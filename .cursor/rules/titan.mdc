@@ -1,0 +1,1743 @@
+---
+description: Permanent engineering rulebook for Titan — architecture, standards, and development governance
+alwaysApply: true
+---
+
+# Titan Engineering Rulebook
+
+This document is the permanent engineering rulebook for the Titan project. Every contributor — human or AI — must follow these rules when designing, implementing, reviewing, or refactoring code in this repository.
+
+Titan is not a chatbot prototype. It is a long-lived personal agentic AI system. Code quality, architectural discipline, and forward compatibility matter more than speed of iteration.
+
+When this rulebook conflicts with a shortcut, follow this rulebook.
+
+When this rulebook conflicts with `core/constitution/titan_constitution.md`, the Constitution defines product identity and values; this rulebook defines engineering execution. Both must be respected.
+
+---
+
+## 1. Mission of Titan
+
+### 1.1 Core Mission
+
+Titan exists to help Nolan Hassing and Ibrahim:
+
+- Build and ship real projects
+- Learn faster with structured guidance
+- Write, review, and maintain code
+- Analyze markets and eventually automate trading strategies
+- Automate repetitive but important tasks
+- Transform ideas into concrete outcomes
+
+Titan's mission is **action-oriented**. Every feature, module, and refactor must move Nolan and Ibrahim closer to usable outcomes — not toward architectural theater.
+
+### 1.2 Permanent Guiding Question
+
+Before any engineering decision, ask:
+
+> "What can I do now to help Nolan or Ibrahim move forward concretely?"
+
+This applies to:
+
+- Feature design
+- Bug fixes
+- Refactors
+- Prompt design
+- Agent behavior
+- Tool selection
+
+### 1.3 What Titan Is Not
+
+Titan is **not**:
+
+- A disposable demo chatbot
+- A collection of placeholder modules with no runtime purpose
+- A single monolithic LLM wrapper with fake subsystems
+- A system that optimizes for impressive architecture over working software
+
+Titan **is**:
+
+- A modular cognitive system with a Brain, Agents, Memory, Tools, State, and Missions
+- A single unified intelligence speaking to users (users never talk to raw agents directly)
+- A project designed to evolve for years
+
+### 1.4 Primary Users
+
+- **Nolan Hassing** — Creator of Titan; primary authority on vision and major architectural direction
+- **Ibrahim** — Equal authority user; separate memory; equal engagement required
+
+Engineering decisions must never hardcode assumptions that only Nolan exists. User-specific memory, preferences, and context must remain separable.
+
+### 1.5 Non-Negotiable Product Principles
+
+These principles from the Constitution must be reflected in code and prompts:
+
+- Truth before convenience
+- Quality before quantity
+- Long-term durability before shortcuts
+- Honesty about uncertainty
+- One intelligence, many specialists internally
+- Tools extend capability; Brain retains decision authority
+
+---
+
+## 2. Vision of the Project
+
+### 2.1 Long-Term Vision
+
+Titan will become a professional-grade personal AI operating system capable of:
+
+- Multi-step mission execution across sessions
+- Persistent memory with user isolation
+- Specialized agent collaboration orchestrated by the Brain
+- Real tool use: files, Python execution, web, calendar, email, trading platforms
+- Voice identification and multi-modal interaction
+- Trading automation with risk controls, backtesting, and monitoring
+- Continuous self-improvement through structured learning loops
+
+### 2.2 Current Phase (v0.0.1+)
+
+The project is in early foundation phase. Current priorities:
+
+1. Solid modular architecture with clear boundaries
+2. Working LLM integration with rich context assembly
+3. Persistent state, mission, and long-term memory
+4. Agent orchestration skeleton ready for real specialization
+5. Tool framework ready for expansion
+
+Do not skip foundation work to chase features that require unstable internals.
+
+### 2.3 Blueprint Alignment Rule
+
+Everything written in this repository must have a **clear role in the final Titan system**.
+
+Forbidden without explicit approval:
+
+- Throwaway tutorial files
+- Fake exercises unrelated to Titan
+- Temporary scripts with no integration path
+- Duplicate modules solving the same problem in parallel
+
+If a file cannot justify its existence against the mission, delete it or integrate it properly.
+
+### 2.4 Planned Directories (Target State)
+
+```
+Titan/
+├── main.py
+├── config/
+├── core/
+├── brain/
+├── agents/
+├── memory/
+├── context/
+├── tools/
+├── prompts/          # Externalized prompt templates (planned)
+├── data/             # Runtime persistence (JSON today; may evolve)
+├── logs/             # Structured logs (planned)
+├── tests/            # Automated tests (required for new modules)
+└── .cursor/rules/    # Engineering governance
+```
+
+Missing directories are not excuses to omit standards. Build toward the target structure.
+
+### 2.5 Versioning Expectations
+
+- Version is defined in `config/settings.py`
+- Every meaningful release increments version and updates changelog documentation when introduced
+- Breaking internal API changes require migration notes in commit/PR description
+
+---
+
+## 3. Architecture Philosophy
+
+### 3.1 Modular Monolith
+
+Titan is a **modular monolith**:
+
+- One application process
+- Many independent modules with explicit responsibilities
+- Shared composition root (`core/titan.py`) wiring dependencies
+
+Do not introduce microservices, separate repos, or distributed complexity until scale truly requires it.
+
+### 3.2 Separation of Concerns
+
+Each module owns one primary responsibility:
+
+| Layer | Owns | Must NOT own |
+|-------|------|--------------|
+| Brain | Reasoning orchestration, prompt assembly, final response synthesis | Direct file I/O for persistence (delegate to memory/state managers) |
+| Agents | Domain-specific task execution | Final user-facing voice/personality decisions |
+| Memory | Storage, retrieval, classification of durable knowledge | LLM API calls |
+| Tools | External actions and factual lookups | Strategic planning |
+| Core | Application lifecycle, wiring, session loop | LLM prompt engineering details |
+| Context | Structured situational metadata | Long-term user notes |
+
+### 3.3 Brain as Conductor
+
+The Brain is the **conductor**, not the entire orchestra.
+
+Rules:
+
+- Brain decides what to consult and in what order
+- Brain assembles the final LLM prompt
+- Brain integrates agent outputs
+- Brain does not replace specialized agents for domain work
+- Brain does not bypass Memory, State, or Mission systems when they are relevant
+
+### 3.4 Single Intelligence Principle
+
+Users interact with **Titan**, not with `CodingAgent`, `ResearchAgent`, etc.
+
+Agent outputs are internal artifacts consumed by the Brain (directly or via orchestrator). Never expose agent identity as the primary speaker unless explicitly debugging with a developer flag.
+
+### 3.5 Dependency Direction (Allowed Flow)
+
+```
+main.py
+  → core/titan.py
+    → brain/brain.py
+      → memory/*, context/*, agents/*, core/state_manager, core/mission_manager, brain/*
+    → tools/tool_manager.py
+    → core/conversation.py
+
+agents/* → may use tools/*, must NOT import brain/brain.py
+memory/* → must NOT import agents/* or brain/brain.py
+tools/*  → must NOT import brain/* or agents/*
+config/* → imported by others; imports nothing project-internal
+```
+
+**Forbidden cycles.** If you introduce a circular import, refactor immediately.
+
+### 3.6 Composition Over Duplication
+
+**Critical current rule:** Do not instantiate duplicate managers.
+
+Known anti-patterns to eliminate over time (do not replicate):
+
+- Two `AgentManager` instances (one in `Titan`, one in `Brain`)
+- Two memory systems without unified facade (`MemoryManager` vs `LongTermMemory`)
+- Two context implementations (`core/context.py` vs `context/context_manager.py`)
+
+New code must use **shared instances injected from the composition root**.
+
+### 3.7 Persistence Boundaries
+
+JSON files in `data/` are runtime state, not source code.
+
+Rules:
+
+- All reads/writes go through dedicated manager classes
+- Never scatter raw `open()` calls across Brain or agents
+- Schema changes require backward-compatible loading or explicit migration
+
+### 3.8 Fail-Safe Defaults
+
+When subsystems are unavailable (LLM down, file missing, tool error):
+
+- Titan must degrade gracefully
+- Never crash the REPL loop silently
+- Never invent data to hide failures
+- Surface actionable error messages to logs and optionally to user when appropriate
+
+---
+
+## 4. Folder Responsibilities
+
+### 4.1 Root
+
+| Path | Responsibility |
+|------|----------------|
+| `main.py` | Minimal entry point; instantiate `Titan`; call `start()`; no business logic |
+| `requirements.txt` | Pinned or minimum versions for runtime dependencies |
+| `Titan_Blueprint.md` | Product vision and roadmap; update when major milestones ship |
+| `.env` | Secrets only; never committed |
+
+### 4.2 `config/`
+
+| Path | Responsibility |
+|------|----------------|
+| `settings.py` | Non-secret static configuration: name, version, creator, default paths, feature flags |
+
+Configuration rules:
+
+- Secrets never in `settings.py`
+- Environment-specific values via environment variables loaded in dedicated modules (e.g. `brain/llm.py` uses `dotenv`)
+
+### 4.3 `core/`
+
+| Path | Responsibility |
+|------|----------------|
+| `titan.py` | Application shell: subsystem wiring, startup, REPL/session loop |
+| `conversation.py` | In-session dialogue history |
+| `task_manager.py` | Decompose user intent into agent task tuples |
+| `task_orchestrator.py` | Execute multi-agent task pipelines; format results |
+| `state_manager.py` | Persist operational state (`data/titan_state.json`) |
+| `mission_manager.py` | Persist multi-step missions (`data/titan_mission.json`) |
+| `action_manager.py` | Future: discrete action execution layer (integrate or remove if unused) |
+| `context.py` | Legacy duplicate — do not extend; migrate to `context/context_manager.py` |
+| `constitution/titan_constitution.md` | Product governance document; source of truth for identity and values |
+
+### 4.4 `brain/`
+
+| Path | Responsibility |
+|------|----------------|
+| `brain.py` | Central `think()` pipeline; prompt assembly; subsystem orchestration |
+| `executive_brain.py` | High-level mission/strategic analysis layer |
+| `llm.py` | LLM provider integration and system instructions |
+| `internal_monologue.py` | Structured pre-response reflection (LLM or template) |
+| `reasoning.py` | Intent and constraint analysis |
+| `planning.py` | Step planning |
+| `decision.py` | Action classification |
+| `executor.py` | Maps analysis to execution strategy |
+| `knowledge.py` | Static or indexed factual knowledge |
+| `task_evaluator.py` | Mission step completion detection |
+| `identity.py` | Identity prompt fragments; must be loaded by LLM layer |
+
+### 4.5 `agents/`
+
+| Path | Responsibility |
+|------|----------------|
+| `agent_manager.py` | Registry, dispatch, auto-selection |
+| `agent_selector.py` | Route tasks to agent types |
+| `base_agent.py` | Abstract agent contract |
+| `coding_agent.py` | Code generation and analysis tasks |
+| `research_agent.py` | Information gathering tasks |
+| `planning_agent.py` | Structured planning tasks |
+| `reasoning_agent.py` | Logic verification tasks |
+
+Future agents (Trading, Memory, Vision, Voice, Web, Automation) follow the same pattern.
+
+### 4.6 `memory/`
+
+| Path | Responsibility |
+|------|----------------|
+| `memory.py` | Short-term in-memory store |
+| `memory_manager.py` | Facade for session memory (to be unified with long-term) |
+| `long_term_memory.py` | JSON-backed durable memory |
+| `memory_decider.py` | Should-this-be-remembered logic |
+| `memory_classifier.py` | Category assignment for stored notes |
+| `memory_retriever.py` | Relevance retrieval for prompt injection |
+
+### 4.7 `context/`
+
+| Path | Responsibility |
+|------|----------------|
+| `context_manager.py` | Current user, project, goal, phase — formatted for prompts |
+
+Context must eventually sync with `StateManager` and active mission, not remain static forever.
+
+### 4.8 `tools/`
+
+| Path | Responsibility |
+|------|----------------|
+| `tool_manager.py` | Tool registry facade; default path uses Tool Runtime V2 (Phase 10A) |
+| `tool_runtime.py` | Pre-flight gates, metrics, confirmation, execution dispatch |
+| `capability_catalog.py` | Capability-first metadata registry |
+| `confirmation_gate.py` | User confirmation for risky LIVE-mode invocations |
+| `permission_engine.py` | Caller and mode permission checks |
+| `health_monitor.py` | Tool/provider health aggregation |
+| `providers/` | Provider registry, versioning, stub backends |
+| `audit/` | Append-only structured tool audit JSONL |
+| `executors/` | Sync and async execution adapters |
+| `adapters/legacy_tool_adapter.py` | Phase 6 `BaseTool` → `ToolCapability` bridge |
+| `time_tool.py` | Current datetime |
+
+**Tool Runtime V2 (Phase 10A, default since v0.10.0):**
+
+```
+ToolDispatcher → ToolManager → ToolRuntime → SyncExecutor/AsyncExecutor → ToolRegistry → BaseTool
+                                    ↓
+              HealthMonitor, QuotaTracker, PermissionEngine, ConfirmationGate, ToolAuditLogger
+```
+
+- **Opt-out:** `TITAN_TOOL_RUNTIME_V2=false` or `ToolManager(use_runtime_v2=False)` for legacy Phase 6 path.
+- **Execution modes:** `LIVE`, `PAPER`, `SIMULATION`, `MOCK` (environment axis); confirmation skipped outside `LIVE`.
+- **External APIs:** provider stubs only until Phase 10B; no real integrations in 10A.
+
+All new tools: implement discrete capability, register in `ToolManager`, document inputs/outputs.
+
+### 4.9 `data/`
+
+Runtime persistence only. Not imported as code. Managed exclusively through manager classes.
+
+### 4.10 `tests/` (Required Target)
+
+Mirror production package structure:
+
+```
+tests/
+  test_brain.py
+  test_memory_retriever.py
+  test_mission_manager.py
+  ...
+```
+
+### 4.11 `logs/` (Required Target)
+
+Structured application logs. No ad-hoc print debugging in production paths once logging module exists.
+
+### 4.12 `prompts/` (Required Target)
+
+Externalize LLM system prompts, agent prompts, and constitution summaries. Do not hardcode large prompt blocks in logic files long-term.
+
+---
+
+## 5. Coding Standards
+
+### 5.1 General Principles
+
+1. **Every line must earn its place** — aligned with Titan Blueprint rule
+2. **Prefer clarity over cleverness**
+3. **Prefer small, testable units over giant functions**
+4. **Match existing file style before introducing new patterns**
+5. **Minimal diff for the task at hand** — no drive-by refactors
+6. **No dead code** — wire it or delete it
+7. **No duplicate subsystems** — consolidate instead of parallel implementations
+
+### 5.2 Language
+
+- Primary development language: **Python 3.10+** (target; verify runtime in deployment environment)
+- User-facing CLI strings: **French** by default (matches current product)
+- Code identifiers, comments, docstrings: **English** preferred for maintainability unless file already uses French consistently
+- LLM responses: French for Nolan/Ibrahim per product rules in `brain/llm.py`
+
+### 5.3 File Header Convention
+
+Each Python module begins with a section banner matching project style:
+
+```python
+# =====================================
+# Titan Module Name
+# =====================================
+```
+
+Do not remove existing banners when editing. Match spacing and style of the file.
+
+### 5.4 Function Design
+
+- Public methods at top of class after `__init__`
+- Keep `think()`, `start()`, `execute()` orchestrators readable — extract private helpers when exceeding ~40 lines of logic
+- Pure functions preferred for classification, retrieval, formatting
+- Side effects isolated in manager classes (save, API call, file write)
+
+### 5.5 Class Design
+
+- One class per file unless tightly coupled helpers
+- Managers end with `Manager` suffix
+- Agents end with `Agent` suffix
+- Tools end with `Tool` suffix
+- Avoid god classes — `Brain` orchestrates but should delegate
+
+### 5.6 Control Flow
+
+- Avoid deep nesting (>3 levels); use early returns
+- Never swallow exceptions silently
+- Do not use bare `except:`
+- Prefer explicit `if/elif` chains for routing until routing tables or registries are justified
+
+### 5.7 String and Prompt Construction
+
+- Use triple-quoted strings for multi-line prompts
+- Keep prompt sections labeled consistently (as in `brain.py`):
+  - `CONTEXTE ACTUEL`
+  - `MÉMOIRE PERMANENTE`
+  - `ÉTAT ACTUEL`
+  - `MISSION ACTIVE`
+  - `QUESTION DE L'UTILISATEUR`
+- When modifying prompt structure, update all builders and tests together
+
+### 5.8 Print vs Logging
+
+**Current state:** many modules use `print()` for debug.
+
+**Target state:** structured logging via `logs/` module.
+
+Rules during transition:
+
+- Do not add new permanent `print()` debug in core paths
+- Temporary prints allowed only in active development with TODO to replace
+- Never print secrets, API keys, or full memory dumps in production mode
+
+### 5.9 Comments
+
+- Code should be self-explanatory
+- Comment **why**, not **what**
+- Required comments for:
+  - Non-obvious business rules (mission step rules, memory isolation)
+  - Workarounds with ticket/issue reference
+  - Security-sensitive decisions
+
+### 5.10 Formatting
+
+- 4-space indentation (existing codebase standard)
+- Max line length: 100 characters (soft target; do not reformat entire files to enforce)
+- Trailing whitespace avoided
+- One blank line between top-level functions/classes
+
+---
+
+## 6. Python Best Practices
+
+### 6.1 Type Hints (Required for New Code)
+
+All new functions and methods must include type hints:
+
+```python
+def retrieve(self, memory: dict, message: str) -> str:
+    ...
+```
+
+Use `from __future__ import annotations` in new files if forward references needed.
+
+Existing files: add types when making substantive edits, do not rewrite entire file solely for types.
+
+### 6.2 Dataclasses and Typed Structures
+
+Prefer `dataclass` or `TypedDict` for:
+
+- Task tuples currently represented as loose `(agent_name, task)` — evolve to structured `Task` objects
+- Mission steps
+- Agent results
+- Context blocks
+
+### 6.3 Path Handling
+
+Use `pathlib.Path` in new code:
+
+```python
+from pathlib import Path
+
+self.file_path = Path(file_path)
+```
+
+Existing `os.path` usage may remain until file is substantially edited.
+
+### 6.4 JSON Persistence
+
+Standard pattern (already used in memory/state managers):
+
+```python
+def load(self) -> dict:
+    if not self.file_path.exists():
+        return self.default_schema()
+    with self.file_path.open("r", encoding="utf-8") as file:
+        return json.load(file)
+
+def save(self) -> None:
+    self.file_path.parent.mkdir(parents=True, exist_ok=True)
+    with self.file_path.open("w", encoding="utf-8") as file:
+        json.dump(self.data, file, indent=4, ensure_ascii=False)
+```
+
+Always specify `encoding="utf-8"`.
+
+### 6.5 Environment Variables
+
+Load via `python-dotenv` only in modules that need secrets (currently `brain/llm.py`).
+
+Never commit `.env`. Provide `.env.example` when adding new required variables.
+
+### 6.6 Dependencies
+
+- Add new packages to `requirements.txt` with comment if non-obvious
+- Prefer standard library when sufficient
+- Avoid heavy frameworks until need is proven
+- Pin major versions when stability matters
+
+### 6.7 Async
+
+Do not introduce `asyncio` project-wide without architectural decision record. Current codebase is synchronous REPL; if async is added, it must be coordinated across Brain, agents, and tools.
+
+### 6.8 Virtual Environment
+
+Development assumes isolated venv. Document setup in README when created. Never install packages globally on behalf of the project without explicit user request.
+
+---
+
+## 7. Naming Conventions
+
+### 7.1 Files and Directories
+
+| Element | Convention | Example |
+|---------|------------|---------|
+| Python modules | `snake_case.py` | `task_orchestrator.py` |
+| Directories | lowercase singular/plural matching domain | `agents/`, `memory/` |
+| Data files | `snake_case.json` | `titan_state.json` |
+| Rule files | `lowercase.mdc` | `titan.mdc` |
+
+### 7.2 Classes
+
+| Type | Pattern | Example |
+|------|---------|---------|
+| Managers | `{Domain}Manager` | `StateManager` |
+| Agents | `{Domain}Agent` | `CodingAgent` |
+| Tools | `{Name}Tool` | `TimeTool` |
+| Core app | `Titan` | — |
+| Brain | `Brain`, `ExecutiveBrain` | — |
+
+### 7.3 Functions and Methods
+
+- `snake_case`
+- Verbs for actions: `load_memory`, `create_mission`, `retrieve`, `orchestrate`
+- Boolean predicates: `is_*`, `should_*`, `has_*`
+  - `should_remember`, `is_step_completed`
+
+### 7.4 Variables
+
+- `snake_case`
+- Avoid single-letter except loop indices
+- Meaningful names: `orchestrator_results` not `res2`
+
+### 7.5 Constants
+
+- `UPPER_SNAKE_CASE` in `config/settings.py` and module-level constants
+- Example: `TITAN_NAME`, `VERSION`, `DEFAULT_MEMORY_PATH`
+
+### 7.6 Agent Registry Keys
+
+- Lowercase short keys: `"coding"`, `"research"`, `"planning"`, `"reasoning"`, `"base"`
+- New agents register with single-word or snake_case keys consistently
+
+### 7.7 JSON Schema Keys
+
+- English keys in JSON persistence (`active`, `current_step`, `users`) even when values are French
+- Do not rename JSON keys without migration
+
+### 7.8 Prohibited Names
+
+- `temp`, `test123`, `new_module`, `final_final`
+- Generic `utils.py` without domain prefix — use `memory_utils.py`, `prompt_utils.py`, etc.
+
+---
+
+## 8. Import Conventions
+
+### 8.1 Import Order
+
+1. Standard library
+2. Third-party packages
+3. Titan project modules
+
+Blank line between each group.
+
+```python
+import json
+import os
+
+from openai import OpenAI
+
+from memory.long_term_memory import LongTermMemory
+from brain.llm import LLM
+```
+
+### 8.2 Import Style
+
+- Prefer **absolute imports** from project root (current convention):
+  - `from brain.llm import LLM`
+  - `from core.state_manager import StateManager`
+- Do not use relative imports (`from ..memory import`) unless package structure officially migrated to installable package
+
+### 8.3 Forbidden Imports
+
+| From | Must NOT import |
+|------|-----------------|
+| `memory/*` | `brain.brain`, `agents/*` |
+| `tools/*` | `brain/*`, `agents/*` |
+| `agents/*` | `brain.brain` |
+| `config/*` | Any other Titan module |
+
+### 8.4 Lazy Imports
+
+Avoid lazy imports except to break verified circular dependencies — document why with comment and issue to resolve cycle properly.
+
+### 8.5 Side Effects on Import
+
+Modules must not execute network calls, file writes, or LLM initialization at import time except where already established (`LLM.__init__` loads dotenv — acceptable but prefer lazy client init in future).
+
+### 8.6 Running the Application
+
+Application is run from project root:
+
+```bash
+python main.py
+```
+
+Imports assume project root is on `PYTHONPATH`. When adding `pyproject.toml`, define proper package entry point.
+
+---
+
+## 9. Documentation Standards
+
+### 9.1 Module Docstrings
+
+New modules require top-level docstring after banner:
+
+```python
+"""Long-term memory persistence for Titan user and project knowledge."""
+```
+
+### 9.2 Class Docstrings
+
+Managers and agents document responsibility in one paragraph.
+
+### 9.3 Method Docstrings
+
+Public methods on managers require docstrings with:
+
+- Purpose
+- Args
+- Returns
+- Raises (if applicable)
+
+```python
+def complete_current_step(self) -> None:
+    """Advance mission to next step or mark completed when no steps remain."""
+```
+
+### 9.4 Architecture Documentation
+
+Update when changing system behavior:
+
+- `Titan_Blueprint.md` — product milestones
+- `core/constitution/titan_constitution.md` — identity/values (product team)
+- This rulebook — engineering standards
+
+Do not create random markdown files unless user requests or milestone requires.
+
+### 9.5 Inline TODO Format
+
+```python
+# TODO(titan): unify MemoryManager and LongTermMemory behind single facade
+```
+
+Include subsystem prefix and actionable description.
+
+### 9.6 Change Documentation
+
+Significant changes require noting:
+
+- What changed
+- Why
+- Migration impact on `data/*.json`
+- Whether prompts or agent behavior shifted
+
+---
+
+## 10. Refactoring Rules
+
+### 10.1 When to Refactor
+
+Refactor when:
+
+- Duplicate subsystems cause bugs (dual AgentManager, dual agent execution)
+- File exceeds maintainability threshold (~300 lines of mixed concerns)
+- Circular imports appear
+- Test coverage cannot be added due to structure
+- Dead code misleads contributors
+
+Do **not** refactor unrelated code during feature work.
+
+### 10.2 Refactoring Process
+
+1. Read affected modules and callers (see Section 22)
+2. Write or update tests first when behavior must be preserved
+3. Make smallest refactor achieving goal
+4. Verify `python main.py` still starts
+5. Verify no new circular imports
+6. Update this rulebook section if architectural rule changed
+
+### 10.3 Behavior-Preserving Refactors
+
+Default assumption: refactors preserve external behavior unless explicitly changing product behavior.
+
+Document intentional behavior changes.
+
+### 10.4 Deleting Code
+
+Before deletion:
+
+- Grep for imports and references
+- Confirm no runtime path uses module
+- Remove from composition root if wired
+
+Prefer delete over `# commented out old code`.
+
+### 10.5 Consolidation Priority List
+
+High-priority consolidations (do when touching related code):
+
+1. Single `AgentManager` instance shared by `Titan` and `Brain`
+2. Remove duplicate agent execution in `Titan.start()` and `Brain.think()` — one orchestration path only
+3. Unified memory facade
+4. Retire `core/context.py` or merge into `context/context_manager.py`
+5. Wire `brain/identity.py` and constitution summary into LLM instructions
+6. Wire or delete `core/action_manager.py`
+
+### 10.6 Migration of JSON Schemas
+
+When changing `data/*.json` structure:
+
+- Implement `default_schema()` fallback
+- Optionally migrate on load with version field
+- Never corrupt existing user data silently
+
+---
+
+## 11. Testing Requirements
+
+### 11.1 Policy
+
+**All new modules require tests.** All bug fixes require regression tests when `tests/` exists.
+
+Until `tests/` is created, first engineering task for any new subsystem is scaffold `tests/` with pytest.
+
+### 11.2 Framework
+
+Use **pytest**.
+
+```
+tests/test_memory_retriever.py
+tests/test_mission_manager.py
+tests/test_task_manager.py
+```
+
+### 11.3 What Must Be Tested
+
+| Area | Minimum Tests |
+|------|---------------|
+| Memory retrieval | Keyword relevance, empty memory, user isolation |
+| Memory decider/classifier | Trigger keywords, category assignment |
+| Mission manager | Step creation, completion, mission completion state |
+| State manager | Load/save, update_after_response |
+| Task manager | Routing rules produce expected agent lists |
+| Agent selector | Keyword routing |
+| Task evaluator | Completion keyword detection (careful with false positives) |
+| Prompt assembly | Required sections present given inputs |
+
+### 11.4 What Not to Test (Initially)
+
+- Live OpenAI API calls in CI — mock `LLM.ask`
+- Actual clock time — mock `TimeTool`
+
+### 11.5 Test Data
+
+Use temporary directories for JSON persistence tests:
+
+```python
+tmp_path = Path(tmp_path)
+manager = StateManager(file_path=tmp_path / "titan_state.json")
+```
+
+Never write tests that modify real `data/` in repo during CI.
+
+### 11.6 Coverage Goal
+
+Target 70%+ on managers and pure logic modules. Brain integration tests may be smoke-level initially.
+
+### 11.7 Running Tests
+
+When introduced:
+
+```bash
+pytest tests/ -v
+```
+
+All tests must pass before merge.
+
+---
+
+## 12. Memory Architecture
+
+### 12.1 Memory Layers
+
+Titan implements multiple memory layers (per Constitution Article 7):
+
+| Layer | Implementation | Purpose |
+|-------|----------------|---------|
+| Short-term session | `memory/memory.py` via `MemoryManager` | Ephemeral session notes |
+| Conversation | `core/conversation.py` | Current dialogue |
+| Long-term permanent | `memory/long_term_memory.py` | Durable user/project knowledge |
+| State | `core/state_manager.py` | Operational continuity |
+| Mission | `core/mission_manager.py` | Multi-step goal tracking |
+
+Future: project memory, learning memory — extend via new manager classes, not ad-hoc JSON.
+
+### 12.2 User Isolation (Critical)
+
+**Never mix Nolan and Ibrahim personal memory.**
+
+Rules:
+
+- Notes stored under `users.{username}.notes`
+- Retrieval must filter by identified current user when personal data involved
+- If user identity uncertain, ask before retrieving personal notes
+- Classifier must not assign Ibrahim notes to Nolan's profile
+
+### 12.3 Memory Write Pipeline
+
+Standard write path:
+
+```
+User message
+  → MemoryDecider.should_remember()
+  → MemoryClassifier.classify()
+  → LongTermMemory.remember_user_note()
+  → save to data/long_term_memory.json
+```
+
+Do not bypass decider for convenience.
+
+### 12.4 Memory Read Pipeline
+
+Standard read path:
+
+```
+Full memory load
+  → MemoryRetriever.retrieve(memory, message)
+  → injected into Brain prompt as MÉMOIRE PERMANENTE
+```
+
+Retrieval must stay **relevant** — Constitution says memory is privilege, not hoarding.
+
+### 12.5 Memory Categories
+
+Current classifier categories:
+
+- `goals`
+- `preferences`
+- `projects`
+- `notes` (default)
+
+New categories require updating classifier, retrieval, and documentation.
+
+### 12.6 Storage Format
+
+- JSON with UTF-8
+- Human-readable indent in development
+- Keys in English; content may be French
+
+### 12.7 Prohibited Memory Practices
+
+- Storing API keys or secrets in long-term memory
+- Storing entire LLM responses without filtering
+- Auto-remembering everything — violates selective memory principle
+- Writing memory from agents directly — go through memory managers
+
+### 12.8 Future Memory Improvements
+
+Planned enhancements (implement via managers):
+
+- Embedding-based retrieval
+- Memory summarization/compaction
+- Per-project memory namespaces
+- Explicit user commands: "oublie X", "souviens-toi de X"
+
+---
+
+## 13. Agent Architecture
+
+### 13.1 Agent Role
+
+Agents are **internal specialists**. They produce artifacts for the Brain, not final UX.
+
+### 13.2 Agent Contract
+
+All agents inherit from `BaseAgent` and implement:
+
+```python
+def execute(self, task: str) -> str:
+    ...
+```
+
+Return value must be structured text the Brain can inject into prompts or logs.
+
+### 13.3 Agent Registry
+
+`AgentManager` maintains registry:
+
+- Register in `__init__` via `register_agent(name, agent)`
+- Names are stable API keys for task routing
+
+### 13.4 Agent Selection
+
+Two selection paths exist (consolidate over time):
+
+1. `AgentSelector.select_agent()` — single agent for `auto_execute`
+2. `TaskManager.create_tasks()` — multi-agent task list for orchestrator
+
+Rules:
+
+- Keep routing logic DRY — shared keyword maps or intent classifier
+- French and English keywords supported where users mix languages
+- Document new keywords when adding routes
+
+### 13.5 Orchestration
+
+`TaskOrchestrator.orchestrate()`:
+
+- Creates tasks from `TaskManager`
+- Executes sequentially (parallel only with explicit future design)
+- Returns structured results list
+- `format_results()` produces prompt-ready text
+
+**Do not execute agents twice per user turn.** One orchestration entry point.
+
+### 13.6 Agent Intelligence Level
+
+Current agents return templates. Target: LLM-backed agents with:
+
+- Focused system prompt per agent
+- Optional tool access scoped to agent domain
+- No duplicate of full Brain prompt
+
+Coding agent may eventually use code tools; research agent may use web tool.
+
+### 13.7 Adding a New Agent
+
+See Section 21. Required:
+
+1. `agents/{name}_agent.py` extending `BaseAgent`
+2. Register in `AgentManager`
+3. Update `AgentSelector` and/or `TaskManager` routing
+4. Add tests
+5. Update constitution Article 8 agent list if user-facing capability
+
+### 13.8 Prohibited Agent Patterns
+
+- Agents calling `LLM.ask` with full Titan constitution independently
+- Agents writing directly to state/mission/memory files
+- Agents printing as if speaking to user as final Titan voice
+- Agents importing `Brain`
+
+---
+
+## 14. Brain Architecture
+
+### 14.1 Brain Responsibility
+
+`Brain.think(message)` is the **single cognitive entry point** for generating a response.
+
+### 14.2 Think Pipeline (Canonical Order)
+
+Current pipeline — preserve order unless architecturally justified:
+
+1. Knowledge search
+2. Context load
+3. Long-term memory load + retrieval
+4. State load
+5. Mission load/create
+6. Executive analysis
+7. Internal monologue
+8. Reasoning analysis
+9. Planning
+10. Executor action selection
+11. Decision classification
+12. Memory write decision (decider + classifier)
+13. Task orchestration (agents)
+14. Prompt assembly
+15. LLM call
+16. Task evaluation / mission step advance
+17. State update after response
+
+When modifying pipeline, update tests and this rulebook section.
+
+### 14.3 Prompt Assembly
+
+Final LLM prompt must include when available:
+
+- Context
+- Retrieved memory (not full dump unless small)
+- State
+- Mission
+- Executive analysis
+- User message
+- Agent orchestration results
+
+Optional future sections:
+
+- Constitution summary
+- Identity block
+- Conversation history summary
+
+### 14.4 Executive Brain
+
+`ExecutiveBrain.analyze_mission()` provides strategic framing. Must remain aligned with active mission step — Constitution rules on not reverting completed steps.
+
+### 14.5 Sub-Brain Modules
+
+| Module | Role |
+|--------|------|
+| `reasoning.py` | Structured understanding |
+| `planning.py` | Step breakdown |
+| `decision.py` | High-level intent class |
+| `executor.py` | Tool/memory/clarify routing |
+| `task_evaluator.py` | Mission progression |
+
+Placeholder implementations must be upgraded to real logic or collapsed — do not accumulate fake stages.
+
+### 14.6 Brain Dependencies
+
+Brain receives dependencies via constructor injection (target). Until refactored, avoid adding more hardcoded `AgentManager()` inside Brain.
+
+### 14.7 Debug Output
+
+Brain currently prints extensive debug. Transition to logging levels:
+
+- `DEBUG` — internal analysis blocks
+- `INFO` — mission/state transitions
+- `ERROR` — failures
+
+User-facing REPL should stay clean in normal mode.
+
+---
+
+## 15. LLM Integration Rules
+
+### 15.1 Single Gateway
+
+All OpenAI (or future provider) calls go through `brain/llm.py` unless explicitly split for agent sub-calls in a controlled subclass.
+
+Never scatter `OpenAI()` clients across the codebase.
+
+### 15.2 Configuration
+
+- API key: `OPENAI_API_KEY` in `.env`
+- Model name: configurable constant (currently `gpt-5.2` in code — move to `config/settings.py`)
+- System instructions: centralized in `LLM` class or `prompts/` directory
+
+### 15.3 Instructions Content
+
+System instructions must reflect:
+
+- Titan identity (French, tutoiement, direct, practical)
+- Constitution principles (truth, step-by-step, no huge code blocks without context)
+- User names: Nolan and Ibrahim
+- Role: private assistant, not generic ChatGPT
+
+Load `brain/identity.py` and constitution summary into instructions — required future integration.
+
+### 15.4 Prompt Discipline
+
+- Label sections clearly
+- Do not duplicate conflicting instructions in user prompt and system prompt
+- Keep retrieved memory relevant — truncate or summarize long memory
+- Include agent results after orchestration, before LLM call (current correct order)
+
+### 15.5 Error Handling for LLM
+
+On API failure:
+
+- Log error with context (no API key in log)
+- Return user-visible graceful message in French
+- Do not crash REPL
+- Do not retry infinitely — max 2 retries with backoff for transient errors
+
+### 15.6 Cost and Token Management
+
+Future requirements:
+
+- Token counting before send
+- Truncation strategy for memory/history
+- Model routing (small model for classification, large for synthesis)
+
+Track when adding heavy agent LLM calls.
+
+### 15.7 Multi-Provider Future
+
+If adding Anthropic or others:
+
+- Abstract provider behind `LLM` interface
+- Brain depends on interface, not vendor SDK
+
+### 15.8 Prohibited LLM Practices
+
+- Sending secrets or `.env` contents in prompts
+- Sending full `data/` JSON dumps without filtering
+- Letting LLM directly choose file paths to write without validation
+- Unvalidated execution of LLM-produced code
+
+---
+
+## 16. Context Handling
+
+### 16.1 Context Sources
+
+Context assembled from:
+
+| Source | Fields |
+|--------|--------|
+| `ContextManager` | current_user, active_project, current_goal, current_phase |
+| `StateManager` | active_project, current_step, progress, last messages |
+| `MissionManager` | active mission, current step |
+| `Conversation` | recent dialogue (future) |
+
+### 16.2 Context Rules
+
+- Context must reflect **current operational reality** — static hardcoded context is technical debt
+- Updating state or mission should eventually update context automatically
+- Context formatting for prompts lives in `ContextManager.get_context()` or dedicated prompt builder
+
+### 16.3 User Context
+
+`current_user` must be set explicitly when multi-user sessions exist. Default `"Nolan"` is acceptable for development only — document assumption.
+
+### 16.4 Project Context
+
+`active_project` should sync with `StateManager.active_project` and mission title when mission active.
+
+### 16.5 Context vs Memory
+
+| Context | Memory |
+|---------|--------|
+| Situational now | Durable facts |
+| Session/project state | User preferences, notes, goals |
+| May change every turn | Selective persistence |
+
+Do not store transient context in long-term memory.
+
+---
+
+## 17. Error Handling
+
+### 17.1 Philosophy
+
+Fail visibly to logs, gracefully to users. Never hide errors with fake success messages.
+
+### 17.2 Exception Hierarchy (Target)
+
+Define in `core/exceptions.py` when introduced:
+
+- `TitanError` — base
+- `MemoryError`, `MissionError`, `LLMError`, `ToolError`, `AgentError`
+
+Catch specific exceptions, not bare `Exception`, unless top-level session loop.
+
+### 17.3 File I/O Errors
+
+On JSON load failure:
+
+- Log corrupted file path
+- Fall back to `default_schema()` if safe
+- Optionally backup corrupt file as `.corrupt.bak`
+
+Never silently reset user data without logging.
+
+### 17.4 REPL Top-Level Handler
+
+`Titan.start()` loop should wrap `brain.think()` to catch unexpected errors and continue session:
+
+```python
+try:
+    response = self.brain.think(question)
+except Exception as exc:
+    logger.exception("Brain failure")
+    response = "Désolé, une erreur interne s'est produite. On peut réessayer."
+```
+
+### 17.5 Validation
+
+Validate external inputs at boundaries:
+
+- User CLI input: strip, length limits for memory storage
+- JSON loaded data: verify required keys before access
+- Agent names: verify registry membership before execute
+
+### 17.6 Prohibited Patterns
+
+```python
+except:
+    pass
+
+except Exception:
+    pass
+```
+
+Always log and either recover or re-raise.
+
+---
+
+## 18. Logging
+
+### 18.1 Status
+
+Logging module not yet implemented. **Required** before production use.
+
+### 18.2 Target Design
+
+Create `core/logging_config.py` or `logs/logger.py`:
+
+- Use Python `logging` module
+- Rotating file handler in `logs/titan.log`
+- Console handler for development
+- Structured fields: timestamp, module, level, message
+
+### 18.3 Log Levels
+
+| Level | Usage |
+|-------|-------|
+| DEBUG | Prompt sections, retrieval details, agent routing |
+| INFO | Startup, mission transitions, memory saves |
+| WARNING | Fallback paths, deprecated module usage |
+| ERROR | API failures, corrupt files, agent errors |
+| CRITICAL | Unrecoverable startup failures |
+
+### 18.4 Sensitive Data
+
+Never log:
+
+- `OPENAI_API_KEY`
+- Full `.env`
+- Complete long-term memory with personal notes in production logs
+
+Redact or truncate.
+
+### 18.5 Migration from Print
+
+When touching a module with debug prints, replace with:
+
+```python
+import logging
+logger = logging.getLogger(__name__)
+logger.debug("Mission loaded: %s", mission.get("title"))
+```
+
+---
+
+## 19. Configuration Management
+
+### 19.1 Layers
+
+| Layer | Location | Content |
+|-------|----------|---------|
+| Static app config | `config/settings.py` | Name, version, default paths |
+| Secrets | `.env` | API keys |
+| Runtime state | `data/*.json` | Missions, memory, state |
+| Feature flags | `config/settings.py` (future) | Debug mode, logging level |
+
+### 19.2 Adding Configuration
+
+1. Non-secret → `settings.py` with UPPER_SNAKE_CASE name
+2. Secret → environment variable documented in `.env.example`
+3. Never hardcode paths absolute to one machine — use relative paths from project root
+
+### 19.3 Default Paths
+
+Memory and state managers use relative paths:
+
+```python
+file_path="data/long_term_memory.json"
+```
+
+Override via constructor parameter for tests.
+
+### 19.4 Feature Flags (Future)
+
+```python
+DEBUG_BRAIN = os.getenv("TITAN_DEBUG_BRAIN", "false").lower() == "true"
+```
+
+Use flags instead of commenting code paths.
+
+---
+
+## 20. Security
+
+### 20.1 Secrets
+
+- `.env` in `.gitignore` always
+- Never commit API keys, tokens, passwords
+- Never print secrets to console or logs
+- Cursor agents must warn if user attempts to commit `.env`
+
+### 20.2 Data Privacy
+
+- `data/long_term_memory.json` contains personal user information — treat as sensitive
+- Do not exfiltrate memory contents to external services beyond configured LLM provider
+- LLM prompts: minimize personal data to what is necessary for the task
+
+### 20.3 Tool Execution (Future)
+
+When adding code execution or file tools:
+
+- Sandboxed execution
+- Path allowlist within project directory
+- No arbitrary shell from LLM without confirmation mode
+- Trading tools require explicit risk limits and paper trading default
+
+### 20.4 Input Sanitization
+
+- Do not use `eval()` on user or LLM input
+- Do not construct SQL/shell commands via string concat without parameterization
+- Validate file paths prevent directory traversal (`../` attacks)
+
+### 20.5 Dependency Security
+
+- Review new dependencies for maintenance and reputation
+- Pin versions in production deployments
+
+### 20.6 Multi-User Authority
+
+Nolan and Ibrahim have equal authority in product terms. Code must not embed backdoors or hidden preference for one user in agent logic.
+
+---
+
+## 21. Future Scalability
+
+### 21.1 Code Scalability
+
+Design for growth:
+
+- Registry patterns for agents and tools
+- Manager-per-domain for persistence
+- Prompt externalization
+- Interface abstractions for LLM and tools
+
+Avoid:
+
+- Giant if/elif chains without tables — refactor to registries when >10 branches
+- Copy-paste agent implementations
+
+### 21.2 Data Scalability
+
+JSON sufficient for v0.x. Plan migration path:
+
+- SQLite for structured queries when memory exceeds ~10MB
+- Vector store for semantic retrieval
+- Version field in JSON documents for migrations
+
+### 21.3 Feature Scalability
+
+Planned subsystems (from Constitution):
+
+- Trading Agent + backtest engine
+- Web Agent + research tools
+- Voice Agent + speaker identification
+- Vision Agent
+- Automation Agent
+- Memory Agent for summarization
+
+Each is a new module set following existing patterns — not a rewrite.
+
+### 21.4 Deployment Scalability
+
+Future deployments may include:
+
+- CLI (current)
+- Desktop wrapper
+- API server
+- Voice interface
+
+Keep business logic out of `main.py` and REPL so alternate interfaces reuse `Brain`.
+
+### 21.5 Team Scalability
+
+This rulebook enables multiple contributors without architectural drift. Update rulebook when conventions change.
+
+---
+
+## 22. Performance
+
+### 22.1 Current Profile
+
+Synchronous, single-threaded REPL. Performance is dominated by LLM latency, not Python overhead.
+
+### 22.2 Optimization Priorities
+
+1. Reduce duplicate LLM calls (dual agent paths)
+2. Truncate memory/context sent to LLM
+3. Cache static knowledge and constitution summary
+4. Lazy-init OpenAI client
+
+Do not premature-optimize Python loops before LLM/token costs are addressed.
+
+### 22.3 File I/O
+
+Load JSON once per manager instance; save on mutation, not every read.
+
+Avoid reloading entire `long_term_memory.json` multiple times per `think()` if unchanged.
+
+### 22.4 Agent Orchestration
+
+Sequential execution is acceptable now. Parallel agent calls require async design and LLM cost analysis.
+
+### 22.5 Performance Testing
+
+When latency exceeds acceptable UX:
+
+- Add timing logs around `think()` stages
+- Profile before optimizing
+
+---
+
+## 23. Things That Must Never Be Broken
+
+### 23.1 Critical Invariants
+
+1. **Single intelligence UX** — user always talks to Titan
+2. **User memory isolation** — Nolan ≠ Ibrahim personal data
+3. **Brain orchestrates; tools execute; agents specialize**
+4. **Secrets never in repo**
+5. **Persistence through managers only** — no ad-hoc JSON writes
+6. **Mission steps do not silently reset** without user intent
+7. **Constitution values** — truth, honesty, long-term thinking in prompts
+8. **Project root imports** — `python main.py` must work after changes
+9. **Backward compatibility of data files** or explicit migration
+10. **No duplicate agent execution per turn** (fix if reintroduced)
+
+### 23.2 Regression Checklist Before Any Merge
+
+- [ ] `python main.py` starts without import errors
+- [ ] Brain returns LLM response on normal input
+- [ ] State saves to `data/titan_state.json`
+- [ ] Mission file remains valid JSON
+- [ ] Memory file remains valid JSON
+- [ ] No new circular imports
+- [ ] No secrets in diff
+- [ ] Tests pass (when present)
+
+### 23.3 Forbidden Breaking Changes Without Migration
+
+- Renaming JSON keys in `data/` schemas
+- Removing mission/state fields in use
+- Changing agent registry keys used in saved task definitions
+- Removing `.env` variable support without updating docs
+
+---
+
+## 24. How to Add New Modules
+
+### 24.1 Decision Tree
+
+Before creating a file, answer:
+
+1. Which layer owns this? (brain / agents / memory / tools / core / context / config)
+2. Does an existing module already own this responsibility?
+3. Will it persist data? → manager + `data/` or existing manager extension
+4. Will it call LLM? → through `brain/llm.py` or agent wrapper
+5. Is it user-visible behavior? → integrate into Brain pipeline
+
+If existing module fits, extend it instead of creating parallel module.
+
+### 24.2 New Tool Checklist
+
+1. Create `tools/{name}_tool.py` with `{Name}Tool` class
+2. Register in `ToolManager`
+3. Add method on `ToolManager` facade
+4. Wire into `Brain.executor` or relevant agent when decision logic exists
+5. Add tests with mocked dependencies
+6. Document in tool section of this rulebook if significant
+
+### 24.3 New Agent Checklist
+
+1. Create `agents/{domain}_agent.py`
+2. Extend `BaseAgent`
+3. Register in `AgentManager.__init__`
+4. Add routing to `AgentSelector` and/or `TaskManager`
+5. Tests for routing and execute return shape
+6. No direct LLM unless using controlled agent prompt helper
+
+### 24.4 New Manager Checklist
+
+1. Create `core/{domain}_manager.py` or `memory/{domain}_manager.py`
+2. Implement `load`, `save`, `default_schema`
+3. Use `pathlib` and UTF-8 JSON
+4. Inject into `Titan.__init__` and pass to `Brain` if needed
+5. Tests with `tmp_path`
+6. Never import from Brain
+
+### 24.5 New Brain Submodule Checklist
+
+1. Create `brain/{module}.py`
+2. Import and wire in `Brain.__init__`
+3. Call from `think()` in documented pipeline order
+4. Keep side effects explicit
+5. Tests for pure functions; integration smoke for pipeline
+
+### 24.6 New Prompt Template Checklist
+
+1. Add file under `prompts/` when directory exists
+2. Load in `LLM` or prompt builder
+3. Keep templates versioned and reviewed for constitution alignment
+
+### 24.7 File Placement Prohibitions
+
+- Do not add business logic to `main.py`
+- Do not add LLM calls in `memory/`
+- Do not add JSON persistence inside `agents/`
+- Do not create `misc/` or `helpers/` dumping grounds
+
+---
+
+## 25. How to Review Code Before Modifying It
+
+### 25.1 Mandatory Pre-Edit Workflow
+
+Before changing any file:
+
+1. **Read the entire file** being modified
+2. **Grep imports** — find all callers of the class/function
+3. **Read callers** — understand runtime path
+4. **Read related managers** — memory/state/mission if touching Brain
+5. **Check data schema** — if persistence involved, read current JSON structure
+6. **Check for duplication** — does parallel implementation already exist?
+7. **Identify tests** — existing or needed
+
+Never edit based on assumption or partial file view.
+
+### 25.2 Impact Analysis Questions
+
+Ask before implementing:
+
+- Does this change run once or twice per user turn?
+- Does this create a second instance of an existing manager?
+- Does this mix Nolan/Ibrahim data?
+- Does this add LLM tokens/cost?
+- Does this require migration of `data/*.json`?
+- Does this belong in Brain or an agent?
+- Is this placeholder logic that should be real before shipping?
+
+### 25.3 Reading Order for Common Tasks
+
+**Brain pipeline change:**
+
+```
+core/titan.py → brain/brain.py → affected submodule → llm.py → task_orchestrator.py
+```
+
+**Memory change:**
+
+```
+memory/long_term_memory.py → memory_decider.py → memory_classifier.py → memory_retriever.py → brain/brain.py
+```
+
+**Agent routing change:**
+
+```
+agents/agent_selector.py → core/task_manager.py → core/task_orchestrator.py → agents/agent_manager.py
+```
+
+**Mission behavior change:**
+
+```
+core/mission_manager.py → brain/task_evaluator.py → brain/brain.py → data/titan_mission.json
+```
+
+### 25.4 Diff Discipline
+
+- One concern per commit when possible
+- No unrelated formatting-only diffs
+- Preserve existing indentation style of file (note: some files use mixed spacing — fix only if editing those lines)
+
+### 25.5 Constitution Cross-Check
+
+For user-facing behavior or prompt changes, skim relevant Constitution articles:
+
+- Article 2 — Philosophy
+- Article 6 — Communication
+- Article 7 — Memory
+- Article 8 — Architecture
+
+Engineering must not violate product identity.
+
+### 25.6 AI Agent Self-Check Before Submitting Code
+
+When Cursor or another AI modifies Titan:
+
+- [ ] Read full files touched
+- [ ] Minimal scope diff
+- [ ] No new dead code
+- [ ] No duplicate subsystems introduced
+- [ ] No secrets in output
+- [ ] Imports follow dependency direction
+- [ ] French user strings preserved where expected
+- [ ] Updated tests or noted test gap
+- [ ] Did not modify unrelated modules
+- [ ] Did not create markdown files user did not request
+
+---
+
+## 26. Additional Engineering Policies
+
+### 26.1 REPL Session Loop
+
+`Titan.start()` owns the session loop. Exit commands: `exit`, `quit`, `stop`, `bye` (case insensitive).
+
+Do not remove exit handling.
+
+Conversation history is in-memory only unless explicitly persisted in future.
+
+### 26.2 Internationalization
+
+Product targets French-first users. Code may use English identifiers. Error messages to Nolan/Ibrahim in French.
+
+Keyword routing must support French and common English tech terms (`python`, `code`, `remember`).
+
+### 26.3 Git and Commits
+
+- Commit only when user requests
+- Never commit `.env` or `data/` personal notes if policy added to gitignore
+- Clear commit messages describing why
+
+### 26.4 Cursor-Specific Behavior
+
+When working in this repo:
+
+- Apply this rulebook on every task (`alwaysApply: true`)
+- Prefer implementing over describing
+- Run commands to verify when possible
+- Do not summarize architectural docs when user asks for full detail
+
+### 26.5 Technical Debt Register
+
+Known debt to resolve in priority order:
+
+1. ~~Duplicate `AgentManager` and double agent execution~~ — **Resolved Phase 1 (v0.1.0):** DI + single orchestration path (`P1-051`–`P1-073`)
+2. Dual memory systems without unified API — **Partial (v0.1.0):** `MemoryFacade` stub wired; full unification deferred to Phase 2+
+3. Unused modules: ~~`core/action_manager.py`, `core/context.py`~~, unwired `brain/identity.py` — **Partial (v0.1.0):** dead modules removed; identity still unwired
+4. Constitution not loaded into LLM prompts
+5. Static `ContextManager` not synced with state/mission
+6. Extensive `print()` debug instead of logging — **Partial (v0.1.0):** logging in `titan.py`, `brain.py`, `task_orchestrator.py`; other modules may still print
+7. ~~Missing `tests/`, `logs/`~~, `prompts/` directories — **Partial (v0.1.0):** `tests/` and `logs/` landed; `prompts/` still missing
+8. No `__init__.py` / packaging — **Partial (v0.1.0):** `__init__.py` added; installable package entry point still pending
+9. ~~`TaskEvaluator` keyword false positives~~ — **Resolved Phase 1 (v0.1.0):** explicit-phrase-only policy (`P1-080`–`P1-082`); LLM-backed evaluator deferred to Phase 8
+10. ~~Blueprint.md outdated relative to implementation~~ — **Resolved Phase 1 (v0.1.0):** `Titan_Blueprint.md` §5 updated (`P1-142`)
+11. ~~Tool Runtime V2 behind feature flag~~ — **Resolved Phase 10A (v0.10.0):** default on; legacy opt-out preserved (`P10A-029`)
+
+When fixing debt item, reference number in commit message.
+
+---
+
+## 27. Glossary
+
+| Term | Meaning |
+|------|---------|
+| Brain | Central orchestrator in `brain/brain.py` |
+| Agent | Internal specialist worker |
+| Tool | External capability (time, files, web, etc.) |
+| Mission | Multi-step persisted goal in `MissionManager` |
+| State | Operational session/project continuity in `StateManager` |
+| Long-term memory | Durable JSON knowledge in `LongTermMemory` |
+| Orchestrator | `TaskOrchestrator` running multiple agents |
+| Constitution | Product identity document in `core/constitution/` |
+| Composition root | `Titan` class wiring dependencies |
+
+---
+
+## 28. Rulebook Maintenance
+
+This file is authoritative for Titan engineering.
+
+Update when:
+
+- New top-level directory added
+- Dependency rules change
+- Memory or agent contract changes
+- Logging/testing infrastructure lands
+- Major refactor completes (e.g. unified memory facade)
+
+Version this rulebook informally via git history. Optionally add `RULEBOOK_VERSION = "1.0.0"` to `config/settings.py` when formal tracking begins.
+
+---
+
+**End of Titan Engineering Rulebook**

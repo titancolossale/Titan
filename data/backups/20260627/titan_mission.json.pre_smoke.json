@@ -1,0 +1,14 @@
+{
+    "active": true,
+    "title": "Créer un robot de trading",
+    "objective": "Crée un robot de trading pour le NQ",
+    "steps": [
+        "Créer le système de backtest",
+        "Créer le système d'exécution",
+        "Ajouter la gestion du risque",
+        "Ajouter les logs et le monitoring",
+        "Tester en paper trading"
+    ],
+    "current_step": "Créer le système de backtest",
+    "status": "in_progress"
+}

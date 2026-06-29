@@ -1,0 +1,5 @@
+# Runtime log files (directory tracked via logs/.gitkeep — P1-020)
+logs/*.log
+
+# Secrets — never commit (P1-031)
+.env

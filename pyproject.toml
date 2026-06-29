@@ -1,0 +1,9 @@
+# =====================================
+# Titan — minimal project / pytest config
+# =====================================
+# PYTHONPATH: project root is added for pytest via pythonpath below.
+# Running `python main.py` from repo root does not require this file.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

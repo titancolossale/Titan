@@ -1,0 +1,3 @@
+openai
+python-dotenv
+pytest>=8.0  # test runner for CI and local dev

@@ -1,0 +1,37 @@
+{
+    "users": {
+        "Nolan": {
+            "role": "Créateur de Titan",
+            "authority": "principal",
+            "goals": [],
+            "preferences": [],
+            "active_projects": [
+                "Titan"
+            ],
+            "projects": [
+                "salut titan",
+                "Salut Titan, quelle est ta prochaine étape ?"
+            ],
+            "notes": [
+                "Je préfère travailler la nuit."
+            ],
+            "project_namespaces": {}
+        },
+        "Ibrahim": {
+            "role": "Utilisateur principal de Titan",
+            "authority": "égal à Nolan",
+            "goals": [],
+            "preferences": [],
+            "active_projects": [],
+            "projects": [],
+            "notes": [],
+            "project_namespaces": {}
+        }
+    },
+    "titan": {
+        "mission": "Aider Nolan et Ibrahim à construire, organiser, automatiser et améliorer leurs projets.",
+        "current_project": "Titan",
+        "current_phase": "Développement du système de mémoire permanente"
+    },
+    "schema_version": 2
+}
