@@ -1,0 +1,695 @@
+/* =====================================
+   Titan Web App — Phase 5.3
+   REFERENCE SCENE RECONSTRUCTION
+   Canonical target: sprint-2.7-reference-composition.png
+                     + phase-5-reference-layout-full.png
+   Composition law: everything orbits Titan Core.
+   Presentation only — Brain / APIs / neural engine untouched.
+   Loaded LAST — visual hierarchy authority.
+   ===================================== */
+
+:root {
+  --tdl-c53-void: #000000;
+  --tdl-c53-fog-far: rgba(55, 6, 6, 0.14);
+  --tdl-c53-fog-mid: rgba(90, 10, 10, 0.1);
+  --tdl-c53-bloom: rgba(239, 68, 68, 0.16);
+  --tdl-c53-bloom-hot: rgba(255, 90, 70, 0.12);
+  --tdl-c53-highway: rgba(239, 68, 68, 0.55);
+  --tdl-c53-edge: rgba(255, 255, 255, 0.012);
+  --tdl-c53-reflect: rgba(255, 255, 255, 0.028);
+  --tdl-c53-neural-bleed: rgba(220, 38, 38, 0.035);
+  --tdl-c53-glass: linear-gradient(
+    172deg,
+    rgba(8, 6, 6, 0.22) 0%,
+    rgba(0, 0, 0, 0.12) 48%,
+    rgba(0, 0, 0, 0.34) 100%
+  );
+  --tdl-c53-glass-deep: linear-gradient(
+    176deg,
+    rgba(6, 4, 4, 0.28) 0%,
+    rgba(0, 0, 0, 0.18) 52%,
+    rgba(0, 0, 0, 0.42) 100%
+  );
+}
+
+/* =====================================
+   GLOBAL — deep black cinematic void
+   ===================================== */
+
+.tdl-v2-page,
+.tdl-v2-root {
+  background: var(--tdl-c53-void);
+}
+
+.tdl-v2-neural-host {
+  background: var(--tdl-c53-void);
+}
+
+/* Strong volumetric fog · bloom · depth vignette */
+.tdl-v2-glow-ambient {
+  display: block !important;
+  background:
+    /* Core bloom — visual gravity */
+    radial-gradient(
+      ellipse 44% 28% at 50% 44%,
+      rgba(255, 100, 80, 0.14) 0%,
+      rgba(239, 68, 68, 0.08) 28%,
+      rgba(160, 24, 24, 0.03) 52%,
+      transparent 74%
+    ),
+    /* Soft volumetric fog volume */
+    radial-gradient(
+      ellipse 78% 58% at 50% 46%,
+      rgba(70, 8, 8, 0.16) 0%,
+      rgba(40, 4, 4, 0.07) 38%,
+      transparent 72%
+    ),
+    /* Asymmetric fog pockets — no grid feel */
+    radial-gradient(
+      ellipse 36% 30% at 18% 58%,
+      rgba(90, 12, 12, 0.08) 0%,
+      transparent 72%
+    ),
+    radial-gradient(
+      ellipse 30% 26% at 82% 30%,
+      rgba(80, 10, 10, 0.07) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 22% 18% at 68% 72%,
+      rgba(100, 14, 14, 0.05) 0%,
+      transparent 68%
+    ),
+    /* Subtle bloom shafts */
+    linear-gradient(
+      112deg,
+      transparent 36%,
+      rgba(255, 90, 70, 0.035) 47%,
+      transparent 56%
+    ),
+    linear-gradient(
+      68deg,
+      transparent 40%,
+      rgba(239, 68, 68, 0.022) 51%,
+      transparent 60%
+    ),
+    /* Near lens diffusion */
+    radial-gradient(
+      ellipse 92% 82% at 50% 48%,
+      rgba(255, 220, 210, 0.018) 0%,
+      transparent 52%
+    ),
+    /* Deep void — quieter edges, dense center light */
+    radial-gradient(
+      ellipse 82% 72% at 50% 46%,
+      transparent 18%,
+      rgba(0, 0, 0, 0.35) 58%,
+      rgba(0, 0, 0, 0.82) 100%
+    ),
+    radial-gradient(
+      ellipse 100% 52% at 50% 112%,
+      rgba(0, 0, 0, 0.7) 0%,
+      transparent 55%
+    );
+  opacity: 1;
+  animation: tdl-c53-atmosphere-breathe 16s var(--tdl-ease-organic, ease-in-out) infinite;
+}
+
+@keyframes tdl-c53-atmosphere-breathe {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 1; }
+}
+
+/* Depth bands — stronger cinematic distance */
+.tdl-v2-neural-depth-band--void {
+  background: radial-gradient(
+    ellipse 96% 92% at 50% 48%,
+    transparent 22%,
+    rgba(0, 0, 0, 0.62) 100%
+  ) !important;
+  opacity: 0.98 !important;
+}
+
+.tdl-v2-neural-depth-band--far {
+  background:
+    radial-gradient(
+      ellipse 52% 40% at 38% 36%,
+      rgba(110, 14, 14, 0.12) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 40% 30% at 72% 62%,
+      rgba(70, 8, 8, 0.09) 0%,
+      transparent 72%
+    ) !important;
+  filter: blur(36px) !important;
+  opacity: 0.88 !important;
+}
+
+.tdl-v2-neural-depth-band--distant {
+  background: radial-gradient(
+    ellipse 40% 30% at 50% 44%,
+    rgba(239, 68, 68, 0.1) 0%,
+    rgba(160, 24, 24, 0.04) 42%,
+    transparent 74%
+  ) !important;
+  filter: blur(22px) !important;
+  opacity: 0.85 !important;
+}
+
+.tdl-v2-neural-depth-band--horizon {
+  background: radial-gradient(
+    ellipse 30% 18% at 50% 44%,
+    rgba(255, 90, 70, 0.12) 0%,
+    rgba(220, 38, 38, 0.045) 48%,
+    transparent 78%
+  ) !important;
+  filter: blur(14px) !important;
+  opacity: 0.8 !important;
+}
+
+.tdl-v2-neural-vignette {
+  background: radial-gradient(
+    ellipse 70% 62% at 50% 46%,
+    transparent 28%,
+    rgba(0, 0, 0, 0.48) 72%,
+    rgba(0, 0, 0, 0.88) 100%
+  ) !important;
+}
+
+/* Near + far particles — living dust field */
+.tdl-v2-center-stack::before {
+  opacity: 0.85 !important;
+  background-image:
+    /* Near (larger, soft) */
+    radial-gradient(2.5px 2.5px at 16% 24%, rgba(248, 113, 113, 0.55), transparent),
+    radial-gradient(2px 2px at 74% 16%, rgba(239, 68, 68, 0.42), transparent),
+    radial-gradient(2.5px 2.5px at 30% 76%, rgba(255, 140, 120, 0.4), transparent),
+    radial-gradient(2px 2px at 88% 58%, rgba(220, 38, 38, 0.38), transparent),
+    /* Mid */
+    radial-gradient(1.5px 1.5px at 58% 68%, rgba(248, 113, 113, 0.32), transparent),
+    radial-gradient(1.5px 1.5px at 42% 12%, rgba(239, 68, 68, 0.28), transparent),
+    radial-gradient(1.5px 1.5px at 8% 48%, rgba(255, 90, 80, 0.26), transparent),
+    /* Far (tiny points) */
+    radial-gradient(1px 1px at 64% 88%, rgba(220, 38, 38, 0.3), transparent),
+    radial-gradient(1px 1px at 92% 72%, rgba(248, 113, 113, 0.22), transparent),
+    radial-gradient(1px 1px at 48% 38%, rgba(255, 200, 190, 0.2), transparent),
+    radial-gradient(1px 1px at 22% 58%, rgba(239, 68, 68, 0.18), transparent),
+    radial-gradient(1px 1px at 70% 44%, rgba(220, 38, 38, 0.16), transparent) !important;
+  animation: tdl-c53-fg-particles 20s var(--tdl-ease-organic, ease-in-out) infinite;
+  filter: blur(0.3px);
+}
+
+.tdl-v2-center-stack::after {
+  background: radial-gradient(
+    ellipse 72% 48% at 50% 44%,
+    rgba(180, 28, 28, 0.1) 0%,
+    transparent 72%
+  ) !important;
+  filter: blur(56px) !important;
+  opacity: 0.92 !important;
+}
+
+@keyframes tdl-c53-fg-particles {
+  0%, 100% { opacity: 0.55; transform: translate3d(0, 0, 0); }
+  50% { opacity: 0.9; transform: translate3d(0.5%, -2%, 0); }
+}
+
+/* Soft neural bleed onto peripheral chrome — mind immersion */
+.tdl-v2-layer--workspace::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(
+      ellipse 32% 48% at 6% 44%,
+      rgba(220, 38, 38, 0.04) 0%,
+      transparent 72%
+    ),
+    radial-gradient(
+      ellipse 28% 44% at 94% 48%,
+      rgba(220, 38, 38, 0.045) 0%,
+      transparent 74%
+    ),
+    radial-gradient(
+      ellipse 50% 22% at 50% 8%,
+      rgba(220, 38, 38, 0.025) 0%,
+      transparent 70%
+    );
+  opacity: 0.95;
+}
+
+/* =====================================
+   TITAN CORE — visual gravity point
+   First thing the eye finds.
+   ===================================== */
+
+.tdl-v2-satellite-core {
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  padding: 0.35rem 1.1rem !important;
+  gap: 0.22rem !important;
+  z-index: 4 !important;
+  isolation: isolate;
+}
+
+/* Horizontal elliptical nebula — reference gravity well */
+.tdl-v2-satellite-core__halo {
+  inset: -340% -420% !important;
+  border-radius: 50% !important;
+  background: radial-gradient(
+    ellipse 70% 42% at 50% 50%,
+    rgba(255, 220, 200, 0.14) 0%,
+    rgba(255, 110, 90, 0.2) 12%,
+    rgba(239, 68, 68, 0.14) 28%,
+    rgba(180, 30, 30, 0.06) 48%,
+    transparent 72%
+  ) !important;
+  filter: blur(3px) !important;
+  opacity: 1 !important;
+  z-index: -3 !important;
+  animation: tdl-c53-core-breathe 7.2s var(--tdl-ease-organic, ease-in-out) infinite !important;
+}
+
+.tdl-v2-satellite-core__nucleus {
+  width: 96px !important;
+  height: 56px !important;
+  border-radius: 50% !important;
+  opacity: 0.62 !important;
+  background: radial-gradient(
+    ellipse 70% 55% at 50% 50%,
+    rgba(255, 240, 230, 0.32) 0%,
+    rgba(255, 140, 120, 0.22) 24%,
+    rgba(239, 68, 68, 0.14) 48%,
+    transparent 78%
+  ) !important;
+  box-shadow:
+    0 0 48px rgba(239, 68, 68, 0.45),
+    0 0 110px rgba(220, 38, 38, 0.28),
+    0 0 180px rgba(180, 30, 30, 0.14) !important;
+  z-index: -2 !important;
+  filter: blur(0.5px);
+  animation: tdl-c53-core-nucleus 5.4s var(--tdl-ease-organic, ease-in-out) infinite !important;
+}
+
+.tdl-v2-satellite-core__title {
+  font-size: 1.05rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.42em !important;
+  padding-left: 0.42em !important;
+  color: rgba(255, 255, 255, 0.98) !important;
+  text-shadow:
+    0 0 14px rgba(255, 255, 255, 0.55),
+    0 0 36px rgba(239, 68, 68, 0.95),
+    0 0 72px rgba(220, 38, 38, 0.7),
+    0 0 120px rgba(180, 30, 30, 0.4) !important;
+  z-index: 1;
+}
+
+.tdl-v2-satellite-core__subtitle {
+  font-size: 0.52rem !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.22em !important;
+  color: rgba(255, 230, 225, 0.58) !important;
+  text-shadow:
+    0 0 18px rgba(220, 38, 38, 0.55),
+    0 0 40px rgba(180, 30, 30, 0.3) !important;
+  z-index: 1;
+}
+
+/* Filaments denser at core — buried typography */
+.tdl-v2-satellite-core__tissue {
+  inset: -70% -110% !important;
+  z-index: 2 !important;
+}
+
+.tdl-v2-satellite-core__filament {
+  height: 1.35px !important;
+  opacity: 0.72 !important;
+  box-shadow:
+    0 0 6px rgba(239, 68, 68, 0.7),
+    0 0 14px rgba(220, 38, 38, 0.4) !important;
+}
+
+.tdl-v2-satellite-core__filament--a { opacity: 0.78 !important; }
+.tdl-v2-satellite-core__filament--b { opacity: 0.85 !important; height: 1.6px !important; }
+.tdl-v2-satellite-core__filament--c { opacity: 0.55 !important; }
+.tdl-v2-satellite-core__filament--d { opacity: 0.6 !important; }
+.tdl-v2-satellite-core__filament--e { opacity: 0.48 !important; height: 1.8px !important; }
+.tdl-v2-satellite-core__filament--f { opacity: 0.52 !important; }
+
+.tdl-v2-satellite-core__veil {
+  inset: -40% -70% !important;
+  background: radial-gradient(
+    ellipse 65% 55% at 50% 50%,
+    rgba(255, 120, 100, 0.06) 0%,
+    rgba(220, 38, 38, 0.08) 42%,
+    transparent 78%
+  ) !important;
+  opacity: 1 !important;
+  mix-blend-mode: screen;
+}
+
+/* Gravity well ring — soft elliptical influence field */
+.tdl-v2-satellite-core__gravity {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 280%;
+  height: 160%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: -4;
+  background: transparent;
+  box-shadow:
+    0 0 0 1px rgba(239, 68, 68, 0.06),
+    0 0 60px 20px rgba(220, 38, 38, 0.05),
+    0 0 120px 40px rgba(180, 30, 30, 0.03);
+  animation: tdl-c53-gravity-pulse 9s var(--tdl-ease-organic, ease-in-out) infinite;
+}
+
+@keyframes tdl-c53-core-breathe {
+  0%, 100% { opacity: 0.82; transform: scale(0.94); }
+  50% { opacity: 1; transform: scale(1.12); }
+}
+
+@keyframes tdl-c53-core-nucleus {
+  0%, 100% { opacity: 0.52; transform: translate(-50%, -50%) scale(0.92); }
+  50% { opacity: 0.78; transform: translate(-50%, -50%) scale(1.1); }
+}
+
+@keyframes tdl-c53-gravity-pulse {
+  0%, 100% { opacity: 0.55; transform: translate(-50%, -50%) scale(0.96); }
+  50% { opacity: 0.9; transform: translate(-50%, -50%) scale(1.06); }
+}
+
+/* =====================================
+   SATELLITE ORBITS — natural asymmetry
+   Attached to Core, not a clock grid.
+   ===================================== */
+
+.tdl-v2-satellite--memory {
+  left: 21% !important;
+  top: 19% !important;
+}
+
+.tdl-v2-satellite--planning {
+  left: 47% !important;
+  top: 11% !important;
+}
+
+.tdl-v2-satellite--browser {
+  left: 78% !important;
+  top: 20% !important;
+}
+
+.tdl-v2-satellite--obsidian {
+  left: 90% !important;
+  top: 46% !important;
+}
+
+.tdl-v2-satellite--tools {
+  left: 76% !important;
+  top: 73% !important;
+}
+
+.tdl-v2-satellite--communication {
+  left: 49% !important;
+  top: 85% !important;
+}
+
+.tdl-v2-satellite--trading {
+  left: 17% !important;
+  top: 69% !important;
+}
+
+.tdl-v2-satellite--calendar {
+  left: 9% !important;
+  top: 41% !important;
+}
+
+/* Satellites as constellation nodes — readable, secondary to Core */
+.tdl-v2-satellite {
+  opacity: 0.62 !important;
+  filter: saturate(0.9) brightness(0.95) !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0.1rem 0.18rem !important;
+  gap: 0.4rem !important;
+}
+
+.tdl-v2-satellite__aura {
+  opacity: 0.35 !important;
+  width: 30px !important;
+  height: 30px !important;
+  background: radial-gradient(
+    circle,
+    rgba(239, 68, 68, 0.18) 0%,
+    rgba(220, 38, 38, 0.05) 48%,
+    transparent 74%
+  ) !important;
+}
+
+.tdl-v2-satellite__node {
+  width: 10px !important;
+  height: 10px !important;
+  opacity: 0.78 !important;
+  box-shadow:
+    0 0 8px rgba(239, 68, 68, 0.4),
+    0 0 18px rgba(220, 38, 38, 0.18) !important;
+  animation: tdl-c53-sat-breathe 6.2s var(--tdl-ease-organic, ease-in-out) infinite !important;
+}
+
+.tdl-v2-satellite__title {
+  font-size: 0.52rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.16em !important;
+  color: rgba(220, 210, 210, 0.62) !important;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.95) !important;
+}
+
+.tdl-v2-satellite__status {
+  font-size: 0.4rem !important;
+  font-weight: 300 !important;
+  letter-spacing: 0.14em !important;
+  color: rgba(140, 130, 130, 0.48) !important;
+}
+
+.tdl-v2-satellite[data-status="idle"],
+.tdl-v2-satellite:not([data-status="active"]):not([data-status="waiting"]) {
+  opacity: 0.55 !important;
+}
+
+.tdl-v2-satellite[data-status="waiting"] {
+  opacity: 0.78 !important;
+  filter: saturate(1) brightness(1.02) !important;
+}
+
+.tdl-v2-satellite[data-status="active"] {
+  opacity: 1 !important;
+  filter: saturate(1.25) brightness(1.15) !important;
+}
+
+.tdl-v2-satellite[data-status="active"] .tdl-v2-satellite__title {
+  font-weight: 600 !important;
+  color: rgba(255, 255, 255, 0.96) !important;
+  text-shadow:
+    0 0 16px rgba(239, 68, 68, 0.55),
+    0 1px 8px rgba(0, 0, 0, 0.9) !important;
+}
+
+.tdl-v2-satellite[data-status="active"] .tdl-v2-satellite__node {
+  width: 13px !important;
+  height: 13px !important;
+  opacity: 1 !important;
+  box-shadow:
+    0 0 20px rgba(239, 68, 68, 0.85),
+    0 0 44px rgba(220, 38, 38, 0.5) !important;
+}
+
+.tdl-v2-satellite[data-status="active"] .tdl-v2-satellite__aura {
+  opacity: 0.9 !important;
+}
+
+@keyframes tdl-c53-sat-breathe {
+  0%, 100% { opacity: 0.65; transform: scale(0.94); }
+  50% { opacity: 0.9; transform: scale(1.06); }
+}
+
+/* =====================================
+   MAJOR NEURAL HIGHWAYS
+   Large luminous pathways → Core
+   ===================================== */
+
+.tdl-v2-satellite-link {
+  stroke: var(--tdl-c53-highway) !important;
+  stroke-width: 1.65 !important;
+  stroke-linecap: round !important;
+  opacity: 0.28 !important;
+  filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.35)) !important;
+  stroke-dasharray: 8 14 !important;
+  animation: tdl-c53-highway-flow 7.5s linear infinite !important;
+}
+
+.tdl-v2-satellite-link--secondary {
+  stroke: rgba(220, 38, 38, 0.45) !important;
+  stroke-width: 0.7 !important;
+  opacity: 0.12 !important;
+  filter: drop-shadow(0 0 2px rgba(220, 38, 38, 0.2)) !important;
+  stroke-dasharray: 3 16 !important;
+  animation: tdl-c53-highway-flow 11s linear infinite reverse !important;
+}
+
+.tdl-v2-satellite-link--synapse {
+  stroke: rgba(248, 113, 113, 0.35) !important;
+  stroke-width: 0.45 !important;
+  opacity: 0.07 !important;
+  stroke-dasharray: 2 22 !important;
+  filter: none !important;
+  animation: tdl-c53-highway-flow 14s linear infinite !important;
+}
+
+.tdl-v2-satellite-link[data-status="waiting"] {
+  opacity: 0.48 !important;
+  stroke-width: 1.9 !important;
+}
+
+.tdl-v2-satellite-link[data-status="active"] {
+  opacity: 0.82 !important;
+  stroke: rgba(255, 120, 100, 0.95) !important;
+  stroke-width: 2.4 !important;
+  filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.65)) !important;
+  stroke-dasharray: 6 8 !important;
+  animation: tdl-c53-highway-flow 2.8s linear infinite !important;
+}
+
+.tdl-v2-satellite-link--secondary[data-status="active"],
+.tdl-v2-satellite-link--synapse[data-status="active"] {
+  opacity: 0.4 !important;
+}
+
+@keyframes tdl-c53-highway-flow {
+  to { stroke-dashoffset: -160; }
+}
+
+/* =====================================
+   FLOATING UI — secondary to the mind
+   See Core → living field → then chrome
+   ===================================== */
+
+.tdl-v2-region--sidebar,
+.tdl-v2-region--sidebar.tdl-v2-glass-panel {
+  background: var(--tdl-c53-glass) !important;
+  outline-color: var(--tdl-c53-edge) !important;
+  box-shadow:
+    0 20px 56px rgba(0, 0, 0, 0.4),
+    0 1px 0 var(--tdl-c53-reflect) inset,
+    -12px 0 40px rgba(0, 0, 0, 0.32) inset,
+    0 -20px 40px var(--tdl-c53-neural-bleed) inset,
+    6px 0 32px rgba(220, 38, 38, 0.02) !important;
+  opacity: 0.88;
+}
+
+.tdl-v2-region--sidebar .tdl-v2-nav-item {
+  color: rgba(244, 241, 241, 0.34) !important;
+  font-weight: 300 !important;
+}
+
+.tdl-v2-region--sidebar .tdl-v2-nav-item--active {
+  color: rgba(255, 252, 252, 0.92) !important;
+}
+
+.tdl-v2-region--orchestrator,
+.tdl-v2-region--orchestrator.tdl-v2-glass-panel {
+  background: var(--tdl-c53-glass-deep) !important;
+  outline-color: var(--tdl-c53-edge) !important;
+  box-shadow:
+    inset 0 1px 0 var(--tdl-c53-reflect),
+    inset 0 0 64px var(--tdl-c53-neural-bleed),
+    -4px 0 36px rgba(220, 38, 38, 0.02),
+    0 0 64px rgba(0, 0, 0, 0.55) !important;
+  opacity: 0.86;
+}
+
+.tdl-v2-topbar--telemetry {
+  background: linear-gradient(
+    168deg,
+    rgba(6, 4, 4, 0.18) 0%,
+    rgba(0, 0, 0, 0.08) 50%,
+    rgba(0, 0, 0, 0.22) 100%
+  ) !important;
+  outline-color: rgba(255, 255, 255, 0.01) !important;
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.24),
+    0 1px 0 rgba(255, 255, 255, 0.02) inset !important;
+  opacity: 0.82;
+}
+
+.tdl-v2-float-card,
+.tdl-v2-dock-status-cards--phase5 .tdl-v2-float-card {
+  background: rgba(0, 0, 0, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.015) !important;
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.32),
+    0 1px 0 rgba(255, 255, 255, 0.02) inset !important;
+  opacity: 0.72;
+}
+
+.tdl-v2-float-card:hover {
+  opacity: 0.92;
+}
+
+.tdl-v2-composer--reference,
+.tdl-v2-composer--console {
+  background: rgba(0, 0, 0, 0.36) !important;
+  border-color: rgba(255, 255, 255, 0.025) !important;
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.4),
+    0 1px 0 rgba(255, 255, 255, 0.025) inset,
+    0 0 28px rgba(220, 38, 38, 0.025) !important;
+  opacity: 0.9;
+}
+
+/* Breathing room — less chrome crowding the Core */
+.tdl-v2-workspace-grid {
+  --tdl-workspace-gap: 1.05rem;
+}
+
+.tdl-v2-dock-status-cards--phase5 {
+  gap: 0.65rem !important;
+}
+
+/* =====================================
+   Reduced motion
+   ===================================== */
+
+.tdl-v2--reduced-motion .tdl-v2-glow-ambient,
+.tdl-v2--reduced-motion .tdl-v2-center-stack::before,
+.tdl-v2--reduced-motion .tdl-v2-satellite-core__halo,
+.tdl-v2--reduced-motion .tdl-v2-satellite-core__nucleus,
+.tdl-v2--reduced-motion .tdl-v2-satellite-core__gravity,
+.tdl-v2--reduced-motion .tdl-v2-satellite__node,
+.tdl-v2--reduced-motion .tdl-v2-satellite-link,
+.tdl-v2--reduced-motion .tdl-v2-satellite-link--secondary,
+.tdl-v2--reduced-motion .tdl-v2-satellite-link--synapse {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tdl-v2-glow-ambient,
+  .tdl-v2-center-stack::before,
+  .tdl-v2-satellite-core__halo,
+  .tdl-v2-satellite-core__nucleus,
+  .tdl-v2-satellite-core__gravity,
+  .tdl-v2-satellite__node,
+  .tdl-v2-satellite-link,
+  .tdl-v2-satellite-link--secondary,
+  .tdl-v2-satellite-link--synapse {
+    animation: none !important;
+  }
+}

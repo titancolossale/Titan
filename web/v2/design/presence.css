@@ -1,0 +1,662 @@
+/* =====================================
+   Titan Web App — Sprint 2.9
+   Living Cognitive Operating System
+   Presence · telemetry · instrument glass · calm life
+   Loaded last — chrome polish only; neural renderer untouched
+   Constitution: TITAN_DESIGN_CONSTITUTION.md
+   ===================================== */
+
+:root {
+  --tdl-presence-breath: 6.4s;
+  --tdl-presence-glass: rgba(0, 0, 0, 0.34);
+  --tdl-presence-glass-elevated: rgba(0, 0, 0, 0.4);
+  --tdl-presence-edge: rgba(255, 255, 255, 0.055);
+  --tdl-presence-edge-live: rgba(239, 68, 68, 0.22);
+  --tdl-presence-reflect: rgba(255, 255, 255, 0.035);
+  --tdl-composer-min-height: 60px;
+  --tdl-topbar-height: 48px;
+  --tdl-status-cards-height: 104px;
+}
+
+/* --- Shell presence: soft ambient life on structural glass --- */
+
+.tdl-v2-region--sidebar.tdl-v2-glass-panel,
+.tdl-v2-region--orchestrator.tdl-v2-glass-panel {
+  background: var(--tdl-presence-glass);
+  border-color: var(--tdl-presence-edge);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.42),
+    0 1px 0 var(--tdl-presence-reflect) inset;
+}
+
+.tdl-v2-root[data-presence="idle"] .tdl-v2-region--orchestrator.tdl-v2-glass-panel,
+.tdl-v2-root:not([data-presence]) .tdl-v2-region--orchestrator.tdl-v2-glass-panel {
+  animation: tdl-v2-panel-breathe var(--tdl-presence-breath) var(--tdl-ease-organic) infinite;
+}
+
+@keyframes tdl-v2-panel-breathe {
+  0%, 100% {
+    box-shadow:
+      0 12px 40px rgba(0, 0, 0, 0.42),
+      0 1px 0 var(--tdl-presence-reflect) inset,
+      0 0 0 0 rgba(220, 38, 38, 0);
+  }
+  50% {
+    box-shadow:
+      0 14px 44px rgba(0, 0, 0, 0.48),
+      0 1px 0 var(--tdl-presence-reflect) inset,
+      0 0 28px rgba(220, 38, 38, 0.04);
+  }
+}
+
+/* --- Top cognitive telemetry strip --- */
+
+.tdl-v2-topbar--telemetry {
+  min-height: var(--tdl-topbar-height);
+  padding: 0.4rem 0.85rem;
+  gap: 1.15rem;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--tdl-presence-edge);
+  border-radius: var(--tdl-radius-lg);
+  backdrop-filter: blur(24px) saturate(1.04);
+  -webkit-backdrop-filter: blur(24px) saturate(1.04);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.38),
+    0 1px 0 var(--tdl-presence-reflect) inset;
+}
+
+.tdl-v2-topbar__pills {
+  gap: 0.55rem;
+  row-gap: 0.35rem;
+}
+
+.tdl-v2-topbar__pill {
+  gap: 0.42rem;
+  padding: 0.28rem 0.62rem;
+  border-radius: var(--tdl-radius-sm);
+  border: 1px solid transparent;
+  background: rgba(0, 0, 0, 0.28);
+  transition:
+    border-color var(--tdl-duration-fast) var(--tdl-ease-premium),
+    background var(--tdl-duration-fast) var(--tdl-ease-premium),
+    box-shadow var(--tdl-duration-fast) var(--tdl-ease-premium);
+}
+
+.tdl-v2-topbar__pill:hover {
+  border-color: var(--tdl-presence-edge);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.tdl-v2-topbar__pill[data-status="active"],
+.tdl-v2-topbar__pill[data-status="live"] {
+  border-color: rgba(239, 68, 68, 0.16);
+  background: rgba(220, 38, 38, 0.06);
+}
+
+.tdl-v2-topbar__pill-dot {
+  width: 4px;
+  height: 4px;
+  opacity: 0.85;
+  animation: tdl-v2-telemetry-dot-breathe 4.8s var(--tdl-ease-organic) infinite;
+}
+
+.tdl-v2-topbar__pill[data-status="idle"] .tdl-v2-topbar__pill-dot {
+  background: rgba(248, 113, 113, 0.35);
+  box-shadow: 0 0 6px rgba(220, 38, 38, 0.12);
+}
+
+.tdl-v2-topbar__pill[data-status="active"] .tdl-v2-topbar__pill-dot,
+.tdl-v2-topbar__pill[data-status="live"] .tdl-v2-topbar__pill-dot {
+  animation: tdl-v2-telemetry-dot-live 2.6s var(--tdl-ease-organic) infinite;
+}
+
+@keyframes tdl-v2-telemetry-dot-breathe {
+  0%, 100% { opacity: 0.45; transform: scale(0.92); }
+  50% { opacity: 0.9; transform: scale(1.08); }
+}
+
+@keyframes tdl-v2-telemetry-dot-live {
+  0%, 100% {
+    opacity: 0.75;
+    box-shadow: 0 0 4px rgba(239, 68, 68, 0.35);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.55);
+  }
+}
+
+.tdl-v2-topbar__pill-label {
+  font-size: 0.48rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  color: var(--tdl-text-label);
+}
+
+.tdl-v2-topbar__pill-value {
+  font-size: 0.56rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--tdl-text-secondary);
+  max-width: 8.5rem;
+}
+
+.tdl-v2-topbar__presence {
+  min-width: 10rem;
+  padding: 0 0.5rem;
+}
+
+.tdl-v2-topbar__presence-copy {
+  font-size: 0.66rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--tdl-text-secondary);
+  opacity: 0.92;
+  transition: color var(--tdl-duration-normal) var(--tdl-ease-premium),
+    opacity var(--tdl-duration-normal) var(--tdl-ease-premium);
+}
+
+.tdl-v2-topbar__actions {
+  gap: 0.45rem;
+}
+
+.tdl-v2-topbar__icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--tdl-radius-sm);
+  opacity: 0.78;
+  transition:
+    opacity var(--tdl-duration-fast) var(--tdl-ease-premium),
+    background var(--tdl-duration-fast) var(--tdl-ease-premium),
+    color var(--tdl-duration-fast) var(--tdl-ease-premium);
+}
+
+.tdl-v2-topbar__icon-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.04);
+  transform: none;
+}
+
+/* --- Cognitive Orchestrator — always alive --- */
+
+.tdl-v2-orchestrator--reference .tdl-v2-orchestrator-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.55rem;
+  padding-bottom: 0.7rem;
+}
+
+.tdl-v2-orchestrator-header__alive {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--tdl-font-mono);
+  font-size: 0.44rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tdl-text-muted);
+}
+
+.tdl-v2-orchestrator-header__alive-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--tdl-red-core);
+  box-shadow: 0 0 8px var(--tdl-red-pulse);
+  animation: tdl-v2-telemetry-dot-breathe 5.2s var(--tdl-ease-organic) infinite;
+}
+
+.tdl-v2-orchestrator-presence {
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+}
+
+.tdl-v2-orchestrator-presence__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.28rem 0.15rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.tdl-v2-orchestrator-presence__row:last-child {
+  border-bottom: none;
+}
+
+.tdl-v2-orchestrator-presence__key {
+  font-size: 0.52rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tdl-text-muted);
+}
+
+.tdl-v2-orchestrator-presence__value {
+  font-size: 0.6rem;
+  color: var(--tdl-text-secondary);
+  text-align: right;
+  max-width: 58%;
+  line-height: 1.35;
+}
+
+.tdl-v2-orchestrator-presence__value[data-tone="live"] {
+  color: var(--tdl-red-glow);
+}
+
+.tdl-v2-orchestrator-presence__value[data-tone="calm"] {
+  color: var(--tdl-text-secondary);
+}
+
+.tdl-v2-orchestrator-state__orb {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.22) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(239, 68, 68, 0.35) 0%, rgba(127, 29, 29, 0.4) 55%, #0a0505 100%);
+  box-shadow:
+    0 0 16px rgba(220, 38, 38, 0.28),
+    0 0 32px rgba(220, 38, 38, 0.12);
+  animation: tdl-v2-orch-orb-breathe 5.6s var(--tdl-ease-organic) infinite;
+}
+
+.tdl-v2-orchestrator-state__orb::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  opacity: 0.7;
+  animation: tdl-v2-orch-orb-ring 5.6s var(--tdl-ease-organic) infinite;
+}
+
+@keyframes tdl-v2-orch-orb-breathe {
+  0%, 100% { transform: scale(0.96); opacity: 0.88; }
+  50% { transform: scale(1.04); opacity: 1; }
+}
+
+@keyframes tdl-v2-orch-orb-ring {
+  0%, 100% { transform: scale(0.94); opacity: 0.35; }
+  50% { transform: scale(1.06); opacity: 0.7; }
+}
+
+.tdl-v2-orchestrator-state__orb[data-cognitive-state="thinking"],
+.tdl-v2-orchestrator-state__orb[data-cognitive-state="reasoning"],
+.tdl-v2-orchestrator-state__orb[data-cognitive-state="planning"] {
+  animation-duration: 2.8s;
+  box-shadow:
+    0 0 22px rgba(239, 68, 68, 0.45),
+    0 0 44px rgba(220, 38, 38, 0.22);
+}
+
+.tdl-v2-orchestrator-state__bar {
+  animation: tdl-v2-orch-bar-idle 3.8s var(--tdl-ease-organic) infinite;
+}
+
+.tdl-v2-orchestrator-state__bar:nth-child(2) { animation-delay: 0.2s; }
+.tdl-v2-orchestrator-state__bar:nth-child(3) { animation-delay: 0.4s; }
+.tdl-v2-orchestrator-state__bar:nth-child(4) { animation-delay: 0.15s; }
+.tdl-v2-orchestrator-state__bar:nth-child(5) { animation-delay: 0.35s; }
+.tdl-v2-orchestrator-state__bar:nth-child(6) { animation-delay: 0.55s; }
+.tdl-v2-orchestrator-state__bar:nth-child(7) { animation-delay: 0.25s; }
+.tdl-v2-orchestrator-state__bar:nth-child(8) { animation-delay: 0.45s; }
+
+@keyframes tdl-v2-orch-bar-idle {
+  0%, 100% { opacity: 0.35; transform: scaleY(0.85); }
+  50% { opacity: 0.75; transform: scaleY(1.08); }
+}
+
+.tdl-v2-orchestrator-plan__idle {
+  padding: 0.35rem 0.45rem;
+  border-radius: var(--tdl-radius-sm);
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  color: var(--tdl-text-secondary);
+  line-height: 1.45;
+}
+
+.tdl-v2-orchestrator-steps__item[data-status="waiting"] {
+  opacity: 0.72;
+  transition: opacity var(--tdl-duration-normal) var(--tdl-ease-premium),
+    color var(--tdl-duration-normal) var(--tdl-ease-premium);
+}
+
+.tdl-v2-orchestrator-tools__item[data-active="false"] .tdl-v2-orchestrator-tools__dot {
+  animation: tdl-v2-telemetry-dot-breathe 5.8s var(--tdl-ease-organic) infinite;
+  background: rgba(248, 113, 113, 0.28);
+}
+
+/* --- Satellites — powered idle / purposeful active --- */
+
+.tdl-v2-satellite[data-status="idle"] .tdl-v2-satellite__node {
+  opacity: 0.92;
+  box-shadow:
+    0 0 10px rgba(239, 68, 68, 0.38),
+    0 0 20px rgba(220, 38, 38, 0.16);
+}
+
+.tdl-v2-satellite[data-status="idle"] .tdl-v2-satellite__aura {
+  opacity: 0.55;
+}
+
+.tdl-v2-satellite[data-status="idle"] .tdl-v2-satellite__status {
+  color: rgba(154, 147, 147, 0.85);
+}
+
+.tdl-v2-satellite-link:not([data-status="active"]):not([data-status="waiting"]) {
+  opacity: 0.16;
+  animation: tdl-v2-link-idle-impulse 11s linear infinite;
+}
+
+.tdl-v2-satellite:hover {
+  transform: translate(-50%, -50%) scale(1.03);
+  box-shadow: var(--tdl-glow-red-sm);
+}
+
+.tdl-v2-satellite[data-status="active"] {
+  filter: brightness(1.06);
+}
+
+.tdl-v2-satellite-core__halo {
+  animation-duration: 6.2s;
+}
+
+/* --- Bottom floating glass workspaces --- */
+
+.tdl-v2-dock-status-cards--float {
+  gap: 0.65rem;
+  padding: 0.15rem 0.1rem 0.25rem;
+}
+
+.tdl-v2-float-card {
+  position: relative;
+  min-height: var(--tdl-status-cards-height);
+  padding: 0.7rem 0.8rem;
+  border-radius: var(--tdl-radius-lg);
+  border: 1px solid var(--tdl-presence-edge);
+  background: linear-gradient(
+    165deg,
+    rgba(20, 18, 18, 0.42) 0%,
+    rgba(0, 0, 0, 0.38) 48%,
+    rgba(0, 0, 0, 0.5) 100%
+  );
+  backdrop-filter: blur(26px) saturate(1.02);
+  -webkit-backdrop-filter: blur(26px) saturate(1.02);
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.45),
+    0 1px 0 rgba(255, 255, 255, 0.045) inset,
+    0 -1px 0 rgba(255, 255, 255, 0.015) inset;
+  overflow: hidden;
+  transition:
+    border-color var(--tdl-duration-fast) var(--tdl-ease-premium),
+    box-shadow var(--tdl-duration-fast) var(--tdl-ease-premium),
+    transform var(--tdl-duration-fast) var(--tdl-ease-premium),
+    background var(--tdl-duration-fast) var(--tdl-ease-premium);
+  animation: tdl-v2-glass-workspace-float 8.5s var(--tdl-ease-organic) infinite;
+}
+
+.tdl-v2-float-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 12%;
+  right: 12%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.12) 50%,
+    transparent 100%
+  );
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.tdl-v2-float-card:nth-child(1) { animation-delay: 0s; }
+.tdl-v2-float-card:nth-child(2) { animation-delay: 0.4s; }
+.tdl-v2-float-card:nth-child(3) { animation-delay: 0.8s; }
+.tdl-v2-float-card:nth-child(4) { animation-delay: 1.2s; }
+.tdl-v2-float-card:nth-child(5) { animation-delay: 1.6s; }
+
+@keyframes tdl-v2-glass-workspace-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+.tdl-v2-float-card:hover {
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.55),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 0 24px rgba(220, 38, 38, 0.05);
+  transform: translateY(-3px);
+}
+
+.tdl-v2-float-card .tdl-v2-status-card__title {
+  font-size: 0.52rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  color: var(--tdl-text-label);
+}
+
+.tdl-v2-float-card .tdl-v2-status-card__body {
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: var(--tdl-text-primary);
+  line-height: 1.4;
+}
+
+.tdl-v2-float-card__status {
+  font-size: 0.44rem;
+  letter-spacing: 0.14em;
+  opacity: 0.85;
+}
+
+.tdl-v2-float-card .tdl-v2-status-card__indicator--idle {
+  background: rgba(248, 113, 113, 0.35);
+  opacity: 0.85;
+  animation: tdl-v2-telemetry-dot-breathe 5.4s var(--tdl-ease-organic) infinite;
+}
+
+.tdl-v2-float-card .tdl-v2-status-card__indicator--live {
+  animation: tdl-v2-telemetry-dot-live 2.4s var(--tdl-ease-organic) infinite;
+}
+
+/* --- Premium command console (composer) --- */
+
+.tdl-v2-composer--reference,
+.tdl-v2-composer--console {
+  min-height: var(--tdl-composer-min-height);
+  padding: 0.5rem 0.55rem 0.5rem 0.65rem;
+  gap: 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--tdl-presence-edge);
+  background: linear-gradient(
+    180deg,
+    rgba(18, 16, 16, 0.55) 0%,
+    rgba(0, 0, 0, 0.62) 100%
+  );
+  backdrop-filter: blur(28px) saturate(1.05);
+  -webkit-backdrop-filter: blur(28px) saturate(1.05);
+  box-shadow:
+    0 14px 40px rgba(0, 0, 0, 0.52),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 -8px 24px rgba(220, 38, 38, 0.03);
+  transition:
+    border-color var(--tdl-duration-normal) var(--tdl-ease-premium),
+    box-shadow var(--tdl-duration-normal) var(--tdl-ease-premium),
+    background var(--tdl-duration-normal) var(--tdl-ease-premium);
+}
+
+.tdl-v2-composer--console:focus-within,
+.tdl-v2-composer--reference:focus-within {
+  border-color: rgba(239, 68, 68, 0.28);
+  box-shadow:
+    0 16px 44px rgba(0, 0, 0, 0.58),
+    0 0 0 1px rgba(239, 68, 68, 0.12),
+    0 0 32px rgba(220, 38, 38, 0.1),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+.tdl-v2-composer--console .tdl-v2-composer__input,
+.tdl-v2-composer--reference .tdl-v2-composer__input {
+  min-height: 2.35rem;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.9rem;
+  font-weight: 400;
+  letter-spacing: 0.015em;
+  line-height: 1.45;
+}
+
+.tdl-v2-composer--console .tdl-v2-composer__input::placeholder,
+.tdl-v2-composer--reference .tdl-v2-composer__input::placeholder {
+  color: var(--tdl-text-muted);
+  font-weight: 300;
+  letter-spacing: 0.045em;
+  opacity: 0.78;
+}
+
+.tdl-v2-composer--console .tdl-v2-voice-mic,
+.tdl-v2-composer--console .tdl-v2-composer-attach,
+.tdl-v2-composer--reference .tdl-v2-voice-mic,
+.tdl-v2-composer--reference .tdl-v2-composer-attach {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  transition:
+    color var(--tdl-duration-fast) var(--tdl-ease-premium),
+    background var(--tdl-duration-fast) var(--tdl-ease-premium),
+    border-color var(--tdl-duration-fast) var(--tdl-ease-premium),
+    transform var(--tdl-duration-fast) var(--tdl-ease-premium),
+    box-shadow var(--tdl-duration-fast) var(--tdl-ease-premium);
+}
+
+.tdl-v2-composer--console .tdl-v2-voice-mic:hover,
+.tdl-v2-composer--console .tdl-v2-composer-attach:hover,
+.tdl-v2-composer--reference .tdl-v2-voice-mic:hover,
+.tdl-v2-composer--reference .tdl-v2-composer-attach:hover {
+  color: var(--tdl-text-primary);
+  background: rgba(255, 255, 255, 0.045);
+  border-color: var(--tdl-presence-edge);
+  box-shadow: 0 0 16px rgba(220, 38, 38, 0.08);
+  transform: scale(1.04);
+}
+
+.tdl-v2-composer--console .tdl-v2-composer__send,
+.tdl-v2-composer--reference .tdl-v2-composer__send {
+  min-width: 5rem;
+  height: 2.55rem;
+  padding: 0 1rem;
+  letter-spacing: 0.12em;
+  box-shadow:
+    0 0 0 1px rgba(220, 38, 38, 0.28),
+    0 0 20px rgba(220, 38, 38, 0.28);
+  transition:
+    filter var(--tdl-duration-fast) var(--tdl-ease-premium),
+    box-shadow var(--tdl-duration-fast) var(--tdl-ease-premium),
+    transform var(--tdl-duration-fast) var(--tdl-ease-premium);
+}
+
+.tdl-v2-composer--console .tdl-v2-composer__send:hover,
+.tdl-v2-composer--reference .tdl-v2-composer__send:hover {
+  filter: brightness(1.07);
+  box-shadow:
+    0 0 0 1px rgba(248, 113, 113, 0.4),
+    0 0 28px rgba(220, 38, 38, 0.38);
+  transform: scale(1.03);
+}
+
+.tdl-v2-composer--console .tdl-v2-composer__send:active,
+.tdl-v2-composer--reference .tdl-v2-composer__send:active {
+  transform: scale(0.97);
+}
+
+/* --- Sidebar presence widget life --- */
+
+.tdl-v2-presence-status__pill--online {
+  animation: tdl-v2-pill-online-glow 5s var(--tdl-ease-organic) infinite;
+}
+
+@keyframes tdl-v2-pill-online-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.1); }
+  50% { box-shadow: 0 0 14px rgba(239, 68, 68, 0.22); }
+}
+
+.tdl-v2-presence-card__orb {
+  animation: tdl-v2-telemetry-dot-breathe 4.6s var(--tdl-ease-organic) infinite;
+}
+
+/* --- Micro fades for status lines --- */
+
+.tdl-v2-status-line {
+  transition: color var(--tdl-duration-normal) var(--tdl-ease-premium),
+    opacity var(--tdl-duration-normal) var(--tdl-ease-premium);
+  opacity: 0.78;
+}
+
+.tdl-v2-status-line[data-active="true"] {
+  opacity: 1;
+  color: var(--tdl-text-secondary);
+}
+
+.tdl-v2-dock-telemetry--system {
+  letter-spacing: 0.1em;
+  background: rgba(0, 0, 0, 0.28);
+  border-color: var(--tdl-presence-edge);
+}
+
+/* --- Reduced motion --- */
+
+.tdl-v2--reduced-motion .tdl-v2-region--orchestrator.tdl-v2-glass-panel,
+.tdl-v2--reduced-motion .tdl-v2-topbar__pill-dot,
+.tdl-v2--reduced-motion .tdl-v2-orchestrator-header__alive-dot,
+.tdl-v2--reduced-motion .tdl-v2-orchestrator-state__orb,
+.tdl-v2--reduced-motion .tdl-v2-orchestrator-state__orb::after,
+.tdl-v2--reduced-motion .tdl-v2-orchestrator-state__bar,
+.tdl-v2--reduced-motion .tdl-v2-float-card,
+.tdl-v2--reduced-motion .tdl-v2-presence-status__pill--online,
+.tdl-v2--reduced-motion .tdl-v2-presence-card__orb,
+.tdl-v2--reduced-motion .tdl-v2-float-card .tdl-v2-status-card__indicator--idle,
+.tdl-v2--reduced-motion .tdl-v2-float-card .tdl-v2-status-card__indicator--live,
+.tdl-v2--reduced-motion .tdl-v2-orchestrator-tools__item[data-active="false"] .tdl-v2-orchestrator-tools__dot {
+  animation: none;
+}
+
+.tdl-v2--reduced-motion .tdl-v2-float-card:hover,
+.tdl-v2--reduced-motion .tdl-v2-composer--console .tdl-v2-composer__send:hover,
+.tdl-v2--reduced-motion .tdl-v2-composer--reference .tdl-v2-composer__send:hover,
+.tdl-v2--reduced-motion .tdl-v2-composer--console .tdl-v2-voice-mic:hover,
+.tdl-v2--reduced-motion .tdl-v2-composer--reference .tdl-v2-voice-mic:hover {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tdl-v2-root[data-presence="idle"] .tdl-v2-region--orchestrator.tdl-v2-glass-panel,
+  .tdl-v2-topbar__pill-dot,
+  .tdl-v2-orchestrator-state__orb,
+  .tdl-v2-float-card {
+    animation: none;
+  }
+}
+
+@media (min-width: 1920px) {
+  .tdl-v2-topbar__pills {
+    gap: 0.7rem;
+  }
+
+  .tdl-v2-composer--console .tdl-v2-composer__input,
+  .tdl-v2-composer--reference .tdl-v2-composer__input {
+    font-size: 0.94rem;
+  }
+
+  .tdl-v2-float-card {
+    padding: 0.8rem 0.95rem;
+  }
+}

@@ -1,0 +1,324 @@
+/* =====================================
+   Titan Frontend V2 — Layout Engine CSS
+   Phase E2 · Production layout
+   Authority: TITAN_LAYOUT_GUIDE · Production Spec §1
+   ===================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #050505;
+  color: var(--tdl-text-primary);
+  font-family: var(--tdl-font-sans);
+  font-size: var(--tdl-text-base);
+  font-weight: 400;
+}
+
+.tdl-v2-skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: calc(var(--tdl-z-overlay) + 1);
+  padding: 0.5rem 1rem;
+  background: var(--tdl-bg-elevated);
+  color: var(--tdl-text-primary);
+  text-decoration: none;
+}
+
+.tdl-v2-skip-link:focus {
+  left: var(--tdl-workspace-padding);
+  top: var(--tdl-workspace-padding);
+}
+
+/* --- Layer stack --- */
+
+.tdl-v2-root {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  isolation: isolate;
+}
+
+.tdl-v2-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.tdl-v2-layer--neural {
+  z-index: var(--tdl-z-neural);
+}
+
+.tdl-v2-layer--glow {
+  z-index: var(--tdl-z-glow);
+}
+
+.tdl-v2-layer--workspace {
+  z-index: var(--tdl-z-content);
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  padding: var(--tdl-workspace-padding);
+  gap: var(--tdl-workspace-gap);
+}
+
+.tdl-v2-layer--floating {
+  z-index: var(--tdl-z-floating);
+  pointer-events: none;
+}
+
+.tdl-v2-layer--overlay {
+  z-index: var(--tdl-z-overlay);
+  pointer-events: none;
+}
+
+.tdl-v2-layer--overlay[data-active="true"] {
+  pointer-events: auto;
+}
+
+/* --- Workspace grid --- */
+
+.tdl-v2-workspace-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--tdl-sidebar-width) 1fr var(--tdl-orchestrator-width);
+  grid-template-rows: 1fr;
+  gap: var(--tdl-workspace-gap);
+}
+
+.tdl-v2-region {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tdl-v2-region--main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tdl-workspace-gap);
+  min-height: 0;
+}
+
+.tdl-v2-region--dock {
+  flex-shrink: 0;
+  min-height: var(--tdl-bottom-dock-min-height);
+  display: flex;
+  flex-direction: column;
+  gap: var(--tdl-space-sm);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.tdl-v2-center-stack {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.tdl-v2-center-viewport {
+  flex: 1;
+  min-height: var(--tdl-chat-min-height);
+  position: relative;
+  overflow: hidden;
+}
+
+.tdl-v2-panel-slot {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  position: relative;
+}
+
+.tdl-v2-panel-slot[data-transition="enter"] {
+  opacity: 0;
+}
+
+.tdl-v2-panel-slot[data-transition="active"] {
+  opacity: 1;
+  transition: opacity var(--tdl-duration-normal) var(--tdl-ease-enter);
+}
+
+.tdl-v2-panel-slot[data-transition="exit"] {
+  opacity: 0;
+  transition: opacity var(--tdl-duration-normal) var(--tdl-ease-exit);
+}
+
+/* --- Panel load stagger --- */
+
+.tdl-v2-stagger-sidebar[data-stagger="pending"],
+.tdl-v2-stagger-main[data-stagger="pending"],
+.tdl-v2-stagger-orchestrator[data-stagger="pending"],
+.tdl-v2-stagger-dock[data-stagger="pending"] {
+  opacity: 0;
+}
+
+.tdl-v2-stagger-visible {
+  opacity: 1;
+  transition: opacity var(--tdl-duration-normal) var(--tdl-ease-enter);
+}
+
+/* --- Responsive: tablet --- */
+
+.tdl-v2--mode-tablet .tdl-v2-workspace-grid {
+  grid-template-columns: 56px 1fr;
+}
+
+.tdl-v2--mode-tablet .tdl-v2-region--orchestrator {
+  display: none;
+}
+
+.tdl-v2--mode-tablet .tdl-v2-region--orchestrator[data-drawer-open="true"] {
+  display: flex;
+  position: fixed;
+  top: var(--tdl-workspace-padding);
+  right: var(--tdl-workspace-padding);
+  bottom: calc(var(--tdl-bottom-dock-min-height) + var(--tdl-workspace-padding));
+  width: min(318px, 85vw);
+  z-index: calc(var(--tdl-z-content) + 5);
+}
+
+.tdl-v2--mode-tablet .tdl-v2-region--sidebar {
+  width: 56px;
+}
+
+.tdl-v2--mode-tablet .tdl-v2-logo,
+.tdl-v2--mode-tablet .tdl-v2-nav-item span,
+.tdl-v2--mode-tablet .tdl-v2-nav-item::after,
+.tdl-v2--mode-tablet .tdl-v2-sidebar-footer,
+.tdl-v2--mode-tablet .tdl-v2-sidebar-telemetry {
+  display: none;
+}
+
+.tdl-v2--mode-tablet .tdl-v2-nav-item {
+  justify-content: center;
+  padding: 0.65rem;
+}
+
+.tdl-v2--mode-tablet .tdl-v2-nav-item::before {
+  margin: 0;
+}
+
+.tdl-v2--mode-tablet .tdl-v2-neural-labels {
+  display: none;
+}
+
+.tdl-v2--mode-tablet .tdl-v2-topbar__module-chip {
+  display: inline-flex;
+}
+
+.tdl-v2--mode-tablet .tdl-v2-topbar__pills {
+  display: none;
+}
+
+.tdl-v2--mode-tablet .tdl-v2-dock-status-cards {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  gap: 0.5rem;
+  padding-bottom: 0.25rem;
+}
+
+.tdl-v2--mode-tablet .tdl-v2-status-card {
+  flex: 0 0 160px;
+  scroll-snap-align: start;
+}
+
+/* --- Responsive: phone --- */
+
+.tdl-v2--mode-phone .tdl-v2-workspace-grid {
+  grid-template-columns: 1fr;
+}
+
+.tdl-v2--mode-phone .tdl-v2-region--sidebar {
+  display: none;
+}
+
+.tdl-v2--mode-phone .tdl-v2-region--orchestrator {
+  display: none;
+}
+
+.tdl-v2--mode-phone .tdl-v2-neural-labels {
+  display: none;
+}
+
+.tdl-v2--mode-phone .tdl-v2-dock-telemetry {
+  display: none;
+}
+
+.tdl-v2--mode-phone .tdl-v2-dock-status-cards {
+  display: none;
+}
+
+.tdl-v2--mode-phone .tdl-v2-dock-status-lines {
+  display: none;
+}
+
+.tdl-v2--mode-phone .tdl-v2-topbar__pills {
+  display: none;
+}
+
+.tdl-v2--mode-phone .tdl-v2-topbar__actions .tdl-v2-topbar__icon-btn {
+  display: none;
+}
+
+.tdl-v2--mode-phone .tdl-v2-topbar {
+  height: auto;
+  min-height: 40px;
+  padding: 0.4rem 0.65rem;
+}
+
+.tdl-v2--mode-phone .tdl-v2-topbar__status {
+  font-size: 0.58rem;
+}
+
+.tdl-v2--mode-phone .tdl-v2-region--dock {
+  min-height: auto;
+}
+
+.tdl-v2--mode-phone .tdl-v2-composer {
+  position: sticky;
+  bottom: 0;
+  margin-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.tdl-v2--mode-phone .tdl-v2-float-tools,
+.tdl-v2--mode-phone .tdl-v2-float-memory,
+.tdl-v2--mode-phone .tdl-v2-float-orchestrator {
+  display: none;
+}
+
+.tdl-v2--mode-phone .tdl-v2-conversation__welcome-title {
+  font-size: var(--tdl-text-base);
+}
+
+/* --- Responsive: laptop --- */
+
+.tdl-v2--mode-laptop .tdl-v2-neural-module--planning,
+.tdl-v2--mode-laptop .tdl-v2-neural-module--calendar,
+.tdl-v2--mode-laptop .tdl-v2-neural-module--trading {
+  opacity: 0.35;
+}
+
+/* --- High contrast --- */
+
+.tdl-v2--high-contrast .tdl-v2-glass-panel,
+.tdl-v2--high-contrast .tdl-v2-status-card,
+.tdl-v2--high-contrast .tdl-v2-composer {
+  background: rgba(0, 0, 0, 0.82);
+  border-color: rgba(255, 255, 255, 0.12);
+}

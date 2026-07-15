@@ -25,6 +25,7 @@ class ExecutionResult:
     tools_truncated: int = 0
     action_label: str = ""
     decision_report: ToolDecisionReport | None = None
+    cognitive_execution: object | None = None
 
     @property
     def has_output(self) -> bool:

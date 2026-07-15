@@ -39,6 +39,8 @@ class BaseTool(ABC):
                 if param_def.default is None:
                     return f"Paramètre requis manquant : {param_def.name}"
         for key in params:
+            if key.startswith("_"):
+                continue
             known = {p.name for p in schema.parameters}
             if key not in known:
                 return f"Paramètre inconnu : {key}"

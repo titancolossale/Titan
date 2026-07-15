@@ -1,0 +1,546 @@
+/* =====================================
+   Titan Web App — Phase 7
+   LIVING RUNTIME EXPERIENCE
+   Presentation only — local UI reactions to existing frontend state.
+   Does not touch Titan Core / neural renderer / sidebar chrome /
+   composer structure / orchestrator layout / backend / Brain / APIs.
+   Loaded LAST — living runtime authority.
+   ===================================== */
+
+:root {
+  --tdl-lr-idle: rgba(107, 99, 99, 0.72);
+  --tdl-lr-live: rgba(239, 68, 68, 0.92);
+  --tdl-lr-glow: rgba(220, 38, 38, 0.22);
+  --tdl-lr-soft: rgba(248, 113, 113, 0.35);
+  --tdl-lr-fade: 420ms;
+  --tdl-lr-ease: cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+/* =====================================
+   GLOBAL ATMOSPHERE — very subtle life
+   ===================================== */
+
+.tdl-v2-root[data-living="7"],
+.tdl-v2-root[data-phase="7"] {
+  --tdl-lr-atmosphere: 1;
+}
+
+.tdl-v2-glow-ambient.tdl-v2-glow-ambient--living {
+  animation: tdl-lr-atmosphere-shift 28s ease-in-out infinite;
+}
+
+.tdl-v2-living-comms {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+  opacity: 0.55;
+}
+
+.tdl-v2-living-comms__node {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.35);
+  box-shadow: 0 0 6px rgba(220, 38, 38, 0.18);
+  animation: tdl-lr-comms-pulse 7.5s ease-in-out infinite;
+}
+
+.tdl-v2-living-comms__node:nth-child(1) {
+  top: 38%;
+  left: 46%;
+  animation-delay: 0s;
+}
+
+.tdl-v2-living-comms__node:nth-child(2) {
+  top: 52%;
+  left: 58%;
+  animation-delay: 1.8s;
+}
+
+.tdl-v2-living-comms__node:nth-child(3) {
+  top: 44%;
+  left: 34%;
+  animation-delay: 3.4s;
+}
+
+.tdl-v2-living-comms__orbit {
+  position: absolute;
+  top: 42%;
+  left: 48%;
+  width: 9rem;
+  height: 9rem;
+  margin: -4.5rem 0 0 -4.5rem;
+  border-radius: 50%;
+  border: 1px solid rgba(239, 68, 68, 0.04);
+  animation: tdl-lr-orbit 42s linear infinite;
+  pointer-events: none;
+}
+
+.tdl-v2-living-comms__orbit::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 50%;
+  width: 3px;
+  height: 3px;
+  margin-left: -1.5px;
+  border-radius: 50%;
+  background: rgba(248, 113, 113, 0.45);
+  box-shadow: 0 0 8px rgba(220, 38, 38, 0.2);
+}
+
+/* Root runtime hue — local atmosphere only, never page flash */
+.tdl-v2-root[data-runtime="thinking"] .tdl-v2-glow-ambient--living,
+.tdl-v2-root[data-runtime="planning"] .tdl-v2-glow-ambient--living {
+  filter: brightness(1.03) saturate(1.04);
+}
+
+.tdl-v2-root[data-runtime="searching"] .tdl-v2-glow-ambient--living,
+.tdl-v2-root[data-runtime="working"] .tdl-v2-glow-ambient--living {
+  filter: brightness(1.04) saturate(1.06);
+}
+
+.tdl-v2-root[data-runtime="remembering"] .tdl-v2-glow-ambient--living {
+  filter: brightness(1.02) saturate(1.03);
+}
+
+@keyframes tdl-lr-atmosphere-shift {
+  0%, 100% { opacity: 0.92; transform: scale(1) translate3d(0, 0, 0); }
+  40% { opacity: 1; transform: scale(1.012) translate3d(0.15%, -0.1%, 0); }
+  70% { opacity: 0.96; transform: scale(1.006) translate3d(-0.1%, 0.12%, 0); }
+}
+
+@keyframes tdl-lr-comms-pulse {
+  0%, 100% { opacity: 0.2; transform: scale(0.85); }
+  50% { opacity: 0.7; transform: scale(1.15); }
+}
+
+@keyframes tdl-lr-orbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* =====================================
+   TOP BAR — telemetry living states
+   Idle · Thinking · Working · Searching · Remembering · Planning
+   ===================================== */
+
+.tdl-v2-topbar--telemetry.tdl-v2-topbar--living {
+  transition:
+    outline-color var(--tdl-lr-fade) var(--tdl-lr-ease),
+    box-shadow var(--tdl-lr-fade) var(--tdl-lr-ease);
+}
+
+.tdl-v2-topbar--living[data-runtime="thinking"],
+.tdl-v2-topbar--living[data-runtime="planning"] {
+  outline-color: rgba(239, 68, 68, 0.12);
+}
+
+.tdl-v2-topbar--living[data-runtime="working"],
+.tdl-v2-topbar--living[data-runtime="searching"] {
+  outline-color: rgba(239, 68, 68, 0.16);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.28),
+    0 1px 0 rgba(255, 255, 255, 0.035) inset,
+    0 0 22px rgba(220, 38, 38, 0.05);
+}
+
+.tdl-v2-topbar--living .tdl-v2-topbar__pill {
+  transition:
+    opacity var(--tdl-lr-fade) var(--tdl-lr-ease),
+    filter var(--tdl-lr-fade) var(--tdl-lr-ease);
+}
+
+.tdl-v2-topbar--living .tdl-v2-topbar__pill-dot {
+  transition:
+    background var(--tdl-lr-fade) var(--tdl-lr-ease),
+    box-shadow var(--tdl-lr-fade) var(--tdl-lr-ease),
+    transform var(--tdl-lr-fade) var(--tdl-lr-ease);
+  animation: tdl-lr-dot-idle 5.8s ease-in-out infinite;
+}
+
+.tdl-v2-topbar--living .tdl-v2-topbar__pill-value {
+  transition: color var(--tdl-lr-fade) var(--tdl-lr-ease), opacity 280ms var(--tdl-lr-ease);
+}
+
+/* Per-state dots */
+.tdl-v2-topbar--living .tdl-v2-topbar__pill[data-activity="idle"] .tdl-v2-topbar__pill-dot {
+  background: var(--tdl-lr-idle);
+  box-shadow: none;
+  animation-name: tdl-lr-dot-idle;
+}
+
+.tdl-v2-topbar--living .tdl-v2-topbar__pill[data-activity="thinking"] .tdl-v2-topbar__pill-dot,
+.tdl-v2-topbar--living .tdl-v2-topbar__pill[data-activity="planning"] .tdl-v2-topbar__pill-dot {
+  background: var(--tdl-lr-live);
+  box-shadow: 0 0 7px var(--tdl-lr-glow);
+  animation: tdl-lr-dot-think 2.8s ease-in-out infinite;
+}
+
+.tdl-v2-topbar--living .tdl-v2-topbar__pill[data-activity="working"] .tdl-v2-topbar__pill-dot,
+.tdl-v2-topbar--living .tdl-v2-topbar__pill[data-activity="searching"] .tdl-v2-topbar__pill-dot {
+  background: var(--tdl-lr-live);
+  box-shadow: 0 0 9px var(--tdl-lr-glow);
+  animation: tdl-lr-dot-work 1.9s ease-in-out infinite;
+}
+
+.tdl-v2-topbar--living .tdl-v2-topbar__pill[data-activity="remembering"] .tdl-v2-topbar__pill-dot {
+  background: rgba(248, 113, 113, 0.95);
+  box-shadow: 0 0 8px rgba(248, 113, 113, 0.35);
+  animation: tdl-lr-dot-remember 3.4s ease-in-out infinite;
+}
+
+.tdl-v2-topbar--living .tdl-v2-topbar__pill[data-status="active"] .tdl-v2-topbar__pill-value,
+.tdl-v2-topbar--living .tdl-v2-topbar__pill[data-status="live"] .tdl-v2-topbar__pill-value {
+  color: rgba(255, 244, 244, 0.92);
+}
+
+.tdl-v2-topbar--living .tdl-v2-topbar__presence-copy {
+  transition: opacity 360ms var(--tdl-lr-ease), color 360ms var(--tdl-lr-ease);
+}
+
+.tdl-v2-topbar--living[data-runtime="thinking"] .tdl-v2-topbar__presence-copy,
+.tdl-v2-topbar--living[data-runtime="planning"] .tdl-v2-topbar__presence-copy,
+.tdl-v2-topbar--living[data-runtime="working"] .tdl-v2-topbar__presence-copy,
+.tdl-v2-topbar--living[data-runtime="searching"] .tdl-v2-topbar__presence-copy,
+.tdl-v2-topbar--living[data-runtime="remembering"] .tdl-v2-topbar__presence-copy {
+  color: rgba(220, 210, 210, 0.95);
+}
+
+.tdl-v2-topbar--living .tdl-v2-topbar__brain-mode {
+  transition: box-shadow 480ms var(--tdl-lr-ease), border-color 480ms var(--tdl-lr-ease);
+}
+
+.tdl-v2-topbar--living[data-runtime="thinking"] .tdl-v2-topbar__brain-mode,
+.tdl-v2-topbar--living[data-runtime="planning"] .tdl-v2-topbar__brain-mode,
+.tdl-v2-topbar--living[data-runtime="working"] .tdl-v2-topbar__brain-mode {
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.16);
+  animation: tdl-lr-brain-breathe 3.6s ease-in-out infinite;
+}
+
+@keyframes tdl-lr-dot-idle {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.85; }
+}
+
+@keyframes tdl-lr-dot-think {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.12); }
+}
+
+@keyframes tdl-lr-dot-work {
+  0%, 100% { opacity: 0.75; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.18); }
+}
+
+@keyframes tdl-lr-dot-remember {
+  0%, 100% { opacity: 0.55; filter: blur(0); }
+  50% { opacity: 1; filter: blur(0.2px); }
+}
+
+@keyframes tdl-lr-brain-breathe {
+  0%, 100% { box-shadow: 0 0 16px rgba(239, 68, 68, 0.1); }
+  50% { box-shadow: 0 0 24px rgba(239, 68, 68, 0.2); }
+}
+
+/* =====================================
+   FLOATING WORKSPACES — alive locally
+   ===================================== */
+
+.tdl-v2-workspace-dock[data-living="7"] .tdl-v2-workspace-card {
+  transition:
+    outline-color 380ms var(--tdl-lr-ease),
+    box-shadow 380ms var(--tdl-lr-ease),
+    opacity 420ms var(--tdl-lr-ease);
+}
+
+/* --- Recent Memory: slow scan · pulse · timestamp fade --- */
+.tdl-v2-workspace-card[data-kind="memory"] .tdl-v2-workspace-card__scan {
+  animation: tdl-lr-memory-scan 11s ease-in-out infinite;
+}
+
+.tdl-v2-workspace-card[data-kind="memory"] .tdl-v2-status-card__indicator--idle {
+  animation: tdl-lr-memory-pulse 6.4s ease-in-out infinite;
+}
+
+.tdl-v2-workspace-card[data-kind="memory"] .tdl-v2-workspace-memory-item__meta {
+  animation: tdl-lr-timestamp-fade 8s ease-in-out infinite;
+}
+
+.tdl-v2-workspace-card[data-kind="memory"][data-activity="remembering"],
+.tdl-v2-workspace-card[data-kind="memory"][data-live="true"] {
+  outline-color: rgba(239, 68, 68, 0.14);
+}
+
+.tdl-v2-workspace-card[data-kind="memory"][data-activity="remembering"] .tdl-v2-workspace-card__scan {
+  opacity: 0.85;
+  animation-duration: 5.5s;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(239, 68, 68, 0.32) 50%,
+    transparent 100%
+  );
+}
+
+@keyframes tdl-lr-memory-scan {
+  0%, 100% { transform: translateX(-10%); opacity: 0.12; }
+  50% { transform: translateX(10%); opacity: 0.5; }
+}
+
+@keyframes tdl-lr-memory-pulse {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.15); }
+}
+
+@keyframes tdl-lr-timestamp-fade {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.95; }
+}
+
+/* --- Obsidian: vault glow · sync pulse · quiet activity --- */
+.tdl-v2-workspace-card[data-kind="obsidian"] .tdl-v2-workspace-obsidian__mark {
+  transition: color 400ms var(--tdl-lr-ease), filter 400ms var(--tdl-lr-ease), opacity 400ms;
+  animation: tdl-lr-vault-glow 7.2s ease-in-out infinite;
+}
+
+.tdl-v2-workspace-card[data-kind="obsidian"]::after {
+  animation: tdl-lr-obsidian-quiet 9s ease-in-out infinite;
+}
+
+.tdl-v2-workspace-card[data-kind="obsidian"][data-activity="syncing"] .tdl-v2-workspace-obsidian__mark,
+.tdl-v2-workspace-card[data-kind="obsidian"][data-live="true"] .tdl-v2-workspace-obsidian__mark {
+  animation: tdl-lr-vault-sync 2.4s ease-in-out infinite;
+  color: rgba(196, 181, 253, 0.78);
+  filter: drop-shadow(0 0 8px rgba(167, 139, 250, 0.35));
+}
+
+@keyframes tdl-lr-vault-glow {
+  0%, 100% { opacity: 0.55; filter: drop-shadow(0 0 2px rgba(167, 139, 250, 0.08)); }
+  50% { opacity: 0.82; filter: drop-shadow(0 0 6px rgba(167, 139, 250, 0.2)); }
+}
+
+@keyframes tdl-lr-vault-sync {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+
+@keyframes tdl-lr-obsidian-quiet {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+}
+
+/* --- Browser: connection · search · idle shimmer --- */
+.tdl-v2-workspace-card[data-kind="browser"] .tdl-v2-workspace-browser__preview {
+  transition: outline-color 360ms var(--tdl-lr-ease), box-shadow 360ms, opacity 360ms;
+}
+
+.tdl-v2-workspace-card[data-kind="browser"] .tdl-v2-workspace-browser__pane {
+  position: relative;
+  overflow: hidden;
+}
+
+.tdl-v2-workspace-card[data-kind="browser"] .tdl-v2-workspace-browser__pane::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.05) 48%,
+    transparent 62%
+  );
+  animation: tdl-lr-browser-shimmer 8.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.tdl-v2-workspace-card[data-kind="browser"] .tdl-v2-workspace-browser__bar::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0.2rem;
+  width: 4px;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 50%;
+  background: rgba(107, 99, 99, 0.7);
+  box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  animation: tdl-lr-browser-conn 5.5s ease-in-out infinite;
+  z-index: 2;
+}
+
+.tdl-v2-workspace-card[data-kind="browser"] {
+  position: relative;
+}
+
+.tdl-v2-workspace-card[data-kind="browser"][data-activity="searching"] .tdl-v2-workspace-browser__bar,
+.tdl-v2-workspace-card[data-kind="browser"][data-live="true"] .tdl-v2-workspace-browser__bar {
+  background: linear-gradient(
+    90deg,
+    rgba(239, 68, 68, 0.45),
+    rgba(255, 255, 255, 0.1),
+    rgba(239, 68, 68, 0.25)
+  );
+  background-size: 200% 100%;
+  animation: tdl-lr-browser-search 2.2s ease-in-out infinite;
+}
+
+.tdl-v2-workspace-card[data-kind="browser"][data-activity="searching"] .tdl-v2-workspace-browser__bar::before,
+.tdl-v2-workspace-card[data-kind="browser"][data-live="true"] .tdl-v2-workspace-browser__bar::before {
+  background: rgba(239, 68, 68, 0.95);
+  animation: tdl-lr-browser-conn-live 1.6s ease-in-out infinite;
+}
+
+@keyframes tdl-lr-browser-shimmer {
+  0%, 100% { transform: translateX(-40%); opacity: 0.2; }
+  50% { transform: translateX(40%); opacity: 0.55; }
+}
+
+@keyframes tdl-lr-browser-search {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes tdl-lr-browser-conn {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.85; }
+}
+
+@keyframes tdl-lr-browser-conn-live {
+  0%, 100% { opacity: 0.7; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.25); }
+  50% { opacity: 1; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0); }
+}
+
+/* --- Cognitive State: breathing glow · state transition --- */
+.tdl-v2-workspace-card[data-kind="cognitive"] {
+  transition:
+    outline-color 480ms var(--tdl-lr-ease),
+    box-shadow 480ms var(--tdl-lr-ease),
+    background 480ms var(--tdl-lr-ease);
+}
+
+.tdl-v2-workspace-card[data-kind="cognitive"]::after {
+  animation: tdl-lr-cognitive-breathe 6.8s ease-in-out infinite;
+}
+
+.tdl-v2-workspace-card[data-kind="cognitive"] .tdl-v2-workspace-line--primary {
+  transition: opacity 320ms var(--tdl-lr-ease), color 320ms var(--tdl-lr-ease);
+}
+
+.tdl-v2-workspace-card[data-kind="cognitive"][data-activity="thinking"]::after,
+.tdl-v2-workspace-card[data-kind="cognitive"][data-activity="planning"]::after,
+.tdl-v2-workspace-card[data-kind="cognitive"][data-activity="working"]::after,
+.tdl-v2-workspace-card[data-kind="cognitive"][data-live="true"]::after {
+  opacity: 0.85;
+  background: linear-gradient(
+    145deg,
+    rgba(220, 38, 38, 0.07) 0%,
+    transparent 42%,
+    transparent 100%
+  );
+  animation-duration: 3.2s;
+}
+
+.tdl-v2-workspace-card[data-kind="cognitive"][data-activity="thinking"] .tdl-v2-workspace-cognitive__pulse,
+.tdl-v2-workspace-card[data-kind="cognitive"][data-activity="planning"] .tdl-v2-workspace-cognitive__pulse {
+  animation-duration: 1.6s;
+}
+
+@keyframes tdl-lr-cognitive-breathe {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.75; }
+}
+
+/* --- Presence: calm breathing ring · engagement pulse --- */
+.tdl-v2-workspace-card[data-kind="presence"] .tdl-v2-workspace-presence__breath {
+  animation: tdl-lr-presence-calm 5.4s ease-in-out infinite;
+}
+
+.tdl-v2-workspace-card[data-kind="presence"] .tdl-v2-presence-ring__fill {
+  transition: stroke-dashoffset 680ms var(--tdl-lr-ease), stroke 400ms var(--tdl-lr-ease);
+}
+
+.tdl-v2-workspace-card[data-kind="presence"][data-activity="engaged"],
+.tdl-v2-workspace-card[data-kind="presence"][data-presence="engaged"] {
+  outline-color: rgba(239, 68, 68, 0.18);
+}
+
+.tdl-v2-workspace-card[data-kind="presence"][data-activity="engaged"] .tdl-v2-workspace-presence__breath,
+.tdl-v2-workspace-card[data-kind="presence"][data-presence="engaged"] .tdl-v2-workspace-presence__breath {
+  animation: tdl-lr-presence-engage 2.8s ease-in-out infinite;
+  background: radial-gradient(
+    circle,
+    rgba(239, 68, 68, 0.28) 0%,
+    transparent 70%
+  );
+}
+
+@keyframes tdl-lr-presence-calm {
+  0%, 100% { opacity: 0.3; transform: scale(0.9); }
+  50% { opacity: 0.75; transform: scale(1.06); }
+}
+
+@keyframes tdl-lr-presence-engage {
+  0%, 100% { opacity: 0.45; transform: scale(0.94); }
+  50% { opacity: 0.95; transform: scale(1.12); }
+}
+
+/* =====================================
+   LOCAL RUNTIME REACTIONS — never whole page
+   ===================================== */
+
+.tdl-v2-root[data-runtime="thinking"] .tdl-v2-workspace-card[data-kind="cognitive"],
+.tdl-v2-root[data-runtime="planning"] .tdl-v2-workspace-card[data-kind="cognitive"] {
+  outline-color: rgba(239, 68, 68, 0.14);
+}
+
+.tdl-v2-root[data-runtime="remembering"] .tdl-v2-workspace-card[data-kind="memory"] {
+  outline-color: rgba(239, 68, 68, 0.12);
+}
+
+.tdl-v2-root[data-runtime="searching"] .tdl-v2-workspace-card[data-kind="browser"] {
+  outline-color: rgba(239, 68, 68, 0.14);
+}
+
+.tdl-v2-root[data-runtime="working"] .tdl-v2-topbar__pill--tools .tdl-v2-topbar__pill-dot {
+  animation-duration: 1.5s;
+}
+
+/* =====================================
+   REDUCED MOTION
+   ===================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .tdl-v2-glow-ambient--living,
+  .tdl-v2-living-comms__node,
+  .tdl-v2-living-comms__orbit,
+  .tdl-v2-topbar--living .tdl-v2-topbar__pill-dot,
+  .tdl-v2-topbar--living .tdl-v2-topbar__brain-mode,
+  .tdl-v2-workspace-card[data-kind="memory"] .tdl-v2-workspace-card__scan,
+  .tdl-v2-workspace-card[data-kind="memory"] .tdl-v2-status-card__indicator--idle,
+  .tdl-v2-workspace-card[data-kind="memory"] .tdl-v2-workspace-memory-item__meta,
+  .tdl-v2-workspace-card[data-kind="obsidian"] .tdl-v2-workspace-obsidian__mark,
+  .tdl-v2-workspace-card[data-kind="obsidian"]::after,
+  .tdl-v2-workspace-card[data-kind="browser"] .tdl-v2-workspace-browser__pane::after,
+  .tdl-v2-workspace-card[data-kind="browser"] .tdl-v2-workspace-browser__bar,
+  .tdl-v2-workspace-card[data-kind="browser"] .tdl-v2-workspace-browser__bar::before,
+  .tdl-v2-workspace-card[data-kind="cognitive"]::after,
+  .tdl-v2-workspace-card[data-kind="presence"] .tdl-v2-workspace-presence__breath {
+    animation: none !important;
+  }
+
+  .tdl-v2-root[data-runtime] .tdl-v2-glow-ambient--living {
+    filter: none;
+  }
+}
+
+.tdl-v2--reduced-motion .tdl-v2-glow-ambient--living,
+.tdl-v2--reduced-motion .tdl-v2-living-comms__node,
+.tdl-v2--reduced-motion .tdl-v2-living-comms__orbit,
+.tdl-v2--reduced-motion .tdl-v2-topbar--living .tdl-v2-topbar__pill-dot,
+.tdl-v2--reduced-motion .tdl-v2-topbar--living .tdl-v2-topbar__brain-mode {
+  animation: none !important;
+}

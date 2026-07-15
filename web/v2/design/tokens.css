@@ -1,0 +1,201 @@
+/* =====================================
+   Titan Frontend V3 — Design Tokens
+   Authority: Titan OS · Premium Command Center (Sprint 2.2)
+   Pure black · dark graphite · Titan red accent only where needed
+   ===================================== */
+
+:root {
+  /* --- Colors: void & surfaces --- */
+  --tdl-bg-void: #000000;
+  --tdl-bg-surface: #0a0a0a;
+  --tdl-bg-elevated: #111111;
+  --tdl-bg-overlay: rgba(0, 0, 0, 0.78);
+  --tdl-bg-graphite: #121214;
+
+  /* --- Colors: Titan Red (attention accents only) --- */
+  --tdl-red-primary: #dc2626;
+  --tdl-red-core: #ef4444;
+  --tdl-red-bright: #f87171;
+  --tdl-red-glow: #f0554f;
+  --tdl-red-dark: #7f1d1d;
+  --tdl-red-subtle: rgba(220, 38, 38, 0.1);
+  --tdl-red-pulse: rgba(239, 68, 68, 0.35);
+  --tdl-red-dim: var(--tdl-red-dark);
+
+  /* Compatibility aliases — legacy purple names resolve to red */
+  --tdl-purple-primary: var(--tdl-red-primary);
+  --tdl-purple-core: var(--tdl-red-core);
+  --tdl-purple-bright: var(--tdl-red-bright);
+  --tdl-purple-accent: var(--tdl-red-glow);
+  --tdl-purple-dark: var(--tdl-red-dark);
+  --tdl-purple-subtle: var(--tdl-red-subtle);
+  --tdl-purple-pulse: var(--tdl-red-pulse);
+
+  /* --- Colors: text hierarchy --- */
+  --tdl-text-primary: #f4f1f1;
+  --tdl-text-secondary: #9a9393;
+  --tdl-text-muted: #4f4a4a;
+  --tdl-text-inverse: #050505;
+  --tdl-text-label: #6b6363;
+
+  /* --- Colors: borders (cool, thin — red reserved for active) --- */
+  --tdl-border-subtle: rgba(255, 255, 255, 0.04);
+  --tdl-border-default: rgba(255, 255, 255, 0.06);
+  --tdl-border-active: rgba(220, 38, 38, 0.32);
+  --tdl-border-focus: rgba(248, 113, 113, 0.45);
+
+  /* --- Colors: semantic --- */
+  --tdl-status-online: var(--tdl-red-glow);
+  --tdl-status-warning: var(--tdl-red-bright);
+  --tdl-status-error: var(--tdl-red-primary);
+  --tdl-status-idle: #5c5555;
+  --tdl-accent-blue: var(--tdl-red-core);
+  --tdl-accent-purple: var(--tdl-red-glow);
+
+  /* --- Spacing (premium breathing room) --- */
+  --tdl-space-2xs: 0.125rem;
+  --tdl-space-xs: 0.25rem;
+  --tdl-space-sm: 0.5rem;
+  --tdl-space-md: 0.75rem;
+  --tdl-space-base: 1rem;
+  --tdl-space-lg: 1.5rem;
+  --tdl-space-xl: 2rem;
+  --tdl-space-2xl: 2.5rem;
+
+  /* --- Layout --- */
+  --tdl-workspace-padding: 1.15rem;
+  --tdl-workspace-gap: 0.85rem;
+  --tdl-sidebar-width: 218px;
+  --tdl-orchestrator-width: 318px;
+  --tdl-bottom-dock-min-height: 10.5rem;
+  --tdl-statusbar-height: 28px;
+  --tdl-content-max-width: 720px;
+  --tdl-chat-min-height: 180px;
+  --tdl-topbar-height: 52px;
+  --tdl-composer-min-height: 54px;
+  --tdl-composer-max-height: 72px;
+  --tdl-status-cards-height: 84px;
+  --tdl-panel-padding: 1.35rem;
+
+  /* --- Panel surfaces (darker glass → almost disappear into void) ---
+     Interiors stay near-black so the neural field reads through.
+     Red is reserved for borders on active states and indicators. */
+  --tdl-panel-bg: rgba(0, 0, 0, 0.32);
+  --tdl-panel-bg-solid: rgba(0, 0, 0, 0.48);
+  --tdl-panel-border: rgba(255, 255, 255, 0.04);
+  --tdl-panel-blur: 32px;
+  --tdl-panel-shadow:
+    0 8px 36px rgba(0, 0, 0, 0.45),
+    0 1px 0 rgba(255, 255, 255, 0.03) inset;
+  --tdl-ref-panel-bg: rgba(0, 0, 0, 0.36);
+  --tdl-ref-panel-border: rgba(255, 255, 255, 0.045);
+  --tdl-ref-panel-blur: 36px;
+  --tdl-ref-core-glow: rgba(239, 68, 68, 0.45);
+
+  /* --- Border radius (consistent command-center language) --- */
+  --tdl-radius-sm: 6px;
+  --tdl-radius-md: 10px;
+  --tdl-radius-lg: 14px;
+  --tdl-radius-xl: 18px;
+  --tdl-radius-panel: 14px;
+  --tdl-radius-full: 9999px;
+
+  /* --- Shadows & glow (softer, lower intensity) --- */
+  --tdl-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --tdl-shadow-md: 0 4px 18px rgba(0, 0, 0, 0.55);
+  --tdl-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.65);
+  --tdl-glow-red-sm: 0 0 12px rgba(220, 38, 38, 0.2), 0 0 24px rgba(220, 38, 38, 0.08);
+  --tdl-glow-red-md: 0 0 22px rgba(220, 38, 38, 0.22), 0 0 44px rgba(220, 38, 38, 0.1);
+  --tdl-glow-red-lg: 0 0 36px rgba(220, 38, 38, 0.26), 0 0 72px rgba(220, 38, 38, 0.12);
+  --tdl-glow-purple-sm: var(--tdl-glow-red-sm);
+  --tdl-glow-purple-md: var(--tdl-glow-red-md);
+  --tdl-glow-purple-lg: var(--tdl-glow-red-lg);
+
+  /* --- Z-index --- */
+  --tdl-z-neural: 0;
+  --tdl-z-glow: 1;
+  --tdl-z-content: 10;
+  --tdl-z-floating: 15;
+  --tdl-z-statusbar: 20;
+  --tdl-z-overlay: 100;
+  --tdl-z-toast: 110;
+
+  /* --- Animation --- */
+  --tdl-duration-instant: 100ms;
+  --tdl-duration-fast: 180ms;
+  --tdl-duration-normal: 320ms;
+  --tdl-duration-slow: 560ms;
+  --tdl-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --tdl-ease-enter: cubic-bezier(0, 0, 0.2, 1);
+  --tdl-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --tdl-ease-organic: cubic-bezier(0.45, 0.05, 0.55, 0.95);
+  --tdl-ease-premium: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* --- Typography hierarchy --- */
+  --tdl-font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --tdl-font-mono: "JetBrains Mono", "Cascadia Code", "Consolas", monospace;
+  --tdl-text-xs: 0.6875rem;
+  --tdl-text-sm: 0.8125rem;
+  --tdl-text-base: 0.9375rem;
+  --tdl-text-lg: 1.125rem;
+  --tdl-text-xl: 1.375rem;
+  --tdl-text-2xl: 1.625rem;
+  --tdl-text-display: 1.85rem;
+  --tdl-tracking-label: 0.14em;
+  --tdl-tracking-heading: 0.06em;
+  --tdl-font-scale: 1;
+  --tdl-v2-mode: desktop;
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  :root {
+    --tdl-orchestrator-width: 272px;
+    --tdl-content-max-width: 680px;
+    --tdl-workspace-padding: 1rem;
+  }
+}
+
+@media (min-width: 1920px) and (max-width: 2559px) {
+  :root {
+    --tdl-content-max-width: 780px;
+    --tdl-sidebar-width: 232px;
+    --tdl-orchestrator-width: 316px;
+    --tdl-workspace-padding: 1.25rem;
+    --tdl-workspace-gap: 0.95rem;
+  }
+}
+
+@media (min-width: 2560px) {
+  :root {
+    --tdl-sidebar-width: 248px;
+    --tdl-orchestrator-width: 336px;
+    --tdl-content-max-width: 860px;
+    --tdl-workspace-padding: 1.5rem;
+    --tdl-topbar-height: 56px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --tdl-duration-instant: 0.01ms;
+    --tdl-duration-fast: 0.01ms;
+    --tdl-duration-normal: 0.01ms;
+    --tdl-duration-slow: 0.01ms;
+  }
+}
+
+.tdl-v2--reduced-motion *,
+.tdl-v2--reduced-motion *::before,
+.tdl-v2--reduced-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+.tdl-v2--font-scale-112 {
+  font-size: calc(var(--tdl-text-base) * 1.12);
+}
+
+.tdl-v2--font-scale-125 {
+  font-size: calc(var(--tdl-text-base) * 1.25);
+}

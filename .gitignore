@@ -3,3 +3,44 @@ logs/*.log
 
 # Secrets — never commit (P1-031)
 .env
+data/google_client_secret.json
+data/google_calendar_token.json
+
+# Controlled patch application backups (local only)
+.titan/
+
+# Phase 10 — Cloud deployment: runtime state, caches, local artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+logs/tools_audit.jsonl
+data/google_gmail_client_secret.json
+data/google_gmail_token.json
+data/*token*.json
+data/*secret*.json
+data/long_term_memory.json
+data/titan_state.json
+data/titan_mission.json
+data/learning_memory.json
+data/knowledge_learning.json
+data/development_sessions.json
+data/proactive_intelligence.json
+data/voice_sessions.json
+data/tradingview_alerts.json
+data/scheduled_jobs.json
+data/tool_runs.json
+data/tool_metrics.json
+data/provider_telemetry.json
+data/rollback_history.json
+data/backups/
+data/sessions/
+.playwright/
+browser_profiles/
+screenshots/
+.idea/
+.vscode/
+Thumbs.db
+node_modules/
+docker-compose.override.yml

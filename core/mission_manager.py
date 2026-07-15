@@ -2,118 +2,103 @@
 # Titan Mission Manager
 # =====================================
 
-"""Mission lifecycle persistence with v2 step history (Phase 8 — P8-002)."""
+"""Mission lifecycle persistence — facade over MissionRuntime (Mission Runtime V1)."""
 
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
-from core.mission_migrator import default_schema, migrate
+from core.mission_migrator import SCHEMA_VERSION, default_schema, migrate
+from core.mission_models import Mission, MissionPriority, MissionState
+from core.mission_runtime import MissionRuntime
 
 
 class MissionManager:
-    """Persist multi-step missions with completed-step history."""
+    """Persist multi-step missions with completed-step history.
+
+    Delegates runtime lifecycle to ``MissionRuntime`` while preserving the
+    v2-compatible API used by Brain pipeline stages and REPL commands.
+    """
 
     def __init__(self, file_path: str | Path = "data/titan_mission.json") -> None:
         self.file_path = Path(file_path)
-        self.mission = self.load_mission()
+        self._runtime = MissionRuntime(file_path=self.file_path)
+        self.mission = self._runtime.get_legacy_mission_view()
 
     def load_mission(self) -> dict:
-        if not self.file_path.exists():
-            return default_schema()
-
-        with self.file_path.open("r", encoding="utf-8") as file:
-            raw = json.load(file)
-
-        return migrate(raw)
+        self._runtime = MissionRuntime(file_path=self.file_path)
+        self.mission = self._runtime.get_legacy_mission_view()
+        return self.mission
 
     def save_mission(self) -> None:
-        self.file_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.file_path.open("w", encoding="utf-8") as file:
-            json.dump(self.mission, file, indent=4, ensure_ascii=False)
+        self._runtime._sync_legacy_view()
+        self._runtime._save_document()
+        self.mission = self._runtime.get_legacy_mission_view()
 
-    def create_mission(self, title: str, objective: str, steps: list[str]) -> None:
-        self.mission = {
-            **default_schema(),
-            "active": True,
-            "title": title,
-            "objective": objective,
-            "steps": list(steps),
-            "completed_steps": [],
-            "current_step": steps[0] if steps else None,
-            "status": "in_progress",
-        }
-        self.save_mission()
+    @property
+    def runtime(self) -> MissionRuntime:
+        """Mission Runtime V1 engine for Brain API and integrations."""
+        return self._runtime
+
+    def create_mission(self, title: str, objective: str, steps: list[str]) -> Mission:
+        mission = self._runtime.create_mission(
+            title,
+            objective,
+            list(steps),
+            state=MissionState.READY,
+        )
+        self.mission = self._runtime.get_legacy_mission_view()
+        return mission
 
     def get_mission(self) -> dict:
+        self.mission = self._runtime.get_legacy_mission_view()
         return self.mission
 
     def complete_current_step(self) -> None:
         """Advance mission by recording current step in history — never mutates steps list."""
-        if not self.mission.get("active"):
-            return
-
-        current = self.mission.get("current_step")
-        if not current:
-            return
-
-        completed = self.mission.setdefault("completed_steps", [])
-        if current not in completed:
-            completed.append(current)
-
-        next_step = self._next_pending_step()
-        self.mission["current_step"] = next_step
-
-        if next_step is None:
-            self.mission["active"] = False
-            self.mission["status"] = "completed"
-
-        self.save_mission()
+        self._runtime.complete_current_step()
+        self.mission = self._runtime.get_legacy_mission_view()
 
     def cancel_mission(self) -> None:
         """Mark active mission as cancelled without deleting history."""
-        if not self.mission.get("active"):
-            return
-        self.mission["active"] = False
-        self.mission["status"] = "cancelled"
-        self.save_mission()
+        self._runtime.cancel_mission()
+        self.mission = self._runtime.get_legacy_mission_view()
 
     def _next_pending_step(self) -> str | None:
         """Return the first step not yet in completed_steps."""
-        completed = set(self.mission.get("completed_steps", []))
-        for step in self.mission.get("steps", []):
+        mission = self._runtime.get_active_mission()
+        if mission is None:
+            return None
+        completed = set(mission.completed_steps)
+        for step in mission.steps:
             if step not in completed:
                 return step
         return None
 
     def format_status(self) -> str:
         """French mission status summary for REPL commands (P8-010)."""
-        mission = self.mission
-        if not mission.get("active") and mission.get("status") == "idle":
+        mission = self._runtime.get_focused_mission()
+        if mission is None:
             return "Aucune mission active."
 
         lines = [
-            f"Mission : {mission.get('title') or 'Sans titre'}",
-            f"Statut : {mission.get('status', 'inconnu')}",
-            f"Objectif : {mission.get('objective') or '—'}",
+            f"Mission : {mission.title or 'Sans titre'}",
+            f"Statut : {mission.state.value}",
+            f"Objectif : {mission.objective or '—'}",
+            f"Progression : {mission.progress_percent:.0f}%",
         ]
-        current = mission.get("current_step")
+        current = mission.current_step
         if current:
             lines.append(f"Étape en cours : {current}")
 
-        completed = mission.get("completed_steps", [])
+        completed = mission.completed_steps
         if completed:
             lines.append(f"Étapes terminées ({len(completed)}) :")
             for step in completed:
                 lines.append(f"  ✓ {step}")
 
-        remaining = [
-            step
-            for step in mission.get("steps", [])
-            if step not in set(completed)
-        ]
+        remaining = mission.remaining_steps
         if remaining:
             lines.append(f"Étapes restantes ({len(remaining)}) :")
             for step in remaining:
@@ -123,7 +108,7 @@ class MissionManager:
         return "\n".join(lines)
 
     def show_mission(self) -> str:
-        return json.dumps(self.mission, indent=4, ensure_ascii=False)
+        return json.dumps(self.get_mission(), indent=4, ensure_ascii=False)
 
     def handle_command(self, message: str) -> str | None:
         """Handle mission REPL commands; return French response when matched (P8-011)."""
@@ -136,14 +121,16 @@ class MissionManager:
             lowered,
             ("terminer étape", "terminer etape", "complete step", "/mission complete"),
         ):
-            if not self.mission.get("active"):
+            active = self._runtime.get_focused_mission()
+            if active is None or not active.is_active:
                 return "Aucune mission active — rien à terminer."
-            previous = self.mission.get("current_step")
+            previous = active.current_step
             self.complete_current_step()
-            if self.mission.get("active"):
+            active = self._runtime.get_focused_mission()
+            if active is not None and active.is_active and active.current_step:
                 return (
                     f"Étape terminée : « {previous} ».\n"
-                    f"Prochaine étape : {self.mission.get('current_step')}"
+                    f"Prochaine étape : {active.current_step}"
                 )
             return f"Mission terminée. Dernière étape complétée : « {previous} »."
 
@@ -151,9 +138,10 @@ class MissionManager:
             lowered,
             ("annuler mission", "cancel mission", "/mission cancel"),
         ):
-            if not self.mission.get("active"):
+            active = self._runtime.get_focused_mission()
+            if active is None or not active.is_active:
                 return "Aucune mission active à annuler."
-            title = self.mission.get("title") or "Sans titre"
+            title = active.title or "Sans titre"
             self.cancel_mission()
             return f"Mission « {title} » annulée."
 
@@ -249,11 +237,37 @@ class MissionManager:
             ]
 
         self.create_mission(title, objective, steps)
-        return self.mission
+        return self.get_mission()
 
     def advance_mission(self) -> dict:
-        if not self.mission.get("active"):
-            return self.mission
+        active = self._runtime.get_active_mission()
+        if active is None:
+            return self.get_mission()
 
         self.complete_current_step()
-        return self.mission
+        return self.get_mission()
+
+    # --- Mission Runtime V1 Brain API passthrough ---
+
+    def resume_mission(self, mission_id: str) -> Mission:
+        mission = self._runtime.resume_mission(mission_id)
+        self.mission = self._runtime.get_legacy_mission_view()
+        return mission
+
+    def update_mission(self, mission_id: str, **kwargs) -> Mission:
+        mission = self._runtime.update_mission(mission_id, **kwargs)
+        self.mission = self._runtime.get_legacy_mission_view()
+        return mission
+
+    def complete_mission(self, mission_id: str) -> Mission:
+        mission = self._runtime.complete_mission(mission_id)
+        self.mission = self._runtime.get_legacy_mission_view()
+        return mission
+
+    def list_active_missions(self) -> list[Mission]:
+        return self._runtime.list_active_missions()
+
+    def on_tool_execution_complete(self, **kwargs) -> Mission | None:
+        mission = self._runtime.on_tool_execution_complete(**kwargs)
+        self.mission = self._runtime.get_legacy_mission_view()
+        return mission

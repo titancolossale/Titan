@@ -38,4 +38,7 @@ class Executor:
         if analysis.get("needs_clarification"):
             return "Poser une question"
 
+        if analysis.get("modification_plan") is not None:
+            return "Planifier modification workspace (sans écriture)"
+
         return "Répondre directement"

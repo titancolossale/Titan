@@ -35,7 +35,9 @@ def test_tool_health_state_values() -> None:
     """P10A-003: health states cover operational spectrum."""
     assert ToolHealthState.ONLINE.value == "online"
     assert ToolHealthState.UNKNOWN.value == "unknown"
-    assert len(ToolHealthState) == 5
+    assert len(ToolHealthState) == 7
+    assert ToolHealthState.MISCONFIGURED.value == "misconfigured"
+    assert ToolHealthState.MISSING_CREDENTIALS.value == "missing_credentials"
 
 
 def test_execution_mode_live_paper_simulation_mock() -> None:

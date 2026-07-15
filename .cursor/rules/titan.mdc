@@ -336,19 +336,56 @@ Context must eventually sync with `StateManager` and active mission, not remain 
 | `capability_catalog.py` | Capability-first metadata registry |
 | `confirmation_gate.py` | User confirmation for risky LIVE-mode invocations |
 | `permission_engine.py` | Caller and mode permission checks |
+| `permission_manager.py` | Action-level safety: AUTO_ALLOWED, CONFIRMATION_REQUIRED, BLOCKED (Phase 12.6) |
+| `natural_language_planner.py` | NL request → structured multi-step execution plan (Phase 12.6 Batch 2) |
+| `planner_models.py` | PlanStep, ExecutionPlan, PlannerResult, ReviewedPlannerResult (Phase 12.6 Batch 2–3) |
+| `reasoning_loop.py` | Critical plan review and safe optimization before orchestration (Phase 12.6 Batch 3) |
+| `tool_orchestrator.py` | Interpreted request → permission check → ToolManager dispatch (Phase 12.6) |
+| `orchestration_models.py` | Structured orchestration results (`ToolOrchestrationResult`) |
 | `health_monitor.py` | Tool/provider health aggregation |
 | `providers/` | Provider registry, versioning, stub backends |
 | `audit/` | Append-only structured tool audit JSONL |
 | `executors/` | Sync and async execution adapters |
 | `adapters/legacy_tool_adapter.py` | Phase 6 `BaseTool` → `ToolCapability` bridge |
 | `time_tool.py` | Current datetime |
+| `connectors/` | User-owned external systems (Phase 12.5); bounded vault roots |
+| `connectors/markdown_parser.py` | Markdown structure awareness for vault notes |
+| `connectors/markdown_editor.py` | Formatting-preserving smart note updates |
+| `connectors/vault_analyzer.py` | Vault health report and organization recommendations |
+| `obsidian_tool.py` | Obsidian vault connector — existing user vault only |
+
+**Obsidian connector policy (Phase 12.5 — non-negotiable):**
+
+- Connect **only** to the user's **existing** Obsidian vault via `TITAN_OBSIDIAN_VAULT_PATH` (vault name: **Titan AI**).
+- **Never** create a new Obsidian vault or bootstrap vault structure as Titan setup.
+- Obsidian is **not** Titan's brain or long-term memory — it is the user's personal note space Titan may read and maintain.
+- **Prefer** `search_notes`, `list_notes`, `read_note`, `patch_note`, and `update_note` on existing notes; organize in place.
+- **Smart updates (Batch 3):** use `patch_note` modes (`append`, `prepend`, `insert_under_heading`, `replace_section`, `update_checklist`, `update_table`) to preserve formatting; full replace only when explicitly requested.
+- **`vault_health`:** structured health report (duplicates, orphans, empty notes, naming, tags) — recommendations only, never auto-delete or auto-merge.
+- **Search before create:** always run `search_notes` (filename, keyword, tag, or folder) before `create_note`.
+- `create_note` and `create_folder` only for durable content (projects, goals, documentation, procedures, long-term reminders); never for casual chat, jokes, greetings, or ephemeral context.
+- Decision layer: `tools/decision/obsidian_decision.py` (`ObsidianDecisionEngine`) decides WHEN and HOW to invoke the vault tool.
+
+**Tool Orchestrator (Phase 12.6 Batch 1):**
+
+```
+ExecutionCoordinator → NaturalLanguagePlanner → ReasoningLoop → ToolOrchestrator → PermissionManager → ToolManager → ToolRuntime
+                                              ↓
+                                    PermissionEngine, ConfirmationGate
+```
+
+- **Reasoning Loop (Batch 3):** `ReasoningLoop` critically reviews `PlannerResult` before orchestration; outputs `ReviewedPlannerResult` with `confidence_score`, `reasoning_summary`, `clarification_required`, and `optimization_count`. Applies safe improvements (duplicate removal, dependency cleanup, order correction, permission resync, Obsidian search-before-create when query is known); requests clarification when required parameters are missing — never invents missing facts.
+- **Natural Language Planner (Batch 2):** `NaturalLanguagePlanner` transforms user requests into `PlannerResult` with ordered `PlanStep` entries (objective, reasoning, tool, permission, dependencies, conditional/fallback steps) before orchestration.
+- **Permission levels:** `AUTO_ALLOWED` (read/search/update), `CONFIRMATION_REQUIRED` (delete, bulk, external comms, trading, unapproved create), `BLOCKED` (unknown tools, unsafe filesystem actions).
+- **Obsidian create:** `AUTO_ALLOWED` only when `ObsidianDecisionEngine` returns `CREATE_NEW_NOTE`; otherwise confirmation required.
+- **Do not implement** Browser, Calendar automation, Email, Voice, Web UI, or Trading execution in Batch 1–2 — permission rules are stubbed for future phases.
 
 **Tool Runtime V2 (Phase 10A, default since v0.10.0):**
 
 ```
-ToolDispatcher → ToolManager → ToolRuntime → SyncExecutor/AsyncExecutor → ToolRegistry → BaseTool
-                                    ↓
-              HealthMonitor, QuotaTracker, PermissionEngine, ConfirmationGate, ToolAuditLogger
+ExecutionCoordinator → ToolOrchestrator → ToolManager → ToolRuntime → SyncExecutor/AsyncExecutor → ToolRegistry → BaseTool
+                                                              ↓
+                        HealthMonitor, QuotaTracker, PermissionEngine, PermissionManager, ConfirmationGate, ToolAuditLogger
 ```
 
 - **Opt-out:** `TITAN_TOOL_RUNTIME_V2=false` or `ToolManager(use_runtime_v2=False)` for legacy Phase 6 path.

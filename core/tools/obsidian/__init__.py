@@ -1,0 +1,93 @@
+# =====================================
+# Titan Obsidian Tool Package
+# =====================================
+
+"""Obsidian vault integration for Titan's core tool layer."""
+
+from core.tools.obsidian.exceptions import (
+    ObsidianConfigurationError,
+    ObsidianError,
+    ObsidianFolderNotEmptyError,
+    ObsidianFolderNotFoundError,
+    ObsidianInvalidPathError,
+    ObsidianNotConnectedError,
+    ObsidianNoteExistsError,
+    ObsidianNoteNotFoundError,
+    ObsidianPathTraversalError,
+    ObsidianPermissionDeniedError,
+    ObsidianUnsupportedExtensionError,
+    ObsidianVaultAccessError,
+    ObsidianVaultNotFoundError,
+)
+from core.tools.obsidian.models import NoteContent, NoteMetadata
+from core.tools.obsidian.obsidian_client import ObsidianClient
+from core.tools.obsidian.obsidian_config import ObsidianConfig
+from core.tools.obsidian.obsidian_tool import (
+    CAPABILITY_APPEND_NOTE,
+    CAPABILITY_CREATE_FOLDER,
+    CAPABILITY_CREATE_NOTE,
+    CAPABILITY_DELETE_FOLDER,
+    CAPABILITY_DELETE_NOTE,
+    CAPABILITY_EDIT_NOTE,
+    CAPABILITY_LIST_FOLDERS,
+    CAPABILITY_LIST_NOTES,
+    CAPABILITY_METADATA,
+    CAPABILITY_MOVE_NOTE,
+    CAPABILITY_READ_NOTES,
+    CAPABILITY_RENAME_NOTE,
+    CAPABILITY_REPLACE_NOTE,
+    ObsidianTool,
+    PERMISSION_CREATE_NOTE,
+    PERMISSION_DELETE_FOLDER,
+    PERMISSION_DELETE_NOTE,
+    PERMISSION_EDIT_NOTE,
+    PERMISSION_LIST_FOLDERS,
+    PERMISSION_LIST_NOTES,
+    PERMISSION_MANAGE_FOLDERS,
+    PERMISSION_READ_NOTE,
+)
+from core.tools.obsidian.vault_helpers import EditMode, VAULT_BACKUP_DIR
+
+__all__ = [
+    "CAPABILITY_APPEND_NOTE",
+    "CAPABILITY_CREATE_FOLDER",
+    "CAPABILITY_CREATE_NOTE",
+    "CAPABILITY_DELETE_FOLDER",
+    "CAPABILITY_DELETE_NOTE",
+    "CAPABILITY_EDIT_NOTE",
+    "CAPABILITY_LIST_FOLDERS",
+    "CAPABILITY_LIST_NOTES",
+    "CAPABILITY_METADATA",
+    "CAPABILITY_MOVE_NOTE",
+    "CAPABILITY_READ_NOTES",
+    "CAPABILITY_RENAME_NOTE",
+    "CAPABILITY_REPLACE_NOTE",
+    "EditMode",
+    "NoteContent",
+    "NoteMetadata",
+    "ObsidianClient",
+    "ObsidianConfig",
+    "ObsidianConfigurationError",
+    "ObsidianError",
+    "ObsidianFolderNotEmptyError",
+    "ObsidianFolderNotFoundError",
+    "ObsidianInvalidPathError",
+    "ObsidianNotConnectedError",
+    "ObsidianNoteExistsError",
+    "ObsidianNoteNotFoundError",
+    "ObsidianPathTraversalError",
+    "ObsidianPermissionDeniedError",
+    "ObsidianTool",
+    "ObsidianUnsupportedExtensionError",
+    "ObsidianVaultAccessError",
+    "ObsidianVaultNotFoundError",
+    "PERMISSION_CREATE_NOTE",
+    "PERMISSION_DELETE_FOLDER",
+    "PERMISSION_DELETE_NOTE",
+    "PERMISSION_EDIT_NOTE",
+    "PERMISSION_LIST_FOLDERS",
+    "PERMISSION_LIST_NOTES",
+    "PERMISSION_MANAGE_FOLDERS",
+    "PERMISSION_READ_NOTE",
+    "VAULT_BACKUP_DIR",
+]

@@ -1,0 +1,623 @@
+/* =====================================
+   Titan Web App — Phase 8
+   LIVING PRESENCE
+   Presentation only — entity occupying the interface.
+   Does not redesign layout, colors, or neural renderer.
+   Does not touch Titan Core structure / Brain / APIs / backend.
+   Loaded LAST — living presence authority.
+   ===================================== */
+
+:root {
+  --tdl-lp-soft: rgba(239, 68, 68, 0.22);
+  --tdl-lp-whisper: rgba(220, 38, 38, 0.08);
+  --tdl-lp-particle: rgba(248, 113, 113, 0.28);
+  --tdl-lp-flash: rgba(255, 160, 140, 0.12);
+  --tdl-lp-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --tdl-lp-organic: cubic-bezier(0.37, 0, 0.63, 1);
+}
+
+/* =====================================
+   TITAN CORE — heartbeat · energy · neural waves
+   Keep current design; presence only.
+   ===================================== */
+
+/* Positioning context for absolute heartbeat/energy children ONLY.
+   Never retarget .tdl-v2-satellite-field itself — that collapses height to 0
+   (absolute children) and pins TITAN CORE under the top telemetry. */
+.tdl-v2-satellite-field[data-presence="8"] .tdl-v2-satellite-core,
+.tdl-v2-satellite-field[data-presence="9"] .tdl-v2-satellite-core,
+.tdl-v2-root[data-phase="8"] .tdl-v2-satellite-core,
+.tdl-v2-root[data-phase="9"] .tdl-v2-satellite-core,
+.tdl-v2-root[data-phase="10"] .tdl-v2-satellite-core,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core {
+  /* Keep absolute layout from satellites.css / reference-scene.css */
+  position: absolute;
+}
+
+.tdl-v2-satellite-core__heartbeat {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 56px;
+  height: 56px;
+  margin: -28px 0 0 -28px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: -1;
+  background: radial-gradient(
+    circle,
+    rgba(255, 200, 190, 0.14) 0%,
+    rgba(239, 68, 68, 0.08) 35%,
+    transparent 72%
+  );
+  animation: tdl-lp-core-heartbeat 7.8s var(--tdl-lp-organic) infinite;
+  opacity: 0.55;
+}
+
+.tdl-v2-satellite-core__energy {
+  position: absolute;
+  inset: -160% -140%;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: -2;
+  background: radial-gradient(
+    circle,
+    rgba(239, 68, 68, 0.05) 0%,
+    rgba(220, 38, 38, 0.03) 40%,
+    transparent 70%
+  );
+  animation: tdl-lp-core-energy 11.5s var(--tdl-lp-organic) infinite;
+}
+
+.tdl-v2-satellite-core__wave {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 72px;
+  height: 72px;
+  margin: -36px 0 0 -36px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: -1;
+  border: 1px solid rgba(239, 68, 68, 0.12);
+  box-shadow: 0 0 12px rgba(220, 38, 38, 0.04);
+  animation: tdl-lp-core-wave 14s var(--tdl-lp-organic) infinite;
+  opacity: 0;
+}
+
+.tdl-v2-satellite-core__wave--b {
+  width: 96px;
+  height: 96px;
+  margin: -48px 0 0 -48px;
+  animation-delay: 4.6s;
+  animation-duration: 16.5s;
+  border-color: rgba(248, 113, 113, 0.08);
+}
+
+.tdl-v2-satellite-core__attention {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: rgba(255, 220, 210, 0.35);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.2);
+  pointer-events: none;
+  z-index: 0;
+  animation: tdl-lp-core-attention 18s var(--tdl-lp-organic) infinite;
+  opacity: 0.4;
+}
+
+@keyframes tdl-lp-core-heartbeat {
+  0%, 100% { opacity: 0.35; transform: scale(0.94); }
+  8% { opacity: 0.7; transform: scale(1.06); }
+  16% { opacity: 0.4; transform: scale(0.97); }
+  24% { opacity: 0.62; transform: scale(1.03); }
+  36%, 100% { opacity: 0.38; transform: scale(0.95); }
+}
+
+@keyframes tdl-lp-core-energy {
+  0%, 100% { opacity: 0.45; transform: scale(0.98); }
+  50% { opacity: 0.85; transform: scale(1.04); }
+}
+
+@keyframes tdl-lp-core-wave {
+  0% { opacity: 0; transform: scale(0.72); }
+  12% { opacity: 0.35; }
+  55% { opacity: 0.08; transform: scale(1.55); }
+  100% { opacity: 0; transform: scale(1.85); }
+}
+
+@keyframes tdl-lp-core-attention {
+  0%, 100% { transform: translate(0, 0); opacity: 0.25; }
+  22% { transform: translate(3px, -2px); opacity: 0.55; }
+  48% { transform: translate(-2px, 2px); opacity: 0.35; }
+  71% { transform: translate(1px, 3px); opacity: 0.5; }
+}
+
+/* Soft sync pulse on nearby tissue filaments when wave fires */
+.tdl-v2-root[data-phase="8"], .tdl-v2-root[data-phase="9"] .tdl-v2-satellite-core__filament {
+  animation: tdl-lp-filament-sync 14s var(--tdl-lp-organic) infinite;
+}
+
+.tdl-v2-root[data-phase="8"], .tdl-v2-root[data-phase="9"] .tdl-v2-satellite-core__filament--b {
+  animation-delay: 1.2s;
+}
+
+.tdl-v2-root[data-phase="8"], .tdl-v2-root[data-phase="9"] .tdl-v2-satellite-core__filament--c {
+  animation-delay: 2.4s;
+}
+
+.tdl-v2-root[data-phase="8"], .tdl-v2-root[data-phase="9"] .tdl-v2-satellite-core__filament--d {
+  animation-delay: 3.6s;
+}
+
+.tdl-v2-root[data-phase="8"], .tdl-v2-root[data-phase="9"] .tdl-v2-satellite-core__filament--e {
+  animation-delay: 4.8s;
+}
+
+.tdl-v2-root[data-phase="8"], .tdl-v2-root[data-phase="9"] .tdl-v2-satellite-core__filament--f {
+  animation-delay: 6s;
+}
+
+@keyframes tdl-lp-filament-sync {
+  0%, 88%, 100% { opacity: inherit; filter: brightness(1); }
+  92% { filter: brightness(1.18); }
+  96% { filter: brightness(1.06); }
+}
+
+/* =====================================
+   SATELLITE LIGHT PACKETS
+   Slow · non-repetitive paths · never flashy
+   ===================================== */
+
+.tdl-v2-satellite-packet-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.tdl-v2-satellite-packet {
+  fill: rgba(255, 200, 190, 0.85);
+  filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.35));
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tdl-v2-satellite-packet-path {
+  fill: none;
+  stroke: none;
+  pointer-events: none;
+}
+
+.tdl-v2-satellite-field[data-presence="8"] .tdl-v2-satellite__node,
+.tdl-v2-satellite-field[data-presence="9"] .tdl-v2-satellite__node {
+  animation-duration: 5.6s;
+}
+
+.tdl-v2-satellite-field[data-presence="8"] .tdl-v2-satellite:nth-child(odd),
+.tdl-v2-satellite-field[data-presence="9"] .tdl-v2-satellite:nth-child(odd) .tdl-v2-satellite__node {
+  animation-delay: 0.6s;
+}
+
+.tdl-v2-satellite-field[data-presence="8"] .tdl-v2-satellite:nth-child(3n),
+.tdl-v2-satellite-field[data-presence="9"] .tdl-v2-satellite:nth-child(3n) .tdl-v2-satellite__aura {
+  animation-duration: 7.2s;
+  animation-delay: 1.4s;
+}
+
+/* Micro attention shift — barely perceptible */
+.tdl-v2-satellite-field[data-presence="8"] .tdl-v2-satellite,
+.tdl-v2-satellite-field[data-presence="9"] .tdl-v2-satellite {
+  animation: tdl-lp-sat-attention 22s var(--tdl-lp-organic) infinite;
+}
+
+.tdl-v2-satellite-field[data-presence="8"] .tdl-v2-satellite--memory,
+.tdl-v2-satellite-field[data-presence="9"] .tdl-v2-satellite--memory {
+  animation-delay: 0s;
+}
+
+.tdl-v2-satellite-field[data-presence="8"] .tdl-v2-satellite--planning,
+.tdl-v2-satellite-field[data-presence="9"] .tdl-v2-satellite--planning {
+  animation-delay: 2.8s;
+}
+
+.tdl-v2-satellite-field[data-presence="8"] .tdl-v2-satellite--browser,
+.tdl-v2-satellite-field[data-presence="9"] .tdl-v2-satellite--browser {
+  animation-delay: 5.1s;
+}
+
+.tdl-v2-satellite-field[data-presence="8"] .tdl-v2-satellite--obsidian,
+.tdl-v2-satellite-field[data-presence="9"] .tdl-v2-satellite--obsidian {
+  animation-delay: 7.4s;
+}
+
+.tdl-v2-satellite-field[data-presence="8"] .tdl-v2-satellite--tools,
+.tdl-v2-satellite-field[data-presence="9"] .tdl-v2-satellite--tools {
+  animation-delay: 9.2s;
+}
+
+.tdl-v2-satellite-field[data-presence="8"] .tdl-v2-satellite--communication,
+.tdl-v2-satellite-field[data-presence="9"] .tdl-v2-satellite--communication {
+  animation-delay: 11s;
+}
+
+.tdl-v2-satellite-field[data-presence="8"] .tdl-v2-satellite--trading,
+.tdl-v2-satellite-field[data-presence="9"] .tdl-v2-satellite--trading {
+  animation-delay: 13.5s;
+}
+
+.tdl-v2-satellite-field[data-presence="8"] .tdl-v2-satellite--calendar,
+.tdl-v2-satellite-field[data-presence="9"] .tdl-v2-satellite--calendar {
+  animation-delay: 16s;
+}
+
+@keyframes tdl-lp-sat-attention {
+  0%, 100% { filter: brightness(1); }
+  4% { filter: brightness(1.06); }
+  8% { filter: brightness(1); }
+}
+
+/* =====================================
+   ATMOSPHERE — particles · flashes · ambient
+   ===================================== */
+
+.tdl-v2-living-presence {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+  opacity: 0.7;
+}
+
+.tdl-v2-living-presence__particle {
+  position: absolute;
+  width: 1.5px;
+  height: 1.5px;
+  border-radius: 50%;
+  background: var(--tdl-lp-particle);
+  box-shadow: 0 0 4px rgba(220, 38, 38, 0.15);
+  animation: tdl-lp-particle-drift 48s linear infinite;
+  opacity: 0.25;
+}
+
+.tdl-v2-living-presence__particle:nth-child(1) {
+  top: 22%;
+  left: 18%;
+  animation-duration: 52s;
+  animation-delay: -4s;
+}
+
+.tdl-v2-living-presence__particle:nth-child(2) {
+  top: 58%;
+  left: 72%;
+  width: 1px;
+  height: 1px;
+  animation-duration: 61s;
+  animation-delay: -12s;
+}
+
+.tdl-v2-living-presence__particle:nth-child(3) {
+  top: 41%;
+  left: 44%;
+  animation-duration: 44s;
+  animation-delay: -8s;
+}
+
+.tdl-v2-living-presence__particle:nth-child(4) {
+  top: 68%;
+  left: 28%;
+  width: 2px;
+  height: 2px;
+  animation-duration: 57s;
+  animation-delay: -20s;
+  opacity: 0.18;
+}
+
+.tdl-v2-living-presence__particle:nth-child(5) {
+  top: 31%;
+  left: 81%;
+  animation-duration: 49s;
+  animation-delay: -15s;
+}
+
+.tdl-v2-living-presence__particle:nth-child(6) {
+  top: 76%;
+  left: 55%;
+  width: 1px;
+  height: 1px;
+  animation-duration: 66s;
+  animation-delay: -28s;
+  opacity: 0.2;
+}
+
+.tdl-v2-living-presence__particle:nth-child(7) {
+  top: 48%;
+  left: 12%;
+  animation-duration: 55s;
+  animation-delay: -6s;
+}
+
+.tdl-v2-living-presence__particle:nth-child(8) {
+  top: 18%;
+  left: 62%;
+  width: 1px;
+  height: 1px;
+  animation-duration: 70s;
+  animation-delay: -22s;
+}
+
+.tdl-v2-living-presence__flash {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--tdl-lp-flash);
+  box-shadow: 0 0 14px rgba(255, 160, 140, 0.18);
+  animation: tdl-lp-distant-flash 22s var(--tdl-lp-organic) infinite;
+  opacity: 0;
+}
+
+.tdl-v2-living-presence__flash:nth-child(9) {
+  top: 26%;
+  left: 36%;
+  animation-delay: 0s;
+}
+
+.tdl-v2-living-presence__flash:nth-child(10) {
+  top: 62%;
+  left: 78%;
+  animation-delay: 7.5s;
+  animation-duration: 28s;
+}
+
+.tdl-v2-living-presence__flash:nth-child(11) {
+  top: 74%;
+  left: 42%;
+  animation-delay: 14s;
+  animation-duration: 31s;
+}
+
+.tdl-v2-glow-ambient.tdl-v2-glow-ambient--presence {
+  animation: tdl-lp-ambient-breathe 36s var(--tdl-lp-organic) infinite;
+}
+
+.tdl-v2-root[data-phase="8"], .tdl-v2-root[data-phase="9"] .tdl-v2-glow-ambient--living {
+  animation: tdl-lp-ambient-breathe 36s var(--tdl-lp-organic) infinite;
+}
+
+@keyframes tdl-lp-particle-drift {
+  0% { transform: translate3d(0, 0, 0); opacity: 0.15; }
+  25% { transform: translate3d(8px, -14px, 0); opacity: 0.35; }
+  50% { transform: translate3d(-6px, -22px, 0); opacity: 0.2; }
+  75% { transform: translate3d(10px, -8px, 0); opacity: 0.32; }
+  100% { transform: translate3d(0, -28px, 0); opacity: 0.12; }
+}
+
+@keyframes tdl-lp-distant-flash {
+  0%, 88%, 100% { opacity: 0; transform: scale(0.6); }
+  90% { opacity: 0.55; transform: scale(1.2); }
+  93% { opacity: 0.2; transform: scale(1); }
+}
+
+@keyframes tdl-lp-ambient-breathe {
+  0%, 100% { opacity: 0.9; filter: brightness(1) saturate(1); }
+  35% { opacity: 0.97; filter: brightness(1.025) saturate(1.02); }
+  70% { opacity: 0.93; filter: brightness(1.01) saturate(1.01); }
+}
+
+/* =====================================
+   WORKSPACES — calm idle · local wake
+   ===================================== */
+
+.tdl-v2-workspace-dock[data-living="8"], .tdl-v2-workspace-dock[data-living="9"] .tdl-v2-workspace-card {
+  transition:
+    outline-color 520ms var(--tdl-lp-ease),
+    box-shadow 520ms var(--tdl-lp-ease),
+    opacity 480ms var(--tdl-lp-ease);
+}
+
+.tdl-v2-workspace-dock[data-living="8"], .tdl-v2-workspace-dock[data-living="9"] .tdl-v2-workspace-card[data-activity="idle"],
+.tdl-v2-workspace-dock[data-living="8"], .tdl-v2-workspace-dock[data-living="9"] .tdl-v2-workspace-card:not([data-activity]),
+.tdl-v2-workspace-dock[data-living="8"], .tdl-v2-workspace-dock[data-living="9"] .tdl-v2-workspace-card[data-activity="calm"] {
+  opacity: 0.94;
+}
+
+.tdl-v2-workspace-dock[data-living="8"], .tdl-v2-workspace-dock[data-living="9"] .tdl-v2-workspace-card[data-kind="memory"][data-activity="remembering"],
+.tdl-v2-workspace-dock[data-living="8"], .tdl-v2-workspace-dock[data-living="9"] .tdl-v2-workspace-card[data-kind="memory"][data-live="true"] {
+  animation: tdl-lp-workspace-wake 4.8s var(--tdl-lp-organic) infinite;
+}
+
+.tdl-v2-workspace-dock[data-living="8"], .tdl-v2-workspace-dock[data-living="9"] .tdl-v2-workspace-card[data-kind="memory"] .tdl-v2-workspace-card__scan {
+  animation-duration: 13s;
+}
+
+.tdl-v2-workspace-dock[data-living="8"], .tdl-v2-workspace-dock[data-living="9"] .tdl-v2-workspace-card[data-kind="browser"][data-activity="searching"],
+.tdl-v2-workspace-dock[data-living="8"], .tdl-v2-workspace-dock[data-living="9"] .tdl-v2-workspace-card[data-kind="browser"][data-live="true"] {
+  animation: tdl-lp-workspace-wake 3.6s var(--tdl-lp-organic) infinite;
+}
+
+.tdl-v2-workspace-dock[data-living="8"], .tdl-v2-workspace-dock[data-living="9"] .tdl-v2-workspace-card[data-kind="obsidian"][data-activity="syncing"],
+.tdl-v2-workspace-dock[data-living="8"], .tdl-v2-workspace-dock[data-living="9"] .tdl-v2-workspace-card[data-kind="obsidian"][data-live="true"] {
+  animation: tdl-lp-workspace-wake 4.2s var(--tdl-lp-organic) infinite;
+}
+
+.tdl-v2-workspace-dock[data-living="8"], .tdl-v2-workspace-dock[data-living="9"] .tdl-v2-workspace-card[data-kind="presence"] .tdl-v2-workspace-presence__breath {
+  animation-duration: 6.8s;
+}
+
+.tdl-v2-workspace-dock[data-living="8"], .tdl-v2-workspace-dock[data-living="9"] .tdl-v2-workspace-card[data-kind="cognitive"]::after {
+  animation-duration: 8.2s;
+}
+
+.tdl-v2-workspace-dock[data-living="8"], .tdl-v2-workspace-dock[data-living="9"] .tdl-v2-workspace-card[data-kind="cognitive"][data-activity="thinking"]::after,
+.tdl-v2-workspace-dock[data-living="8"], .tdl-v2-workspace-dock[data-living="9"] .tdl-v2-workspace-card[data-kind="cognitive"][data-activity="planning"]::after,
+.tdl-v2-workspace-dock[data-living="8"], .tdl-v2-workspace-dock[data-living="9"] .tdl-v2-workspace-card[data-kind="cognitive"][data-live="true"]::after {
+  animation-duration: 3.8s;
+}
+
+@keyframes tdl-lp-workspace-wake {
+  0%, 100% {
+    box-shadow:
+      0 8px 28px rgba(0, 0, 0, 0.28),
+      0 0 0 0 rgba(220, 38, 38, 0);
+  }
+  50% {
+    box-shadow:
+      0 10px 32px rgba(0, 0, 0, 0.32),
+      0 0 18px rgba(220, 38, 38, 0.05);
+  }
+}
+
+/* =====================================
+   ORCHESTRATOR — subtle life · telemetry only
+   ===================================== */
+
+.tdl-v2-orchestrator--presence .tdl-v2-orchestrator-objective__pulse {
+  animation: tdl-lp-objective-breathe 6.4s var(--tdl-lp-organic) infinite;
+}
+
+.tdl-v2-orchestrator--presence[data-alive="true"] .tdl-v2-orchestrator-objective__pulse {
+  animation-duration: 3.2s;
+}
+
+.tdl-v2-orchestrator--presence .tdl-v2-orchestrator-plan-step {
+  position: relative;
+}
+
+.tdl-v2-orchestrator--presence .tdl-v2-orchestrator-plan-step[data-status="active"]::after,
+.tdl-v2-orchestrator--presence .tdl-v2-orchestrator-plan-step[data-status="completed"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 2px;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.55);
+  box-shadow: 0 0 6px rgba(220, 38, 38, 0.25);
+  animation: tdl-lp-pipeline-pulse 3.8s var(--tdl-lp-organic) infinite;
+  pointer-events: none;
+}
+
+.tdl-v2-orchestrator--presence .tdl-v2-orchestrator-plan-step[data-status="completed"]::after {
+  background: rgba(110, 180, 130, 0.55);
+  box-shadow: 0 0 5px rgba(110, 180, 130, 0.2);
+  animation-duration: 5.5s;
+}
+
+.tdl-v2-orchestrator--presence .tdl-v2-orchestrator-header__alive-dot {
+  animation: tdl-lp-status-soft 4.6s var(--tdl-lp-organic) infinite;
+}
+
+.tdl-v2-orchestrator--presence .tdl-v2-orch-activity-marker {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(248, 113, 113, 0.4);
+  box-shadow: 0 0 5px rgba(220, 38, 38, 0.15);
+  pointer-events: none;
+  opacity: 0.35;
+  animation: tdl-lp-activity-marker 9s var(--tdl-lp-organic) infinite;
+}
+
+.tdl-v2-orchestrator--presence .tdl-v2-orch-activity-marker--a {
+  top: 28%;
+  right: 0.85rem;
+  animation-delay: 0s;
+}
+
+.tdl-v2-orchestrator--presence .tdl-v2-orch-activity-marker--b {
+  top: 52%;
+  right: 1.15rem;
+  animation-delay: 3.2s;
+  width: 2px;
+  height: 2px;
+}
+
+.tdl-v2-orchestrator--presence .tdl-v2-orch-activity-marker--c {
+  top: 74%;
+  right: 0.7rem;
+  animation-delay: 6.1s;
+}
+
+.tdl-v2-orchestrator--presence .tdl-v2-orchestrator-footer__status {
+  transition: opacity 400ms var(--tdl-lp-ease);
+}
+
+.tdl-v2-orchestrator--presence[data-alive="true"] .tdl-v2-orchestrator-footer__status {
+  opacity: 1;
+}
+
+@keyframes tdl-lp-objective-breathe {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.08); }
+}
+
+@keyframes tdl-lp-pipeline-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.4); }
+}
+
+@keyframes tdl-lp-status-soft {
+  0%, 100% { opacity: 0.65; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  50% { opacity: 1; box-shadow: 0 0 8px rgba(239, 68, 68, 0.25); }
+}
+
+@keyframes tdl-lp-activity-marker {
+  0%, 100% { opacity: 0.15; transform: translateY(0); }
+  40% { opacity: 0.55; transform: translateY(-2px); }
+  70% { opacity: 0.25; transform: translateY(1px); }
+}
+
+/* =====================================
+   REDUCED MOTION
+   ===================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .tdl-v2-satellite-core__heartbeat,
+  .tdl-v2-satellite-core__energy,
+  .tdl-v2-satellite-core__wave,
+  .tdl-v2-satellite-core__attention,
+  .tdl-v2-root[data-phase="8"], .tdl-v2-root[data-phase="9"] .tdl-v2-satellite-core__filament,
+  .tdl-v2-satellite-field[data-presence="8"] .tdl-v2-satellite,,
+.tdl-v2-satellite-field[data-presence="9"] .tdl-v2-satellite,
+  .tdl-v2-living-presence__particle,
+  .tdl-v2-living-presence__flash,
+  .tdl-v2-glow-ambient--presence,
+  .tdl-v2-root[data-phase="8"], .tdl-v2-root[data-phase="9"] .tdl-v2-glow-ambient--living,
+  .tdl-v2-workspace-dock[data-living="8"], .tdl-v2-workspace-dock[data-living="9"] .tdl-v2-workspace-card,
+  .tdl-v2-orchestrator--presence .tdl-v2-orchestrator-objective__pulse,
+  .tdl-v2-orchestrator--presence .tdl-v2-orchestrator-plan-step::after,
+  .tdl-v2-orchestrator--presence .tdl-v2-orchestrator-header__alive-dot,
+  .tdl-v2-orchestrator--presence .tdl-v2-orch-activity-marker {
+    animation: none !important;
+  }
+
+  .tdl-v2-satellite-packet {
+    display: none !important;
+  }
+}
+
+.tdl-v2--reduced-motion .tdl-v2-satellite-core__heartbeat,
+.tdl-v2--reduced-motion .tdl-v2-satellite-core__energy,
+.tdl-v2--reduced-motion .tdl-v2-satellite-core__wave,
+.tdl-v2--reduced-motion .tdl-v2-satellite-core__attention,
+.tdl-v2--reduced-motion .tdl-v2-living-presence__particle,
+.tdl-v2--reduced-motion .tdl-v2-living-presence__flash,
+.tdl-v2--reduced-motion .tdl-v2-orch-activity-marker {
+  animation: none !important;
+}
+
+.tdl-v2--reduced-motion .tdl-v2-satellite-packet {
+  display: none !important;
+}

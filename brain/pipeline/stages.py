@@ -16,6 +16,7 @@ from config.settings import DEBUG_BRAIN
 from memory.learning_memory import LearningOutcome
 
 if TYPE_CHECKING:
+    from brain.cognitive_stream import CognitiveStreamEmitter
     from agents.agent_manager import AgentManager
     from brain.executive_brain import ExecutiveBrain
     from brain.initiative_engine import InitiativeEngine
@@ -107,15 +108,22 @@ class ThinkPipeline:
         self._tool_dispatcher = tool_dispatcher
         self._conversation_engine = conversation_engine
         self._stage_log: list[str] = []
+        self._stream: CognitiveStreamEmitter | None = None
 
     @property
     def stage_log(self) -> list[str]:
         """Record of stages executed in the last ``run()`` call."""
         return list(self._stage_log)
 
-    def run(self, ctx: ThinkContext) -> ThinkContext:
+    def run(
+        self,
+        ctx: ThinkContext,
+        *,
+        stream: CognitiveStreamEmitter | None = None,
+    ) -> ThinkContext:
         """Execute all pipeline stages in canonical order."""
         self._stage_log = []
+        self._stream = stream
         for stage_name in STAGE_ORDER:
             if ctx.skip_llm and stage_name in (
                 "execution_coordinate",
@@ -126,7 +134,13 @@ class ThinkPipeline:
             stage_fn = getattr(self, f"_stage_{stage_name}")
             self._stage_log.append(stage_name)
             stage_fn(ctx)
+        self._stream = None
         return ctx
+
+    def _emit_stream(self, event_type: str, data: dict | None = None) -> None:
+        """Emit a live cognitive event when a stream emitter is attached."""
+        if self._stream is not None:
+            self._stream.emit(event_type, data or {})
 
     def _debug(self, message: str, *args: object) -> None:
         if DEBUG_BRAIN:
@@ -188,6 +202,7 @@ class ThinkPipeline:
         ctx.conversation_window = self._conversation_engine.get_prompt_window(
             current_message=ctx.user_message,
         )
+        ctx.conversation_loaded = bool(ctx.conversation_window)
         if ctx.conversation_window:
             self._debug(
                 "Conversation récente (%d lignes)",
@@ -211,12 +226,41 @@ class ThinkPipeline:
         if ctx.context_snapshot is not None:
             project_id = ctx.context_snapshot.active_project or ""
         ctx.active_project = project_id
+        self._emit_stream(
+            "memory_lookup",
+            {
+                "label": "Recherche en mémoire…",
+                "neural_state": "memory_retrieval",
+                "source": "long_term",
+            },
+        )
         result = self.memory_service.retrieve(
             ctx.current_user,
             ctx.user_message,
             project_id=project_id or None,
         )
+        ctx.retrieval_result = result
         ctx.retrieved_memory = result.text
+        if result.has_matches:
+            self._emit_stream(
+                "memory_hit",
+                {
+                    "label": "Souvenirs retrouvés…",
+                    "neural_state": "memory_retrieval",
+                    "match_count": len(result.items),
+                    "has_matches": True,
+                },
+            )
+        else:
+            self._emit_stream(
+                "memory_miss",
+                {
+                    "label": "Aucun souvenir précis pour l'instant…",
+                    "neural_state": "memory_retrieval",
+                    "match_count": 0,
+                    "has_matches": False,
+                },
+            )
         self._debug("Mémoire permanente (retrieved) :\n%s", ctx.retrieved_memory)
 
     def _stage_load_state(self, ctx: ThinkContext) -> None:
@@ -356,16 +400,46 @@ class ThinkPipeline:
             agent_context=agent_context,
             dispatch_context=dispatch_context,
             tool_requests_override=tool_override,
+            stream=self._stream,
         )
         ctx.agent_results = result.agent_results
         ctx.agent_results_text = result.agent_results_text
         ctx.tool_results = result.tool_results
         ctx.tool_results_text = result.tool_results_text
         ctx.decision_report = result.decision_report
+        ctx.cognitive_execution = result.cognitive_execution
+        if result.cognitive_execution is not None:
+            from brain.cognitive_progress import resolve_neural_state
+
+            ctx.cognitive_neural_state = resolve_neural_state(
+                result.cognitive_execution.cognitive_phase,
+            )
+        self._track_obsidian_consultation(ctx)
+        self._track_browser_exploration(ctx)
+        if ctx.obsidian_consulted:
+            titles = ctx.obsidian_note_titles or []
+            self._emit_stream(
+                "obsidian_lookup",
+                {
+                    "label": "Consultation des notes Obsidian…",
+                    "neural_state": "memory_retrieval",
+                    "source": "obsidian",
+                    "match_count": len(titles),
+                    "has_matches": bool(titles),
+                },
+            )
         if result.tool_results_text:
             self._debug("Résultats outils :\n%s", result.tool_results_text)
 
     def _stage_assemble_prompt(self, ctx: ThinkContext) -> None:
+        self._emit_stream(
+            "response_building",
+            {
+                "label": "Construction de la réponse…",
+                "neural_state": "thinking",
+                "phase": "writing",
+            },
+        )
         ctx.prompt = self.prompt_builder.build(ctx)
         self._debug("LLM prompt (%d chars):\n%s", len(ctx.prompt), ctx.prompt)
 
@@ -374,6 +448,14 @@ class ThinkPipeline:
             return
         logger.info("Calling LLM")
         ctx.response = self.llm.ask(ctx.prompt)
+        self._emit_stream(
+            "response_ready",
+            {
+                "label": "Réponse prête",
+                "neural_state": "idle",
+                "length": len(ctx.response or ""),
+            },
+        )
 
     def _stage_evaluate_mission_step(self, ctx: ThinkContext) -> None:
         if ctx.skip_llm:
@@ -421,3 +503,52 @@ class ThinkPipeline:
     def _stage_update_context(self, ctx: ThinkContext) -> None:
         """Post-response context session update (P4-040)."""
         self.context_manager.update_after_turn(ctx.user_message, ctx.response)
+
+    @staticmethod
+    def _track_obsidian_consultation(ctx: ThinkContext) -> None:
+        """Record Obsidian vault consultation for memory visualization (Phase 22.0)."""
+        from tools.connectors.vault_link_index import note_display_name
+
+        titles: list[str] = []
+        consulted = False
+        for result in ctx.tool_results:
+            if result.tool_name != "obsidian" or not result.success:
+                continue
+            consulted = True
+            target = str((result.metadata or {}).get("target_path", "")).strip()
+            if target and target not in {".", ""}:
+                label = note_display_name(target)
+                if label and label not in titles:
+                    titles.append(label)
+        ctx.obsidian_consulted = consulted
+        ctx.obsidian_note_titles = titles[:4]
+
+    @staticmethod
+    def _track_browser_exploration(ctx: ThinkContext) -> None:
+        """Record Browser exploration for Exploration UI and source cards (Phase 23.0)."""
+        labels: list[str] = []
+        exploring = False
+        for result in ctx.tool_results:
+            if result.tool_name != "browser" or not result.success:
+                continue
+            metadata = result.metadata or {}
+            if metadata.get("exploration") or metadata.get("sources"):
+                exploring = True
+            for citation in metadata.get("citations") or []:
+                label = str(citation).strip()
+                if label and label not in labels:
+                    labels.append(label)
+            for source in metadata.get("sources") or []:
+                if isinstance(source, dict):
+                    title = str(source.get("title", "")).strip()
+                    if title and title not in labels:
+                        labels.append(title)
+            if not labels:
+                target_url = str(metadata.get("target_url", "")).strip()
+                if target_url:
+                    host_label = target_url.split("//")[-1].split("/")[0]
+                    if host_label and host_label not in labels:
+                        labels.append(host_label)
+                exploring = True
+        ctx.browser_exploring = exploring
+        ctx.browser_source_labels = labels[:4]

@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 
 from agents.agent_result import AgentResult
 from context.models import ContextSnapshot
+from memory.models import RetrievalResult
 from tools.decision.models import ToolDecisionReport
 from tools.tool_result import ToolRequest, ToolResult
 
@@ -23,6 +24,8 @@ class ThinkContext:
     context_snapshot: ContextSnapshot | None = None
     situational_context: str = ""
     retrieved_memory: str = ""
+    retrieval_result: RetrievalResult | None = None
+    conversation_loaded: bool = False
     state: dict = field(default_factory=dict)
     mission: dict = field(default_factory=dict)
     executive_analysis: str = ""
@@ -46,3 +49,10 @@ class ThinkContext:
     skip_llm: bool = False
     prompt: str = ""
     response: str = ""
+    obsidian_consulted: bool = False
+    obsidian_note_titles: list[str] = field(default_factory=list)
+    browser_exploring: bool = False
+    browser_source_labels: list[str] = field(default_factory=list)
+    cognitive_execution: object | None = None
+    cognitive_neural_state: str = ""
+    orchestrator_progress: list[dict] = field(default_factory=list)

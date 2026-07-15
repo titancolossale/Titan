@@ -1,0 +1,472 @@
+/* =====================================
+   Titan Frontend V3 — Living Neural Core
+   Sprint 2 · Titan Core label + Cognitive Satellites + neural links
+   Uses canonical red tokens only (tokens.css). No color literals beyond
+   restrained alpha overlays derived from the red identity.
+   ===================================== */
+
+.tdl-v2-satellite-field {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  transition: opacity var(--tdl-duration-slow) var(--tdl-ease-organic);
+  will-change: transform;
+}
+
+/* --- Neural links (satellite → Titan Core) --- */
+
+.tdl-v2-satellite-links {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tdl-v2-satellite-link {
+  stroke: var(--tdl-red-primary);
+  stroke-width: 0.9;
+  stroke-linecap: round;
+  stroke-dasharray: 5 18;
+  stroke-dashoffset: 0;
+  opacity: 0.1;
+  transition: opacity var(--tdl-duration-slow) var(--tdl-ease-organic),
+    stroke-width var(--tdl-duration-slow) var(--tdl-ease-organic);
+  filter: drop-shadow(0 0 2px rgba(220, 38, 38, 0.2));
+  animation: tdl-v2-link-idle-impulse 9s linear infinite;
+}
+
+.tdl-v2-satellite-link[data-status="waiting"] {
+  opacity: 0.32;
+  stroke: var(--tdl-red-core);
+  stroke-dasharray: 5 10;
+  animation: tdl-v2-link-idle-impulse 4.8s linear infinite;
+}
+
+.tdl-v2-satellite-link[data-status="active"] {
+  opacity: 0.72;
+  stroke: var(--tdl-red-glow);
+  stroke-width: 1.75;
+  stroke-dasharray: 4 8;
+  animation: tdl-v2-link-active-impulse 2.4s linear infinite,
+    tdl-v2-link-flow 3.2s var(--tdl-ease-organic) infinite;
+  filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.5));
+}
+
+@keyframes tdl-v2-link-flow {
+  0%, 100% { opacity: 0.42; }
+  50% { opacity: 0.78; }
+}
+
+@keyframes tdl-v2-link-idle-impulse {
+  to { stroke-dashoffset: -120; }
+}
+
+@keyframes tdl-v2-link-active-impulse {
+  to { stroke-dashoffset: -160; }
+}
+
+/* --- Titan Core label --- */
+
+.tdl-v2-satellite-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.18rem;
+  text-align: center;
+  padding: 0.55rem 1.2rem;
+  pointer-events: none;
+}
+
+.tdl-v2-satellite-core__halo {
+  position: absolute;
+  inset: -220% -180%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 120, 100, 0.22) 12%,
+    rgba(239, 68, 68, 0.16) 30%,
+    rgba(220, 38, 38, 0.06) 55%,
+    transparent 78%
+  );
+  animation: tdl-v2-core-breathe 5.4s var(--tdl-ease-organic) infinite;
+  z-index: -1;
+}
+
+.tdl-v2-satellite-core__nucleus {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  top: 42%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  /* Soft volume fused into the canvas tangle — not an isolated bright orb. */
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 255, 255, 0.28) 0%,
+    rgba(255, 140, 120, 0.22) 22%,
+    rgba(239, 68, 68, 0.14) 48%,
+    transparent 78%
+  );
+  box-shadow: 0 0 28px rgba(239, 68, 68, 0.35), 0 0 70px rgba(220, 38, 38, 0.22);
+  animation: tdl-v2-core-nucleus 4.2s var(--tdl-ease-organic) infinite;
+  z-index: -1;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.tdl-v2-satellite-core__title {
+  font-size: 0.94rem;
+  font-weight: 700;
+  letter-spacing: 0.36em;
+  padding-left: 0.36em;
+  color: var(--tdl-text-primary);
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.65), 0 0 28px rgba(239, 68, 68, 0.85),
+    0 0 60px rgba(220, 38, 38, 0.55);
+}
+
+.tdl-v2-satellite-core__subtitle {
+  font-family: var(--tdl-font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--tdl-text-secondary);
+  text-shadow: 0 0 14px rgba(220, 38, 38, 0.4);
+}
+
+@keyframes tdl-v2-core-breathe {
+  0%, 100% { opacity: 0.72; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+@keyframes tdl-v2-core-nucleus {
+  0%, 100% { opacity: 0.7; transform: translate(-50%, -50%) scale(0.92); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.12); }
+}
+
+/* --- Cognitive satellites --- */
+
+.tdl-v2-satellite {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 0.46rem;
+  padding: 0.18rem 0.34rem;
+  /* Embedded in the neural field, not a UI card: near-transparent container,
+     no border/blur at rest — the luminous node carries the identity. */
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--tdl-radius-md);
+  color: var(--tdl-text-secondary);
+  pointer-events: auto;
+  cursor: pointer;
+  font-family: var(--tdl-font-sans);
+  transition: border-color var(--tdl-duration-normal) var(--tdl-ease-organic),
+    background var(--tdl-duration-normal) var(--tdl-ease-organic),
+    box-shadow var(--tdl-duration-normal) var(--tdl-ease-organic),
+    transform var(--tdl-duration-fast) var(--tdl-ease-standard);
+}
+
+.tdl-v2-satellite__aura {
+  position: absolute;
+  left: 0.18rem;
+  top: 50%;
+  width: 36px;
+  height: 36px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(239, 68, 68, 0.14) 0%,
+    rgba(220, 38, 38, 0.05) 45%,
+    transparent 72%
+  );
+  pointer-events: none;
+  opacity: 0.5;
+  transition: opacity var(--tdl-duration-normal) var(--tdl-ease-organic),
+    transform var(--tdl-duration-normal) var(--tdl-ease-organic);
+  z-index: 0;
+  animation: tdl-v2-satellite-aura-breathe 5.8s var(--tdl-ease-organic) infinite;
+}
+
+.tdl-v2-satellite__node {
+  position: relative;
+  z-index: 1;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff 0%, var(--tdl-red-bright) 32%, var(--tdl-red-dark) 76%, #0a0505 100%);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.45), 0 0 20px rgba(220, 38, 38, 0.22);
+  transition: box-shadow var(--tdl-duration-normal) var(--tdl-ease-organic),
+    background var(--tdl-duration-normal) var(--tdl-ease-organic),
+    transform var(--tdl-duration-normal) var(--tdl-ease-organic);
+  animation: tdl-v2-satellite-idle-breathe 4.8s var(--tdl-ease-organic) infinite;
+}
+
+.tdl-v2-satellite__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.04rem;
+  position: relative;
+  z-index: 1;
+  animation: tdl-v2-label-float 7.5s var(--tdl-ease-organic) infinite;
+}
+
+.tdl-v2-satellite__title {
+  font-size: 0.56rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--tdl-text-secondary);
+  white-space: nowrap;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+  transition: color var(--tdl-duration-normal) var(--tdl-ease-organic);
+}
+
+.tdl-v2-satellite__status {
+  font-family: var(--tdl-font-mono);
+  font-size: 0.48rem;
+  letter-spacing: 0.14em;
+  color: var(--tdl-text-muted);
+}
+
+.tdl-v2-satellite:focus-visible {
+  outline: none;
+  border-color: var(--tdl-border-focus);
+  background: rgba(3, 3, 3, 0.42);
+  box-shadow: var(--tdl-glow-red-sm);
+}
+
+/* Status: WAITING */
+.tdl-v2-satellite[data-status="waiting"] {
+  border-color: rgba(220, 38, 38, 0.32);
+}
+.tdl-v2-satellite[data-status="waiting"] .tdl-v2-satellite__node {
+  box-shadow: 0 0 10px rgba(220, 38, 38, 0.4);
+  animation: tdl-v2-satellite-wait 2.6s var(--tdl-ease-organic) infinite;
+}
+.tdl-v2-satellite[data-status="waiting"] .tdl-v2-satellite__aura {
+  opacity: 0.7;
+}
+.tdl-v2-satellite[data-status="waiting"] .tdl-v2-satellite__status {
+  color: var(--tdl-red-bright);
+}
+
+/* Status: ACTIVE — nearby network brightens */
+.tdl-v2-satellite[data-status="active"] .tdl-v2-satellite__title {
+  color: var(--tdl-text-primary);
+}
+.tdl-v2-satellite[data-status="active"] .tdl-v2-satellite__node {
+  background: radial-gradient(circle at 35% 30%, #fff 0%, var(--tdl-red-glow) 45%, var(--tdl-red-primary) 100%);
+  box-shadow: 0 0 18px rgba(239, 68, 68, 0.8), 0 0 40px rgba(220, 38, 38, 0.5);
+  transform: scale(1.14);
+  animation: tdl-v2-satellite-pulse 1.9s var(--tdl-ease-organic) infinite;
+}
+.tdl-v2-satellite[data-status="active"] .tdl-v2-satellite__aura {
+  opacity: 1;
+  transform: translateY(-50%) scale(1.55);
+  animation: tdl-v2-satellite-aura-active 2.2s var(--tdl-ease-organic) infinite;
+  background: radial-gradient(
+    circle,
+    rgba(239, 68, 68, 0.28) 0%,
+    rgba(220, 38, 38, 0.1) 42%,
+    transparent 74%
+  );
+}
+.tdl-v2-satellite[data-status="active"] .tdl-v2-satellite__status {
+  color: var(--tdl-red-glow);
+}
+
+@keyframes tdl-v2-label-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes tdl-v2-satellite-idle-breathe {
+  0%, 100% {
+    transform: scale(0.94);
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.35), 0 0 16px rgba(220, 38, 38, 0.16);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 0 14px rgba(239, 68, 68, 0.55), 0 0 28px rgba(220, 38, 38, 0.28);
+  }
+}
+
+@keyframes tdl-v2-satellite-aura-breathe {
+  0%, 100% { opacity: 0.38; transform: translateY(-50%) scale(0.92); }
+  50% { opacity: 0.62; transform: translateY(-50%) scale(1.12); }
+}
+
+@keyframes tdl-v2-satellite-aura-active {
+  0%, 100% { opacity: 0.85; transform: translateY(-50%) scale(1.4); }
+  50% { opacity: 1; transform: translateY(-50%) scale(1.7); }
+}
+
+.tdl-v2-satellite:hover {
+  border-color: var(--tdl-border-focus);
+  background: rgba(3, 3, 3, 0.42);
+  box-shadow: var(--tdl-glow-red-md);
+  transform: translate(-50%, -50%) scale(1.05);
+}
+
+.tdl-v2-satellite:hover .tdl-v2-satellite__title {
+  color: var(--tdl-text-primary);
+}
+
+@keyframes tdl-v2-satellite-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(239, 68, 68, 0.55), 0 0 26px rgba(220, 38, 38, 0.35); }
+  50% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.85), 0 0 44px rgba(220, 38, 38, 0.5); }
+}
+
+@keyframes tdl-v2-satellite-wait {
+  0%, 100% { box-shadow: 0 0 6px rgba(220, 38, 38, 0.3); }
+  50% { box-shadow: 0 0 14px rgba(220, 38, 38, 0.55); }
+}
+
+/* --- Tooltip (name · role · status) --- */
+
+.tdl-v2-satellite__tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 132px;
+  padding: 0.42rem 0.6rem;
+  background: var(--tdl-bg-overlay);
+  border: 1px solid var(--tdl-border-default);
+  border-radius: var(--tdl-radius-md);
+  box-shadow: var(--tdl-shadow-md);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 5;
+  transition: opacity var(--tdl-duration-fast) var(--tdl-ease-standard),
+    transform var(--tdl-duration-fast) var(--tdl-ease-standard);
+}
+
+.tdl-v2-satellite:hover .tdl-v2-satellite__tooltip,
+.tdl-v2-satellite:focus-visible .tdl-v2-satellite__tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.tdl-v2-satellite__tooltip-title {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--tdl-text-primary);
+}
+
+.tdl-v2-satellite__tooltip-role {
+  font-size: 0.56rem;
+  color: var(--tdl-text-secondary);
+}
+
+.tdl-v2-satellite__tooltip-status {
+  font-family: var(--tdl-font-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.12em;
+  color: var(--tdl-red-glow);
+}
+
+/* --- Ring placement (Sprint 2.7 reference subsystems) --- */
+
+.tdl-v2-satellite--memory { left: 18%; top: 18%; }
+.tdl-v2-satellite--planning { left: 50%; top: 10%; }
+.tdl-v2-satellite--browser { left: 82%; top: 18%; }
+.tdl-v2-satellite--obsidian { left: 90%; top: 45%; }
+.tdl-v2-satellite--tools { left: 82%; top: 72%; }
+.tdl-v2-satellite--communication { left: 50%; top: 84%; }
+.tdl-v2-satellite--trading { left: 18%; top: 72%; }
+.tdl-v2-satellite--calendar { left: 10%; top: 45%; }
+
+/* --- Behavior states (stage-wide) --- */
+
+.tdl-v2-satellite-field[data-behavior="OFFLINE"] {
+  opacity: 0.32;
+  filter: saturate(0.5);
+}
+
+.tdl-v2-satellite-field[data-behavior="ERROR"] .tdl-v2-satellite-core__halo {
+  animation: tdl-v2-core-error 2.4s var(--tdl-ease-organic) infinite;
+}
+
+@keyframes tdl-v2-core-error {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.95; }
+}
+
+.tdl-v2-satellite-field[data-behavior="LISTENING"] .tdl-v2-satellite--communication,
+.tdl-v2-satellite-field[data-behavior="THINKING"] .tdl-v2-satellite-core__title,
+.tdl-v2-satellite-field[data-behavior="EXECUTING"] .tdl-v2-satellite-core__title {
+  filter: brightness(1.08);
+}
+
+/* --- Reduced motion --- */
+
+.tdl-v2--reduced-motion .tdl-v2-satellite-field {
+  transform: none !important;
+}
+
+.tdl-v2--reduced-motion .tdl-v2-satellite-core__halo,
+.tdl-v2--reduced-motion .tdl-v2-satellite-core__nucleus,
+.tdl-v2--reduced-motion .tdl-v2-satellite__body,
+.tdl-v2--reduced-motion .tdl-v2-satellite__aura,
+.tdl-v2--reduced-motion .tdl-v2-satellite__node,
+.tdl-v2--reduced-motion .tdl-v2-satellite[data-status="active"] .tdl-v2-satellite__node,
+.tdl-v2--reduced-motion .tdl-v2-satellite[data-status="waiting"] .tdl-v2-satellite__node,
+.tdl-v2--reduced-motion .tdl-v2-satellite-link,
+.tdl-v2--reduced-motion .tdl-v2-satellite-link[data-status="active"] {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tdl-v2-satellite-core__halo,
+  .tdl-v2-satellite-core__nucleus,
+  .tdl-v2-satellite__body,
+  .tdl-v2-satellite__aura,
+  .tdl-v2-satellite__node,
+  .tdl-v2-satellite[data-status="active"] .tdl-v2-satellite__node,
+  .tdl-v2-satellite[data-status="waiting"] .tdl-v2-satellite__node,
+  .tdl-v2-satellite-link,
+  .tdl-v2-satellite-link[data-status="active"] {
+    animation: none;
+  }
+}
+
+/* --- Keep satellites interactive beneath the transparent chat view ---
+   The chat panel is a full-bleed transparent layer above the satellite ring
+   (z-index 3 vs 2). Letting pointer events pass through its empty margins keeps
+   the peripheral satellites hoverable/clickable while the centered conversation
+   column (and the separate dock composer) stay fully interactive. */
+
+.tdl-v2-panel-view--chat {
+  pointer-events: none;
+}
+
+.tdl-v2-panel-view--chat .tdl-v2-conversation {
+  pointer-events: auto;
+}
+
+/* --- Compact viewports: keep the ring readable --- */
+
+.tdl-v2--mode-tablet .tdl-v2-satellite__body,
+.tdl-v2--mode-phone .tdl-v2-satellite__body {
+  display: none;
+}
+
+.tdl-v2--mode-phone .tdl-v2-satellite-field {
+  display: none;
+}

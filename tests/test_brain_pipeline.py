@@ -13,6 +13,7 @@ import pytest
 from brain.brain import Brain
 from brain.llm import LLM_ERROR_MESSAGE
 from brain.pipeline.stages import STAGE_ORDER
+from memory.models import RetrievalResult
 
 
 def test_pipeline_stage_order_matches_rulebook() -> None:
@@ -32,7 +33,11 @@ def test_pipeline_stage_order_matches_rulebook() -> None:
 def test_brain_think_uses_retrieved_memory_in_llm_prompt(brain: Brain) -> None:
     """P2-022/P2-025: LLM prompt uses retrieved memory, not full JSON dump."""
     brain.memory_service.retrieve = MagicMock(
-        return_value=type("R", (), {"text": "Nolan note : préfère Python"})(),
+        return_value=RetrievalResult(
+            text="Nolan note : préfère Python",
+            items=["Nolan note : préfère Python"],
+            user="Nolan",
+        ),
     )
     brain.long_memory.show_memory = MagicMock(
         return_value='{"users": {"Nolan": {"notes": ["secret"]}}}',

@@ -24,10 +24,20 @@ class TaskOrchestrator:
         self,
         message: str,
         agent_context: AgentContext | None = None,
+        *,
+        max_agents: int | None = None,
     ) -> list[AgentResult]:
         logger.debug("TASK ORCHESTRATOR — starting")
 
         tasks = self.task_manager.create_tasks(message)
+
+        if max_agents is not None and len(tasks) > max_agents:
+            logger.info(
+                "Agent pipeline truncated %d tasks (max=%d)",
+                len(tasks) - max_agents,
+                max_agents,
+            )
+            tasks = tasks[:max_agents]
 
         for agent_name, task in tasks:
             logger.debug("Tâche planifiée — %s : %s", agent_name, task)

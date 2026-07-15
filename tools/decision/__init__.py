@@ -11,20 +11,23 @@ from tools.decision.execution_context import (
 )
 from tools.decision.intent import Intent
 from tools.decision.models import (
-    CandidateTool,
+    CandidateProvider,
     FallbackAction,
     IntentClassification,
     ToolDecisionReport,
     ToolNeedAssessment,
 )
+from tools.decision.provider_ranker import ProviderRanker
 from tools.decision.tool_decision_engine import ToolDecisionEngine
 
 __all__ = [
     "CapabilityAvailabilityResolver",
+    "CandidateProvider",
     "CandidateTool",
     "FallbackAction",
     "Intent",
     "IntentClassification",
+    "ProviderRanker",
     "ToolDecisionEngine",
     "ToolDecisionReport",
     "ToolNeedAssessment",

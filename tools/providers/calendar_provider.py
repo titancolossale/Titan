@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 
 from tools.provider_version import ProviderHealth, ProviderVersionInfo
 from tools.providers.base_provider import BaseProvider
+from tools.providers.provider_context import ProviderContext
+from tools.providers.provider_health_resolver import resolve_provider_health
 from tools.tool_enums import ExecutionMode, ToolHealthState
 
 
@@ -41,6 +43,12 @@ class CalendarProvider(BaseProvider):
     def provider_id(self) -> str:
         return "calendar"
 
+    def capabilities(self) -> frozenset[str]:
+        return frozenset({"calendar"})
+
+    def supported_actions(self) -> frozenset[str]:
+        return frozenset({"list", "create", "update", "delete"})
+
     @abstractmethod
     def execute(self, action: str = "list", **params: object) -> CalendarResponse:
         """Run a calendar action and return structured results."""
@@ -49,14 +57,22 @@ class CalendarProvider(BaseProvider):
 class StubCalendarProvider(CalendarProvider):
     """Placeholder calendar provider — no external API."""
 
+    def __init__(self, *, context: ProviderContext | None = None) -> None:
+        self.context = context
+
     @property
     def version_info(self) -> ProviderVersionInfo:
         return _STUB_VERSION
 
     def health_check(self) -> ProviderHealth:
-        return ProviderHealth(
+        default = ProviderHealth(
             state=ToolHealthState.DEGRADED,
             message="Calendrier stub — intégration externe non disponible.",
+        )
+        return resolve_provider_health(
+            self.provider_id,
+            context=self.context,
+            default_health=default,
         )
 
     def execute(self, action: str = "list", **params: object) -> CalendarResponse:

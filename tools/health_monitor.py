@@ -13,6 +13,13 @@ from core.exceptions import ToolHealthError
 from tools.tool_capability import ToolCapability
 from tools.tool_enums import ToolHealthState
 
+_BLOCKED_PROVIDER_STATES = frozenset({
+    ToolHealthState.OFFLINE,
+    ToolHealthState.DISABLED,
+    ToolHealthState.MISCONFIGURED,
+    ToolHealthState.MISSING_CREDENTIALS,
+})
+
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -105,7 +112,7 @@ class HealthMonitor:
 
         if capability.provider_name:
             provider_state = self.get_provider_health(capability.provider_name)
-            if provider_state in (ToolHealthState.OFFLINE, ToolHealthState.DISABLED):
+            if provider_state in _BLOCKED_PROVIDER_STATES:
                 state = provider_state
             elif provider_state == ToolHealthState.DEGRADED and state == ToolHealthState.UNKNOWN:
                 state = ToolHealthState.DEGRADED
@@ -115,6 +122,14 @@ class HealthMonitor:
 
         if state == ToolHealthState.DISABLED:
             raise ToolHealthError(f"Outil {tool_name!r} désactivé par politique.")
+
+        if state == ToolHealthState.MISCONFIGURED:
+            raise ToolHealthError(f"Outil {tool_name!r} mal configuré.")
+
+        if state == ToolHealthState.MISSING_CREDENTIALS:
+            raise ToolHealthError(
+                f"Outil {tool_name!r} indisponible — credentials manquantes."
+            )
 
         if state == ToolHealthState.DEGRADED:
             return HealthCheckResult(

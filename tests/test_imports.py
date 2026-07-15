@@ -73,6 +73,9 @@ PRODUCTION_MODULES = [
     "tools.tool_result",
     "tools.tool_policy",
     "tools.path_guard",
+    "tools.permission_manager",
+    "tools.tool_orchestrator",
+    "tools.orchestration_models",
     "tools.file_read_tool",
     "tools.file_write_tool",
     "tools.python_exec_tool",
@@ -81,6 +84,15 @@ PRODUCTION_MODULES = [
     "tools.decision",
     "tools.decision.tool_decision_engine",
     "brain.tool_dispatcher",
+    "brain.cognitive_operating_system",
+    "brain.autonomous_workflow_engine",
+    "brain.natural_language_orchestrator",
+    "brain.cognitive_context_builder",
+    "brain.reasoning_engine",
+    "brain.meta_cognition",
+    "brain.world_model",
+    "brain.knowledge_learning_engine",
+    "core.mission_runtime",
 ]
 
 

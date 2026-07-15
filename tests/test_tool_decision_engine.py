@@ -56,7 +56,7 @@ def test_intent_memory(engine: ToolDecisionEngine) -> None:
 
 def test_intent_file(engine: ToolDecisionEngine) -> None:
     report = engine.decide("Lire le fichier config/settings.py")
-    assert report.intent == Intent.FILE
+    assert report.intent == Intent.FILE_READ
     assert report.confidence >= 0.8
 
 
@@ -218,15 +218,48 @@ def test_fallback_direct_answer(engine: ToolDecisionEngine) -> None:
 def test_fallback_no_capability_trading(engine: ToolDecisionEngine) -> None:
     report = engine.decide("Buy 10 contracts of NQ")
     assert report.tool_required is True
+    assert report.fallback_action == FallbackAction.EXECUTE_TOOL
+    assert report.selected_tool == "trading"
+
+
+def test_fallback_no_capability_trading_without_tool(engine: ToolDecisionEngine) -> None:
+    report = engine.decide(
+        "Buy 10 contracts of NQ",
+        available_tools=frozenset({"time", "file_read"}),
+    )
+    assert report.tool_required is True
     assert report.fallback_action == FallbackAction.NO_CAPABILITY
     assert report.selected_tool is None
     assert "not yet available" in report.decision_reason.lower() or "no registered" in report.decision_reason.lower()
 
 
-def test_fallback_no_capability_email(engine: ToolDecisionEngine) -> None:
-    report = engine.decide("Send an email to Nolan")
+def test_fallback_trading_selects_tool_when_available(engine: ToolDecisionEngine) -> None:
+    report = engine.decide(
+        "Show my NQ positions",
+        available_tools=frozenset({"trading"}),
+    )
+    assert report.intent == Intent.TRADING
+    assert report.selected_tool == "trading"
+    assert report.fallback_action == FallbackAction.EXECUTE_TOOL
+
+
+def test_fallback_no_capability_email_without_tool(engine: ToolDecisionEngine) -> None:
+    report = engine.decide(
+        "Send an email to Nolan",
+        available_tools=frozenset({"time", "file_read"}),
+    )
     assert report.fallback_action == FallbackAction.NO_CAPABILITY
     assert report.selected_tool is None
+
+
+def test_fallback_email_selects_tool_when_available(engine: ToolDecisionEngine) -> None:
+    report = engine.decide(
+        "Send an email to Nolan",
+        available_tools=frozenset({"email"}),
+    )
+    assert report.intent == Intent.EMAIL
+    assert report.selected_tool == "email"
+    assert report.fallback_action == FallbackAction.EXECUTE_TOOL
 
 
 def test_fallback_never_selects_random_tool(engine: ToolDecisionEngine) -> None:
@@ -262,8 +295,21 @@ def test_reasoning_no_tool_for_general_question() -> None:
     assert analysis["tool_requests"] == []
 
 
-def test_reasoning_no_capability_sets_clarification() -> None:
-    analysis = Reasoning().analyze("Send an email to Ibrahim")
+def test_reasoning_email_routes_when_tool_available() -> None:
+    analysis = Reasoning().analyze(
+        "Send an email to Ibrahim",
+        available_tools=frozenset({"email"}),
+    )
+    assert analysis["needs_tool"] is True
+    assert analysis["tool_requests"]
+    assert analysis["tool_requests"][0].params["action"] == "send_email"
+
+
+def test_reasoning_no_capability_sets_clarification_without_email_tool() -> None:
+    analysis = Reasoning().analyze(
+        "Send an email to Ibrahim",
+        available_tools=frozenset({"time", "file_read"}),
+    )
     assert analysis["needs_clarification"] is True
     assert analysis["tool_requests"] == []
 

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Titan AI — Design Language Preview</title>
+  <link rel="stylesheet" href="/static/design/titan-ui.css">
+</head>
+<body class="tdl-page">
+  <div class="tdl-neural-bg tdl-neural-bg--thinking" aria-hidden="true"></div>
+  <div class="tdl-glow-ambient" aria-hidden="true"></div>
+
+  <div class="tdl-shell">
+    <aside class="tdl-sidebar">
+      <div class="tdl-sidebar__brand">Titan AI</div>
+      <a class="tdl-sidebar__item tdl-sidebar__item--active" href="#">Design</a>
+      <a class="tdl-sidebar__item" href="#">Conversation</a>
+      <a class="tdl-sidebar__item" href="#">Outils</a>
+      <a class="tdl-sidebar__item" href="#">Statut</a>
+    </aside>
+
+    <main class="tdl-main">
+      <div class="tdl-preview-grid">
+        <header>
+          <h1 class="tdl-display">Titan <span class="tdl-display__accent">AI</span></h1>
+          <p class="tdl-text-secondary">Titan Design Language — Phase 17.2 preview</p>
+        </header>
+
+        <section class="tdl-panel">
+          <h2 class="tdl-panel__title">Palette</h2>
+          <p class="tdl-panel__subtitle">Pure black void, deep red signature, white/gray text.</p>
+          <div class="tdl-swatch-grid">
+            <div class="tdl-swatch">
+              <div class="tdl-swatch__color" style="background: var(--tdl-bg-void);"></div>
+              <div class="tdl-swatch__label">--tdl-bg-void</div>
+            </div>
+            <div class="tdl-swatch">
+              <div class="tdl-swatch__color" style="background: var(--tdl-bg-surface);"></div>
+              <div class="tdl-swatch__label">--tdl-bg-surface</div>
+            </div>
+            <div class="tdl-swatch">
+              <div class="tdl-swatch__color" style="background: var(--tdl-red-core);"></div>
+              <div class="tdl-swatch__label">--tdl-red-core</div>
+            </div>
+            <div class="tdl-swatch">
+              <div class="tdl-swatch__color" style="background: var(--tdl-red-glow);"></div>
+              <div class="tdl-swatch__label">--tdl-red-glow</div>
+            </div>
+            <div class="tdl-swatch">
+              <div class="tdl-swatch__color" style="background: var(--tdl-text-primary);"></div>
+              <div class="tdl-swatch__label">--tdl-text-primary</div>
+            </div>
+            <div class="tdl-swatch">
+              <div class="tdl-swatch__color" style="background: var(--tdl-text-secondary);"></div>
+              <div class="tdl-swatch__label">--tdl-text-secondary</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="tdl-panel">
+          <h2 class="tdl-panel__title">Typographie</h2>
+          <div class="tdl-stack">
+            <p class="tdl-display" style="font-size: var(--tdl-text-2xl);">Display — Titan AI</p>
+            <p class="tdl-heading">Heading — Section title</p>
+            <p>Body — Interface principale, lisible sur fond noir.</p>
+            <p class="tdl-text-secondary">Secondary — Métadonnées et labels.</p>
+            <p class="tdl-text-mono">Mono — status: ONLINE · v0.10.0</p>
+          </div>
+        </section>
+
+        <section class="tdl-panel">
+          <h2 class="tdl-panel__title">Boutons</h2>
+          <div class="tdl-preview-row">
+            <button type="button" class="tdl-btn tdl-btn--primary">Primary</button>
+            <button type="button" class="tdl-btn tdl-btn--secondary">Secondary</button>
+            <button type="button" class="tdl-btn tdl-btn--ghost">Ghost</button>
+            <button type="button" class="tdl-btn tdl-btn--primary" disabled>Disabled</button>
+          </div>
+        </section>
+
+        <section class="tdl-panel tdl-panel--elevated">
+          <h2 class="tdl-panel__title">Panneau &amp; formulaire</h2>
+          <div class="tdl-stack">
+            <label class="tdl-label" for="preview-input">Message</label>
+            <input class="tdl-input" id="preview-input" type="text" placeholder="Écris ton message…">
+            <div class="tdl-preview-row">
+              <span class="tdl-badge tdl-badge--online">Online</span>
+              <span class="tdl-badge tdl-badge--idle">Idle</span>
+              <span class="tdl-badge tdl-badge--warning">Warning</span>
+              <span class="tdl-badge tdl-badge--error">Error</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="tdl-panel">
+          <h2 class="tdl-panel__title">Neural background</h2>
+          <p class="tdl-panel__subtitle">
+            Placeholder CSS — infinite drift, deep red pulses, edges fading into void.
+            Full canvas/WebGL implementation in a later phase.
+          </p>
+        </section>
+
+        <section class="tdl-panel">
+          <h2 class="tdl-panel__title">Thinking animation</h2>
+          <div class="tdl-thinking" aria-label="Titan réfléchit">
+            <span class="tdl-thinking__pulse"></span>
+            <span class="tdl-thinking__pulse"></span>
+            <span class="tdl-thinking__pulse"></span>
+            <span>Titan réfléchit…</span>
+          </div>
+        </section>
+
+        <section class="tdl-panel">
+          <h2 class="tdl-panel__title">Glow</h2>
+          <div class="tdl-preview-row">
+            <button type="button" class="tdl-btn tdl-btn--primary tdl-glow-red">Glow SM</button>
+            <button type="button" class="tdl-btn tdl-btn--secondary tdl-glow-red--md">Glow MD</button>
+            <button type="button" class="tdl-btn tdl-btn--secondary tdl-glow-red--lg">Glow LG</button>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

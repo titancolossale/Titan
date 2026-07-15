@@ -18,15 +18,20 @@ from tools.tool_schema import ToolSchema
 _LEGACY_RISK_DEFAULTS: dict[str, RiskLevel] = {
     "time": RiskLevel.SAFE,
     "file_read": RiskLevel.LOW,
-    "file_write": RiskLevel.MEDIUM,
+    "file_write": RiskLevel.HIGH,
     "python_exec": RiskLevel.HIGH,
     "web_search": RiskLevel.LOW,
     "calendar": RiskLevel.SAFE,
+    "obsidian": RiskLevel.LOW,
+    "browser": RiskLevel.LOW,
 }
 
 _LEGACY_PROVIDER_DEFAULTS: dict[str, str] = {
     "web_search": "web_search",
     "calendar": "calendar",
+    "file_read": "file_system",
+    "file_write": "file_system",
+    "github": "github",
 }
 
 _LEGACY_EXECUTION_MODES: dict[str, frozenset[ExecutionMode]] = {
@@ -38,6 +43,9 @@ _LEGACY_EXECUTION_MODES: dict[str, frozenset[ExecutionMode]] = {
     "python_exec": frozenset({ExecutionMode.LIVE, ExecutionMode.MOCK, ExecutionMode.SIMULATION}),
     "web_search": frozenset({ExecutionMode.LIVE, ExecutionMode.MOCK}),
     "calendar": frozenset({ExecutionMode.LIVE, ExecutionMode.MOCK}),
+    "github": frozenset({ExecutionMode.LIVE, ExecutionMode.MOCK}),
+    "obsidian": frozenset({ExecutionMode.LIVE, ExecutionMode.MOCK, ExecutionMode.SIMULATION}),
+    "browser": frozenset({ExecutionMode.LIVE, ExecutionMode.MOCK, ExecutionMode.SIMULATION}),
 }
 
 _LEGACY_ACTION_TYPES: dict[str, str] = {
@@ -55,8 +63,9 @@ _LEGACY_REQUIRES_CONFIRMATION: dict[str, bool] = {
 _LEGACY_DEPENDENCIES: dict[str, tuple[ToolDependency, ...]] = {
     "web_search": (ToolDependency("provider", "web_search"),),
     "calendar": (ToolDependency("provider", "calendar"),),
-    "file_read": (ToolDependency("service", "filesystem"),),
-    "file_write": (ToolDependency("service", "filesystem"),),
+    "file_read": (ToolDependency("provider", "file_system"),),
+    "file_write": (ToolDependency("provider", "file_system"),),
+    "github": (ToolDependency("provider", "github"),),
 }
 
 

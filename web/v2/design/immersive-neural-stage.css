@@ -1,0 +1,692 @@
+/* =====================================
+   Titan Web App — Phase 5.1
+   IMMERSIVE NEURAL STAGE
+   Canonical target: living-neural-core-closeup.png
+                     + sprint-2.7-reference-composition.png
+   Presentation only — neural renderer / APIs untouched.
+   Loaded LAST — dissolves dashboard-over-background feel.
+   ===================================== */
+
+:root {
+  /* Slightly more breathing room — premium negative space */
+  --tdl-workspace-padding: 1.15rem;
+  --tdl-workspace-gap: 0.95rem;
+
+  /* Deeper void · quieter chrome */
+  --tdl-p5-edge: rgba(255, 255, 255, 0.022);
+  --tdl-p5-edge-lit: rgba(255, 255, 255, 0.05);
+  --tdl-p5-neural-bleed: rgba(220, 38, 38, 0.028);
+  --tdl-p5-glass: linear-gradient(
+    168deg,
+    rgba(12, 10, 10, 0.32) 0%,
+    rgba(0, 0, 0, 0.2) 48%,
+    rgba(0, 0, 0, 0.42) 100%
+  );
+  --tdl-p5-glass-deep: linear-gradient(
+    172deg,
+    rgba(10, 8, 8, 0.4) 0%,
+    rgba(0, 0, 0, 0.28) 50%,
+    rgba(0, 0, 0, 0.52) 100%
+  );
+
+  /* Immersive atmosphere tokens */
+  --tdl-imm-void: rgba(0, 0, 0, 0.72);
+  --tdl-imm-fog: rgba(80, 10, 10, 0.07);
+  --tdl-imm-core-glow: rgba(239, 68, 68, 0.14);
+  --tdl-imm-filament: rgba(248, 113, 113, 0.55);
+}
+
+/* =====================================
+   GLOBAL ATMOSPHERE — one cinematic space
+   ===================================== */
+
+.tdl-v2-page,
+.tdl-v2-root {
+  background: #000000;
+}
+
+.tdl-v2-neural-host {
+  background: #000000;
+}
+
+/* Volumetric darkness + layered fog over the neural field
+   (chrome atmosphere only — canvas renderer untouched) */
+.tdl-v2-glow-ambient {
+  display: block !important;
+  background:
+    /* Far fog — soft crimson haze buried deep */
+    radial-gradient(
+      ellipse 72% 58% at 50% 44%,
+      rgba(90, 12, 12, 0.11) 0%,
+      rgba(40, 6, 6, 0.04) 36%,
+      transparent 70%
+    ),
+    /* Mid glow — emerges from the organism, not a panel */
+    radial-gradient(
+      ellipse 42% 34% at 50% 44%,
+      rgba(220, 38, 38, 0.07) 0%,
+      rgba(120, 16, 16, 0.03) 42%,
+      transparent 72%
+    ),
+    /* Dark void vignette — infinite depth at edges */
+    radial-gradient(
+      ellipse 88% 78% at 50% 48%,
+      transparent 28%,
+      rgba(0, 0, 0, 0.22) 62%,
+      rgba(0, 0, 0, 0.62) 100%
+    ),
+    /* Bottom void weight */
+    radial-gradient(
+      ellipse 100% 55% at 50% 108%,
+      rgba(0, 0, 0, 0.55) 0%,
+      transparent 58%
+    );
+  opacity: 1;
+}
+
+.tdl-v2-layer--workspace::before {
+  background:
+    radial-gradient(
+      ellipse 64% 52% at 50% 42%,
+      transparent 22%,
+      rgba(0, 0, 0, 0.12) 58%,
+      rgba(0, 0, 0, 0.38) 100%
+    );
+  opacity: 1;
+}
+
+/* =====================================
+   DEPTH LAYERS — void · far fog · mid · foreground
+   Existing DOM bands (shell) — presentation re-enabled
+   ===================================== */
+
+.tdl-v2-neural-depth-layers {
+  z-index: 1;
+  mix-blend-mode: screen;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.tdl-v2-neural-depth-band {
+  display: block !important;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Dark void — deepest recess */
+.tdl-v2-neural-depth-band--void {
+  background: radial-gradient(
+    ellipse 95% 90% at 50% 48%,
+    transparent 35%,
+    rgba(0, 0, 0, 0.45) 100%
+  );
+  mix-blend-mode: multiply;
+  opacity: 0.9;
+  z-index: 0;
+}
+
+/* Far fog — distant neural haze */
+.tdl-v2-neural-depth-band--far {
+  background:
+    radial-gradient(
+      ellipse 55% 42% at 48% 40%,
+      rgba(120, 20, 20, 0.08) 0%,
+      transparent 68%
+    ),
+    radial-gradient(
+      ellipse 40% 30% at 58% 55%,
+      rgba(90, 12, 12, 0.05) 0%,
+      transparent 70%
+    );
+  filter: blur(28px);
+  opacity: 0.75;
+  z-index: 1;
+  animation: tdl-imm-fog-drift 28s var(--tdl-ease-organic, ease-in-out) infinite;
+}
+
+/* Distant tissue — soft mid-depth bloom */
+.tdl-v2-neural-depth-band--distant {
+  background: radial-gradient(
+    ellipse 38% 30% at 50% 44%,
+    rgba(239, 68, 68, 0.06) 0%,
+    rgba(180, 30, 30, 0.025) 40%,
+    transparent 72%
+  );
+  filter: blur(18px);
+  opacity: 0.7;
+  z-index: 2;
+  animation: tdl-imm-tissue-breathe 9.5s var(--tdl-ease-organic, ease-in-out) infinite;
+}
+
+/* Horizon / mid neural tissue — closer red volume */
+.tdl-v2-neural-depth-band--horizon {
+  background: radial-gradient(
+    ellipse 28% 22% at 50% 44%,
+    rgba(255, 80, 70, 0.07) 0%,
+    rgba(220, 38, 38, 0.03) 45%,
+    transparent 78%
+  );
+  filter: blur(10px);
+  opacity: 0.65;
+  z-index: 3;
+}
+
+/* Soft vignette restored as atmospheric lid */
+.tdl-v2-neural-vignette {
+  display: block !important;
+  z-index: 4;
+  background: radial-gradient(
+    ellipse 78% 70% at 50% 46%,
+    transparent 40%,
+    rgba(0, 0, 0, 0.35) 78%,
+    rgba(0, 0, 0, 0.72) 100%
+  );
+  opacity: 1;
+  pointer-events: none;
+}
+
+@keyframes tdl-imm-fog-drift {
+  0%, 100% { transform: scale(1) translate(0, 0); opacity: 0.7; }
+  50% { transform: scale(1.04) translate(1.2%, -0.8%); opacity: 0.85; }
+}
+
+@keyframes tdl-imm-tissue-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(0.97); }
+  50% { opacity: 0.82; transform: scale(1.05); }
+}
+
+/* =====================================
+   CENTER STAGE — no clipped rectangle
+   ===================================== */
+
+.tdl-v2-center-stack {
+  border-radius: 0 !important;
+  overflow: visible !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  border: none !important;
+}
+
+.tdl-v2-region--main {
+  overflow: visible !important;
+}
+
+.tdl-v2-center-viewport,
+.tdl-v2-region--main,
+.tdl-v2-panel-slot {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Foreground particle dust — very subtle cinematic bokeh */
+.tdl-v2-center-stack::before {
+  content: "";
+  position: absolute;
+  inset: -8% -4%;
+  pointer-events: none;
+  z-index: 3;
+  background-image:
+    radial-gradient(1.5px 1.5px at 12% 28%, rgba(248, 113, 113, 0.35), transparent),
+    radial-gradient(1px 1px at 78% 22%, rgba(239, 68, 68, 0.28), transparent),
+    radial-gradient(1.5px 1.5px at 64% 68%, rgba(255, 120, 100, 0.22), transparent),
+    radial-gradient(1px 1px at 28% 74%, rgba(220, 38, 38, 0.3), transparent),
+    radial-gradient(2px 2px at 88% 48%, rgba(248, 113, 113, 0.18), transparent),
+    radial-gradient(1px 1px at 42% 18%, rgba(239, 68, 68, 0.2), transparent),
+    radial-gradient(1.5px 1.5px at 18% 52%, rgba(255, 90, 80, 0.16), transparent),
+    radial-gradient(1px 1px at 55% 82%, rgba(220, 38, 38, 0.22), transparent);
+  opacity: 0.55;
+  mix-blend-mode: screen;
+  animation: tdl-imm-particles 16s var(--tdl-ease-organic, ease-in-out) infinite;
+}
+
+/* Soft mid fog veil inside the stage column */
+.tdl-v2-center-stack::after {
+  content: "";
+  position: absolute;
+  inset: 8% 12%;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    ellipse 70% 55% at 50% 48%,
+    rgba(180, 30, 30, 0.05) 0%,
+    transparent 70%
+  );
+  filter: blur(40px);
+  opacity: 0.8;
+}
+
+@keyframes tdl-imm-particles {
+  0%, 100% { opacity: 0.4; transform: translateY(0); }
+  50% { opacity: 0.65; transform: translateY(-1.5%); }
+}
+
+.tdl-v2-neural-labels,
+.tdl-v2-satellite-field {
+  z-index: 2;
+}
+
+/* =====================================
+   TITAN CORE — buried inside the organism
+   Remove every glass / pill / rectangle cue
+   ===================================== */
+
+.tdl-v2-satellite-core {
+  padding: 0.15rem 0.4rem !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  gap: 0.12rem;
+  /* Sit in the true center of the neural workspace */
+  top: 50%;
+  isolation: isolate;
+}
+
+/* Organic glow emerging FROM the field — never a plate */
+.tdl-v2-satellite-core__halo {
+  inset: -280% -220% !important;
+  border-radius: 50% !important;
+  background: radial-gradient(
+    circle,
+    rgba(255, 200, 180, 0.08) 0%,
+    rgba(255, 100, 80, 0.14) 14%,
+    rgba(239, 68, 68, 0.1) 32%,
+    rgba(180, 30, 30, 0.04) 52%,
+    transparent 74%
+  ) !important;
+  filter: blur(2px);
+  opacity: 0.85;
+  z-index: -2 !important;
+  animation: tdl-imm-core-breathe 6.8s var(--tdl-ease-organic, ease-in-out) infinite;
+}
+
+.tdl-v2-satellite-core__nucleus {
+  width: 72px !important;
+  height: 72px !important;
+  opacity: 0.42 !important;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 220, 200, 0.18) 0%,
+    rgba(255, 120, 100, 0.12) 28%,
+    rgba(239, 68, 68, 0.08) 52%,
+    transparent 78%
+  ) !important;
+  box-shadow:
+    0 0 40px rgba(239, 68, 68, 0.22),
+    0 0 90px rgba(220, 38, 38, 0.14) !important;
+  z-index: -2 !important;
+  filter: blur(1px);
+}
+
+@keyframes tdl-imm-core-breathe {
+  0%, 100% { opacity: 0.65; transform: scale(0.94); }
+  50% { opacity: 0.95; transform: scale(1.1); }
+}
+
+.tdl-v2-satellite-core__title {
+  position: relative;
+  z-index: 1;
+  font-size: 0.8rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.34em !important;
+  padding-left: 0.34em;
+  color: rgba(255, 255, 255, 0.92) !important;
+  text-shadow:
+    0 0 10px rgba(255, 255, 255, 0.35),
+    0 0 28px rgba(239, 68, 68, 0.65),
+    0 0 56px rgba(220, 38, 38, 0.4) !important;
+}
+
+.tdl-v2-satellite-core__subtitle {
+  position: relative;
+  z-index: 1;
+  font-size: 0.44rem !important;
+  font-weight: 300 !important;
+  letter-spacing: 0.18em !important;
+  color: rgba(255, 255, 255, 0.42) !important;
+  text-shadow: 0 0 18px rgba(220, 38, 38, 0.35);
+}
+
+/* Neural filaments that cross OVER the typography — buried feel */
+.tdl-v2-satellite-core__tissue {
+  position: absolute;
+  inset: -48% -70%;
+  pointer-events: none;
+  z-index: 2;
+  overflow: visible;
+}
+
+.tdl-v2-satellite-core__filament {
+  position: absolute;
+  display: block;
+  height: 1px;
+  border-radius: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--tdl-imm-filament) 28%,
+    rgba(255, 160, 140, 0.75) 50%,
+    var(--tdl-imm-filament) 72%,
+    transparent 100%
+  );
+  box-shadow:
+    0 0 4px rgba(239, 68, 68, 0.55),
+    0 0 10px rgba(220, 38, 38, 0.3);
+  opacity: 0.55;
+  transform-origin: center;
+}
+
+.tdl-v2-satellite-core__filament--a {
+  left: 4%;
+  top: 38%;
+  width: 92%;
+  transform: rotate(-8deg);
+  opacity: 0.62;
+}
+
+.tdl-v2-satellite-core__filament--b {
+  left: 8%;
+  top: 52%;
+  width: 84%;
+  height: 1.25px;
+  transform: rotate(6deg);
+  opacity: 0.7;
+  filter: blur(0.2px);
+}
+
+.tdl-v2-satellite-core__filament--c {
+  left: 18%;
+  top: 28%;
+  width: 64%;
+  transform: rotate(14deg);
+  opacity: 0.4;
+}
+
+.tdl-v2-satellite-core__filament--d {
+  left: 22%;
+  top: 68%;
+  width: 58%;
+  transform: rotate(-12deg);
+  opacity: 0.45;
+}
+
+.tdl-v2-satellite-core__filament--e {
+  left: 35%;
+  top: 18%;
+  width: 42%;
+  height: 1.5px;
+  transform: rotate(22deg);
+  opacity: 0.35;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.45);
+}
+
+.tdl-v2-satellite-core__filament--f {
+  left: 12%;
+  top: 78%;
+  width: 70%;
+  transform: rotate(3deg);
+  opacity: 0.38;
+}
+
+/* Soft bloom veil wrapping type */
+.tdl-v2-satellite-core__veil {
+  position: absolute;
+  inset: -20% -35%;
+  pointer-events: none;
+  z-index: 3;
+  background: radial-gradient(
+    ellipse 55% 70% at 50% 50%,
+    transparent 30%,
+    rgba(220, 38, 38, 0.06) 55%,
+    transparent 78%
+  );
+  mix-blend-mode: screen;
+  opacity: 0.85;
+}
+
+/* =====================================
+   SATELLITES — distant neural clusters
+   Not widgets. Almost transparent until active.
+   ===================================== */
+
+.tdl-v2-satellite {
+  padding: 0.1rem 0.2rem !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
+  gap: 0.38rem;
+  opacity: 0.58;
+  filter: saturate(0.85);
+  transition:
+    opacity var(--tdl-duration-normal, 220ms) var(--tdl-ease-organic, ease),
+    filter var(--tdl-duration-normal, 220ms) var(--tdl-ease-organic, ease),
+    transform var(--tdl-duration-fast, 160ms) var(--tdl-ease-standard, ease);
+}
+
+.tdl-v2-satellite__aura {
+  width: 28px !important;
+  height: 28px !important;
+  opacity: 0.28 !important;
+  background: radial-gradient(
+    circle,
+    rgba(239, 68, 68, 0.1) 0%,
+    rgba(220, 38, 38, 0.03) 48%,
+    transparent 74%
+  ) !important;
+}
+
+.tdl-v2-satellite__node {
+  width: 9px !important;
+  height: 9px !important;
+  opacity: 0.7;
+  box-shadow:
+    0 0 6px rgba(239, 68, 68, 0.28),
+    0 0 14px rgba(220, 38, 38, 0.12) !important;
+}
+
+.tdl-v2-satellite__title {
+  font-size: 0.5rem !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.16em !important;
+  color: rgba(200, 190, 190, 0.55) !important;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9) !important;
+}
+
+.tdl-v2-satellite__status {
+  font-size: 0.4rem !important;
+  font-weight: 300 !important;
+  letter-spacing: 0.14em !important;
+  color: rgba(120, 110, 110, 0.55) !important;
+}
+
+.tdl-v2-satellite[data-status="idle"] {
+  opacity: 0.5;
+}
+
+.tdl-v2-satellite[data-status="idle"] .tdl-v2-satellite__node {
+  opacity: 0.55 !important;
+  box-shadow:
+    0 0 5px rgba(239, 68, 68, 0.22),
+    0 0 12px rgba(220, 38, 38, 0.08) !important;
+}
+
+.tdl-v2-satellite[data-status="idle"] .tdl-v2-satellite__aura {
+  opacity: 0.22 !important;
+}
+
+.tdl-v2-satellite[data-status="idle"] .tdl-v2-satellite__status {
+  color: rgba(110, 100, 100, 0.5) !important;
+}
+
+/* Waiting — slight brighten */
+.tdl-v2-satellite[data-status="waiting"] {
+  opacity: 0.82;
+  filter: saturate(1);
+  border-color: transparent !important;
+  background: transparent !important;
+}
+
+/* Active — only then become bright */
+.tdl-v2-satellite[data-status="active"] {
+  opacity: 1;
+  filter: saturate(1.15) brightness(1.08);
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.tdl-v2-satellite[data-status="active"] .tdl-v2-satellite__title {
+  color: rgba(255, 255, 255, 0.92) !important;
+  text-shadow:
+    0 0 12px rgba(239, 68, 68, 0.45),
+    0 1px 6px rgba(0, 0, 0, 0.85) !important;
+}
+
+.tdl-v2-satellite[data-status="active"] .tdl-v2-satellite__node {
+  opacity: 1;
+  width: 11px !important;
+  height: 11px !important;
+  box-shadow:
+    0 0 16px rgba(239, 68, 68, 0.75),
+    0 0 36px rgba(220, 38, 38, 0.4) !important;
+}
+
+.tdl-v2-satellite[data-status="active"] .tdl-v2-satellite__aura {
+  opacity: 0.9 !important;
+}
+
+.tdl-v2-satellite:hover {
+  opacity: 0.95;
+  filter: saturate(1.05);
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  transform: translate(-50%, -50%) scale(1.04);
+}
+
+.tdl-v2-satellite:hover .tdl-v2-satellite__title {
+  color: rgba(244, 241, 241, 0.88) !important;
+}
+
+.tdl-v2-satellite:focus-visible {
+  background: transparent !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.2) !important;
+}
+
+/* Neural links — thread-like, almost invisible at rest */
+.tdl-v2-satellite-link {
+  opacity: 0.06 !important;
+  stroke-width: 0.7 !important;
+  filter: drop-shadow(0 0 1px rgba(220, 38, 38, 0.15)) !important;
+}
+
+.tdl-v2-satellite-link[data-status="waiting"] {
+  opacity: 0.22 !important;
+}
+
+.tdl-v2-satellite-link[data-status="active"] {
+  opacity: 0.55 !important;
+  stroke-width: 1.4 !important;
+}
+
+/* =====================================
+   CHROME — quieter containers, more void
+   ===================================== */
+
+.tdl-v2-region--sidebar,
+.tdl-v2-region--sidebar.tdl-v2-glass-panel,
+.tdl-v2-region--orchestrator,
+.tdl-v2-region--orchestrator.tdl-v2-glass-panel {
+  outline-color: var(--tdl-p5-edge) !important;
+  background: var(--tdl-p5-glass) !important;
+}
+
+.tdl-v2-region--orchestrator,
+.tdl-v2-region--orchestrator.tdl-v2-glass-panel {
+  background: var(--tdl-p5-glass-deep) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    inset 0 0 64px var(--tdl-p5-neural-bleed),
+    0 0 64px rgba(0, 0, 0, 0.55) !important;
+}
+
+.tdl-v2-topbar--telemetry {
+  background: linear-gradient(
+    168deg,
+    rgba(10, 8, 8, 0.28) 0%,
+    rgba(0, 0, 0, 0.16) 50%,
+    rgba(0, 0, 0, 0.32) 100%
+  ) !important;
+  outline-color: rgba(255, 255, 255, 0.02) !important;
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.22),
+    0 1px 0 rgba(255, 255, 255, 0.03) inset !important;
+  backdrop-filter: blur(28px) saturate(1.02) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.02) !important;
+}
+
+.tdl-v2-float-card,
+.tdl-v2-dock-status-cards--phase5 .tdl-v2-float-card {
+  background: rgba(0, 0, 0, 0.32) !important;
+  border-color: rgba(255, 255, 255, 0.028) !important;
+  outline: none;
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.03) inset !important;
+}
+
+.tdl-v2-composer--reference,
+.tdl-v2-composer--console {
+  background: rgba(0, 0, 0, 0.48) !important;
+  border-color: rgba(255, 255, 255, 0.04) !important;
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.4),
+    0 1px 0 rgba(255, 255, 255, 0.03) inset !important;
+}
+
+.tdl-v2-dock-telemetry--system {
+  background: rgba(0, 0, 0, 0.22) !important;
+  border-color: rgba(255, 255, 255, 0.02) !important;
+}
+
+/* Center HUD — dissolve into the field (no mini-widgets) */
+.tdl-v2-center-hud__panel {
+  background: rgba(0, 0, 0, 0.18) !important;
+  border: 1px solid rgba(255, 255, 255, 0.03) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  box-shadow: none !important;
+  opacity: 0.72;
+}
+
+.tdl-v2-center-hud__title {
+  font-weight: 300 !important;
+  letter-spacing: 0.14em !important;
+  color: rgba(154, 147, 147, 0.65) !important;
+}
+
+/* =====================================
+   Reduced motion
+   ===================================== */
+
+.tdl-v2--reduced-motion .tdl-v2-neural-depth-band--far,
+.tdl-v2--reduced-motion .tdl-v2-neural-depth-band--distant,
+.tdl-v2--reduced-motion .tdl-v2-satellite-core__halo,
+.tdl-v2--reduced-motion .tdl-v2-center-stack::before {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tdl-v2-neural-depth-band--far,
+  .tdl-v2-neural-depth-band--distant,
+  .tdl-v2-satellite-core__halo,
+  .tdl-v2-center-stack::before {
+    animation: none !important;
+  }
+}

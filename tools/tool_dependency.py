@@ -71,7 +71,12 @@ class DependencyGraph:
                 unavailable.append(dep)
                 continue
             health = health_lookup(dep.ref_type, dep.ref_id)
-            if health in (ToolHealthState.OFFLINE, ToolHealthState.DISABLED):
+            if health in (
+                ToolHealthState.OFFLINE,
+                ToolHealthState.DISABLED,
+                ToolHealthState.MISCONFIGURED,
+                ToolHealthState.MISSING_CREDENTIALS,
+            ):
                 unavailable.append(dep)
 
         if unavailable:

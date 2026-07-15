@@ -1,0 +1,709 @@
+/* =====================================
+   Titan Web App — Phase 5.2
+   CINEMATIC LIVING INTELLIGENCE
+   Canonical target: sprint-2.7-reference-composition.png
+                     + living neural field (galaxies · voids · depth)
+   Presentation only — layout regions / APIs / Brain untouched.
+   Loaded LAST — cinematic atmosphere authority.
+   ===================================== */
+
+:root {
+  --tdl-c52-void: #000000;
+  --tdl-c52-fog: rgba(70, 8, 8, 0.09);
+  --tdl-c52-bloom: rgba(239, 68, 68, 0.1);
+  --tdl-c52-shaft: rgba(255, 90, 70, 0.045);
+  --tdl-c52-reflect: rgba(255, 255, 255, 0.035);
+  --tdl-c52-edge: rgba(255, 255, 255, 0.018);
+  --tdl-c52-neural-bleed: rgba(220, 38, 38, 0.04);
+  --tdl-c52-glass: linear-gradient(
+    170deg,
+    rgba(10, 8, 8, 0.28) 0%,
+    rgba(0, 0, 0, 0.16) 48%,
+    rgba(0, 0, 0, 0.4) 100%
+  );
+  --tdl-c52-glass-deep: linear-gradient(
+    174deg,
+    rgba(8, 6, 6, 0.36) 0%,
+    rgba(0, 0, 0, 0.24) 52%,
+    rgba(0, 0, 0, 0.5) 100%
+  );
+}
+
+/* =====================================
+   GLOBAL ATMOSPHERE — command center inside a mind
+   ===================================== */
+
+.tdl-v2-page,
+.tdl-v2-root {
+  background: var(--tdl-c52-void);
+}
+
+.tdl-v2-neural-host {
+  background: var(--tdl-c52-void);
+}
+
+/* Multi-layer cinematic glow over the neural canvas */
+.tdl-v2-glow-ambient {
+  display: block !important;
+  background:
+    /* Soft volumetric bloom — core-adjacent */
+    radial-gradient(
+      ellipse 38% 30% at 48% 43%,
+      rgba(255, 90, 70, 0.08) 0%,
+      rgba(220, 38, 38, 0.04) 32%,
+      transparent 68%
+    ),
+    /* Deep red atmospheric fog */
+    radial-gradient(
+      ellipse 70% 55% at 52% 46%,
+      rgba(70, 8, 8, 0.12) 0%,
+      rgba(40, 4, 4, 0.05) 40%,
+      transparent 72%
+    ),
+    /* Secondary fog pockets — uneven, cinematic */
+    radial-gradient(
+      ellipse 32% 28% at 22% 62%,
+      rgba(90, 12, 12, 0.06) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 28% 24% at 78% 32%,
+      rgba(80, 10, 10, 0.05) 0%,
+      transparent 68%
+    ),
+    /* Soft light-shaft suggestion */
+    linear-gradient(
+      118deg,
+      transparent 38%,
+      rgba(255, 90, 70, 0.025) 46%,
+      transparent 54%
+    ),
+    linear-gradient(
+      72deg,
+      transparent 42%,
+      rgba(239, 68, 68, 0.018) 50%,
+      transparent 58%
+    ),
+    /* Lens diffusion */
+    radial-gradient(
+      ellipse 90% 80% at 50% 48%,
+      rgba(255, 220, 210, 0.012) 0%,
+      transparent 55%
+    ),
+    /* Deep void vignette */
+    radial-gradient(
+      ellipse 86% 76% at 50% 48%,
+      transparent 24%,
+      rgba(0, 0, 0, 0.28) 64%,
+      rgba(0, 0, 0, 0.72) 100%
+    ),
+    radial-gradient(
+      ellipse 100% 58% at 50% 110%,
+      rgba(0, 0, 0, 0.62) 0%,
+      transparent 55%
+    );
+  opacity: 1;
+  animation: tdl-c52-atmosphere-breathe 14s var(--tdl-ease-organic, ease-in-out) infinite;
+}
+
+@keyframes tdl-c52-atmosphere-breathe {
+  0%, 100% { opacity: 0.92; }
+  50% { opacity: 1; }
+}
+
+/* Depth bands — stronger distance read */
+.tdl-v2-neural-depth-band--void {
+  background: radial-gradient(
+    ellipse 96% 92% at 50% 48%,
+    transparent 28%,
+    rgba(0, 0, 0, 0.55) 100%
+  ) !important;
+  opacity: 0.95 !important;
+}
+
+.tdl-v2-neural-depth-band--far {
+  background:
+    radial-gradient(
+      ellipse 48% 38% at 42% 38%,
+      rgba(100, 14, 14, 0.1) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 36% 28% at 68% 58%,
+      rgba(70, 8, 8, 0.07) 0%,
+      transparent 72%
+    ) !important;
+  filter: blur(32px) !important;
+  opacity: 0.8 !important;
+}
+
+.tdl-v2-neural-depth-band--distant {
+  background: radial-gradient(
+    ellipse 34% 28% at 50% 44%,
+    rgba(239, 68, 68, 0.08) 0%,
+    rgba(160, 24, 24, 0.03) 42%,
+    transparent 74%
+  ) !important;
+  filter: blur(20px) !important;
+  opacity: 0.78 !important;
+}
+
+.tdl-v2-neural-depth-band--horizon {
+  background: radial-gradient(
+    ellipse 24% 18% at 49% 44%,
+    rgba(255, 90, 70, 0.09) 0%,
+    rgba(220, 38, 38, 0.035) 48%,
+    transparent 78%
+  ) !important;
+  filter: blur(12px) !important;
+  opacity: 0.72 !important;
+}
+
+.tdl-v2-neural-vignette {
+  background: radial-gradient(
+    ellipse 74% 66% at 50% 46%,
+    transparent 34%,
+    rgba(0, 0, 0, 0.4) 76%,
+    rgba(0, 0, 0, 0.8) 100%
+  ) !important;
+}
+
+/* Foreground particles + mid fog — stronger depth cue */
+.tdl-v2-center-stack::before {
+  opacity: 0.7 !important;
+  background-image:
+    radial-gradient(2px 2px at 14% 26%, rgba(248, 113, 113, 0.42), transparent),
+    radial-gradient(1.5px 1.5px at 72% 18%, rgba(239, 68, 68, 0.32), transparent),
+    radial-gradient(1px 1px at 88% 52%, rgba(255, 140, 120, 0.28), transparent),
+    radial-gradient(2px 2px at 28% 78%, rgba(220, 38, 38, 0.35), transparent),
+    radial-gradient(1.5px 1.5px at 58% 68%, rgba(248, 113, 113, 0.24), transparent),
+    radial-gradient(1px 1px at 42% 12%, rgba(239, 68, 68, 0.22), transparent),
+    radial-gradient(1.5px 1.5px at 8% 48%, rgba(255, 90, 80, 0.2), transparent),
+    radial-gradient(1px 1px at 64% 88%, rgba(220, 38, 38, 0.26), transparent),
+    radial-gradient(1.5px 1.5px at 92% 72%, rgba(248, 113, 113, 0.18), transparent) !important;
+  animation: tdl-c52-fg-particles 18s var(--tdl-ease-organic, ease-in-out) infinite;
+}
+
+.tdl-v2-center-stack::after {
+  background: radial-gradient(
+    ellipse 68% 52% at 50% 48%,
+    rgba(160, 24, 24, 0.07) 0%,
+    transparent 72%
+  ) !important;
+  filter: blur(48px) !important;
+  opacity: 0.85 !important;
+}
+
+@keyframes tdl-c52-fg-particles {
+  0%, 100% { opacity: 0.48; transform: translate3d(0, 0, 0); }
+  50% { opacity: 0.78; transform: translate3d(0.4%, -1.8%, 0); }
+}
+
+/* Soft reflected neural light on nearby chrome */
+.tdl-v2-layer--workspace::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(
+      ellipse 28% 40% at 8% 45%,
+      rgba(220, 38, 38, 0.035) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 26% 38% at 92% 48%,
+      rgba(220, 38, 38, 0.04) 0%,
+      transparent 72%
+    );
+  opacity: 0.9;
+}
+
+/* =====================================
+   SATELLITES — distant stars in the field
+   Idle systems almost disappear.
+   ===================================== */
+
+.tdl-v2-satellite {
+  opacity: 0.28 !important;
+  filter: saturate(0.55) brightness(0.82) !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0.06rem 0.12rem !important;
+  gap: 0.32rem !important;
+}
+
+.tdl-v2-satellite__aura {
+  opacity: 0.12 !important;
+  width: 22px !important;
+  height: 22px !important;
+  filter: blur(1px);
+}
+
+.tdl-v2-satellite__node {
+  width: 7px !important;
+  height: 7px !important;
+  opacity: 0.42 !important;
+  box-shadow:
+    0 0 4px rgba(239, 68, 68, 0.18),
+    0 0 10px rgba(220, 38, 38, 0.06) !important;
+  animation: tdl-c52-star-twinkle 7.5s var(--tdl-ease-organic, ease-in-out) infinite !important;
+}
+
+.tdl-v2-satellite__title {
+  font-size: 0.44rem !important;
+  font-weight: 300 !important;
+  letter-spacing: 0.18em !important;
+  color: rgba(180, 170, 170, 0.32) !important;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.95) !important;
+}
+
+.tdl-v2-satellite__status {
+  font-size: 0.36rem !important;
+  font-weight: 300 !important;
+  letter-spacing: 0.16em !important;
+  color: rgba(100, 92, 92, 0.32) !important;
+}
+
+.tdl-v2-satellite[data-status="idle"],
+.tdl-v2-satellite:not([data-status="active"]):not([data-status="waiting"]) {
+  opacity: 0.24 !important;
+}
+
+.tdl-v2-satellite[data-status="waiting"] {
+  opacity: 0.55 !important;
+  filter: saturate(0.85) brightness(0.95) !important;
+}
+
+.tdl-v2-satellite[data-status="active"] {
+  opacity: 1 !important;
+  filter: saturate(1.2) brightness(1.12) !important;
+}
+
+.tdl-v2-satellite[data-status="active"] .tdl-v2-satellite__title {
+  font-weight: 400 !important;
+  color: rgba(255, 255, 255, 0.94) !important;
+  text-shadow:
+    0 0 14px rgba(239, 68, 68, 0.5),
+    0 1px 8px rgba(0, 0, 0, 0.9) !important;
+}
+
+.tdl-v2-satellite[data-status="active"] .tdl-v2-satellite__node {
+  width: 11px !important;
+  height: 11px !important;
+  opacity: 1 !important;
+  box-shadow:
+    0 0 18px rgba(239, 68, 68, 0.8),
+    0 0 40px rgba(220, 38, 38, 0.45) !important;
+  animation: tdl-c52-star-active 2.2s var(--tdl-ease-organic, ease-in-out) infinite !important;
+}
+
+.tdl-v2-satellite[data-status="active"] .tdl-v2-satellite__aura {
+  opacity: 0.85 !important;
+}
+
+.tdl-v2-satellite-link {
+  opacity: 0.035 !important;
+  stroke-width: 0.55 !important;
+}
+
+.tdl-v2-satellite-link[data-status="active"] {
+  opacity: 0.5 !important;
+  stroke-width: 1.35 !important;
+}
+
+@keyframes tdl-c52-star-twinkle {
+  0%, 100% { opacity: 0.32; transform: scale(0.92); }
+  50% { opacity: 0.55; transform: scale(1.05); }
+}
+
+@keyframes tdl-c52-star-active {
+  0%, 100% { box-shadow: 0 0 14px rgba(239, 68, 68, 0.65), 0 0 32px rgba(220, 38, 38, 0.35); }
+  50% { box-shadow: 0 0 22px rgba(239, 68, 68, 0.9), 0 0 48px rgba(220, 38, 38, 0.5); }
+}
+
+/* =====================================
+   LEFT SIDEBAR — OS console, not dashboard
+   ===================================== */
+
+.tdl-v2-region--sidebar,
+.tdl-v2-region--sidebar.tdl-v2-glass-panel {
+  --tdl-sidebar-pad-x: 0.92rem;
+  --tdl-sidebar-pad-y: 1.2rem;
+  --tdl-sidebar-nav-gap: 0.38rem;
+  background: var(--tdl-c52-glass) !important;
+  outline-color: var(--tdl-c52-edge) !important;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.45),
+    0 1px 0 var(--tdl-c52-reflect) inset,
+    1px 0 0 rgba(255, 255, 255, 0.02) inset,
+    -10px 0 36px rgba(0, 0, 0, 0.28) inset,
+    0 -24px 48px var(--tdl-c52-neural-bleed) inset,
+    8px 0 40px rgba(220, 38, 38, 0.03) !important;
+}
+
+/* Soft edge lighting + reflection */
+.tdl-v2-region--sidebar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.03) 0%,
+      transparent 8%,
+      transparent 92%,
+      rgba(220, 38, 38, 0.025) 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.028) 0%,
+      transparent 12%,
+      transparent 88%,
+      rgba(0, 0, 0, 0.18) 100%
+    );
+  opacity: 0.9;
+}
+
+.tdl-v2-region--sidebar .tdl-v2-logo {
+  margin-bottom: 1.35rem !important;
+  padding-bottom: 1.1rem !important;
+}
+
+.tdl-v2-region--sidebar .tdl-v2-logo__wordmark {
+  font-weight: 300 !important;
+  letter-spacing: 0.14em !important;
+}
+
+.tdl-v2-region--sidebar .tdl-v2-nav-item {
+  padding: 0.52rem 0.58rem !important;
+  font-weight: 300 !important;
+  letter-spacing: 0.06em !important;
+  color: rgba(244, 241, 241, 0.42) !important;
+}
+
+.tdl-v2-region--sidebar .tdl-v2-nav-item--conversation.tdl-v2-nav-item--active,
+.tdl-v2-region--sidebar .tdl-v2-nav-item--active {
+  color: rgba(255, 252, 252, 0.96) !important;
+  box-shadow:
+    0 0 32px rgba(220, 38, 38, 0.12),
+    0 1px 0 rgba(255, 255, 255, 0.04) inset !important;
+}
+
+/* Quiet separators — almost gone */
+.tdl-v2-region--sidebar .tdl-v2-sidebar-presence,
+.tdl-v2-region--sidebar .tdl-v2-sidebar-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.015) !important;
+  margin-top: 1.1rem !important;
+  padding-top: 0.95rem !important;
+}
+
+/* =====================================
+   RIGHT ORCHESTRATOR — alive while idle
+   ===================================== */
+
+.tdl-v2-region--orchestrator,
+.tdl-v2-region--orchestrator.tdl-v2-glass-panel {
+  background: var(--tdl-c52-glass-deep) !important;
+  outline-color: var(--tdl-c52-edge) !important;
+  box-shadow:
+    inset 0 1px 0 var(--tdl-c52-reflect),
+    inset 0 0 72px var(--tdl-c52-neural-bleed),
+    -6px 0 40px rgba(220, 38, 38, 0.025),
+    0 0 72px rgba(0, 0, 0, 0.58) !important;
+  animation: tdl-c52-orch-breathe 8.5s var(--tdl-ease-organic, ease-in-out) infinite;
+}
+
+@keyframes tdl-c52-orch-breathe {
+  0%, 100% {
+    box-shadow:
+      inset 0 1px 0 var(--tdl-c52-reflect),
+      inset 0 0 72px var(--tdl-c52-neural-bleed),
+      -6px 0 40px rgba(220, 38, 38, 0.02),
+      0 0 72px rgba(0, 0, 0, 0.58);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 0 var(--tdl-c52-reflect),
+      inset 0 0 80px rgba(220, 38, 38, 0.055),
+      -8px 0 48px rgba(220, 38, 38, 0.04),
+      0 0 72px rgba(0, 0, 0, 0.58);
+  }
+}
+
+/* Idle life layer — scanning · pulses · mini bars */
+.tdl-v2-orchestrator-idle-life {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0.15rem 0 0.35rem;
+  padding: 0.45rem 0.35rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.22);
+  outline: 1px solid rgba(255, 255, 255, 0.02);
+  outline-offset: -1px;
+  overflow: hidden;
+}
+
+.tdl-v2-orchestrator-idle-life__scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  top: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(239, 68, 68, 0.35) 50%,
+    transparent 100%
+  );
+  box-shadow: 0 0 8px rgba(220, 38, 38, 0.25);
+  animation: tdl-c52-scan 5.8s linear infinite;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+@keyframes tdl-c52-scan {
+  0% { top: 4%; opacity: 0; }
+  12% { opacity: 0.55; }
+  88% { opacity: 0.4; }
+  100% { top: 92%; opacity: 0; }
+}
+
+.tdl-v2-orchestrator-idle-life__row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  position: relative;
+  z-index: 1;
+}
+
+.tdl-v2-orchestrator-idle-life__label {
+  flex: 0 0 52px;
+  font-family: var(--tdl-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.38rem;
+  font-weight: 300;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(130, 122, 122, 0.72);
+}
+
+.tdl-v2-orchestrator-idle-life__bars {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+
+.tdl-v2-orchestrator-idle-life__bar {
+  flex: 1 1 0;
+  min-width: 2px;
+  border-radius: 1px;
+  background: rgba(220, 38, 38, 0.22);
+  box-shadow: 0 0 4px rgba(220, 38, 38, 0.12);
+  animation: tdl-c52-bar-breathe 3.6s var(--tdl-ease-organic, ease-in-out) infinite;
+  height: 35%;
+}
+
+.tdl-v2-orchestrator-idle-life__bar:nth-child(2) { height: 55%; animation-delay: -0.4s; }
+.tdl-v2-orchestrator-idle-life__bar:nth-child(3) { height: 40%; animation-delay: -0.9s; }
+.tdl-v2-orchestrator-idle-life__bar:nth-child(4) { height: 70%; animation-delay: -1.3s; }
+.tdl-v2-orchestrator-idle-life__bar:nth-child(5) { height: 45%; animation-delay: -1.8s; }
+.tdl-v2-orchestrator-idle-life__bar:nth-child(6) { height: 60%; animation-delay: -2.2s; }
+.tdl-v2-orchestrator-idle-life__bar:nth-child(7) { height: 32%; animation-delay: -2.7s; }
+.tdl-v2-orchestrator-idle-life__bar:nth-child(8) { height: 50%; animation-delay: -3.1s; }
+
+@keyframes tdl-c52-bar-breathe {
+  0%, 100% { opacity: 0.35; transform: scaleY(0.85); }
+  50% { opacity: 0.85; transform: scaleY(1.15); }
+}
+
+.tdl-v2-orchestrator-idle-life__pulse {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.45);
+  box-shadow: 0 0 8px rgba(220, 38, 38, 0.35);
+  animation: tdl-c52-idle-pulse 2.8s var(--tdl-ease-organic, ease-in-out) infinite;
+  flex-shrink: 0;
+}
+
+.tdl-v2-orchestrator-idle-life__pulse:nth-child(odd) {
+  animation-delay: -1.2s;
+}
+
+@keyframes tdl-c52-idle-pulse {
+  0%, 100% { opacity: 0.25; transform: scale(0.85); }
+  50% { opacity: 0.9; transform: scale(1.2); }
+}
+
+.tdl-v2-orchestrator-idle-life__placeholder {
+  position: relative;
+  z-index: 1;
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(220, 38, 38, 0.12) 20%,
+    rgba(239, 68, 68, 0.28) 50%,
+    rgba(220, 38, 38, 0.12) 80%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: tdl-c52-placeholder-flow 6.5s linear infinite;
+  opacity: 0.7;
+}
+
+@keyframes tdl-c52-placeholder-flow {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* Section breathing glow while idle */
+.tdl-v2-root[data-presence="idle"] .tdl-v2-orchestrator-section,
+.tdl-v2-root:not([data-presence]) .tdl-v2-orchestrator-section {
+  position: relative;
+}
+
+.tdl-v2-root[data-presence="idle"] .tdl-v2-orchestrator-section::before,
+.tdl-v2-root:not([data-presence]) .tdl-v2-orchestrator-section::before {
+  content: "";
+  position: absolute;
+  left: -0.2rem;
+  top: 0.35rem;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(220, 38, 38, 0.35);
+  box-shadow: 0 0 6px rgba(220, 38, 38, 0.25);
+  animation: tdl-c52-idle-pulse 4.2s var(--tdl-ease-organic, ease-in-out) infinite;
+}
+
+.tdl-v2-root[data-presence="idle"] .tdl-v2-orchestrator-section:nth-child(2)::before {
+  animation-delay: -1s;
+}
+.tdl-v2-root[data-presence="idle"] .tdl-v2-orchestrator-section:nth-child(3)::before {
+  animation-delay: -2s;
+}
+.tdl-v2-root[data-presence="idle"] .tdl-v2-orchestrator-section:nth-child(4)::before {
+  animation-delay: -3s;
+}
+
+.tdl-v2-orchestrator-plan__idle {
+  position: relative;
+  padding-left: 0.85rem;
+  transition: opacity 280ms ease, color 280ms ease;
+}
+
+.tdl-v2-orchestrator-plan__idle::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.35em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.4);
+  box-shadow: 0 0 8px rgba(220, 38, 38, 0.3);
+  animation: tdl-c52-idle-pulse 3.4s var(--tdl-ease-organic, ease-in-out) infinite;
+}
+
+.tdl-v2-orchestrator-tools__item[data-active="false"] .tdl-v2-orchestrator-tools__dot {
+  animation: tdl-c52-idle-pulse 5.2s var(--tdl-ease-organic, ease-in-out) infinite;
+  opacity: 0.35;
+}
+
+.tdl-v2-orchestrator-sparkline {
+  animation: tdl-c52-spark-glow 6s var(--tdl-ease-organic, ease-in-out) infinite;
+}
+
+@keyframes tdl-c52-spark-glow {
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.028), 0 0 16px rgba(220, 38, 38, 0.03); }
+  50% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.028), 0 0 24px rgba(220, 38, 38, 0.08); }
+}
+
+/* Soft transitions */
+.tdl-v2-orchestrator-section,
+.tdl-v2-orchestrator-tools__item,
+.tdl-v2-orchestrator-steps__item {
+  transition:
+    opacity 320ms var(--tdl-ease-organic, ease),
+    filter 320ms var(--tdl-ease-organic, ease),
+    transform 280ms var(--tdl-ease-standard, ease);
+}
+
+/* =====================================
+   CHROME — quieter, more void, premium
+   ===================================== */
+
+.tdl-v2-topbar--telemetry {
+  background: linear-gradient(
+    168deg,
+    rgba(8, 6, 6, 0.24) 0%,
+    rgba(0, 0, 0, 0.12) 50%,
+    rgba(0, 0, 0, 0.28) 100%
+  ) !important;
+  outline-color: rgba(255, 255, 255, 0.015) !important;
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.28),
+    0 1px 0 rgba(255, 255, 255, 0.028) inset,
+    0 0 40px rgba(220, 38, 38, 0.02) !important;
+}
+
+.tdl-v2-float-card,
+.tdl-v2-dock-status-cards--phase5 .tdl-v2-float-card {
+  background: rgba(0, 0, 0, 0.28) !important;
+  border-color: rgba(255, 255, 255, 0.022) !important;
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.38),
+    0 1px 0 rgba(255, 255, 255, 0.028) inset,
+    0 0 28px rgba(220, 38, 38, 0.02) !important;
+}
+
+.tdl-v2-composer--reference,
+.tdl-v2-composer--console {
+  background: rgba(0, 0, 0, 0.42) !important;
+  border-color: rgba(255, 255, 255, 0.032) !important;
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.45),
+    0 1px 0 rgba(255, 255, 255, 0.03) inset,
+    0 0 36px rgba(220, 38, 38, 0.03) !important;
+}
+
+/* =====================================
+   Reduced motion
+   ===================================== */
+
+.tdl-v2--reduced-motion .tdl-v2-glow-ambient,
+.tdl-v2--reduced-motion .tdl-v2-center-stack::before,
+.tdl-v2--reduced-motion .tdl-v2-region--orchestrator,
+.tdl-v2--reduced-motion .tdl-v2-orchestrator-idle-life__scan,
+.tdl-v2--reduced-motion .tdl-v2-orchestrator-idle-life__bar,
+.tdl-v2--reduced-motion .tdl-v2-orchestrator-idle-life__pulse,
+.tdl-v2--reduced-motion .tdl-v2-orchestrator-idle-life__placeholder,
+.tdl-v2--reduced-motion .tdl-v2-satellite__node,
+.tdl-v2--reduced-motion .tdl-v2-orchestrator-sparkline {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tdl-v2-glow-ambient,
+  .tdl-v2-center-stack::before,
+  .tdl-v2-region--orchestrator,
+  .tdl-v2-orchestrator-idle-life__scan,
+  .tdl-v2-orchestrator-idle-life__bar,
+  .tdl-v2-orchestrator-idle-life__pulse,
+  .tdl-v2-orchestrator-idle-life__placeholder,
+  .tdl-v2-satellite__node,
+  .tdl-v2-orchestrator-sparkline {
+    animation: none !important;
+  }
+}

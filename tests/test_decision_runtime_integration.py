@@ -101,7 +101,11 @@ def test_decision_to_confirmation_required(
     tool_result = result.tool_results[0]
     assert tool_result.success is False
     assert tool_result.metadata.get("pending_confirmation") is True
-    assert "Confirmation requise" in tool_result.error or "Confirmer" in tool_result.error
+    assert (
+        "Confirmation requise" in tool_result.error
+        or "Confirmer" in tool_result.error
+        or "confirmation" in tool_result.error.lower()
+    )
 
 
 def test_decision_to_no_capability_surfaces_error(

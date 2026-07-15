@@ -1,8 +1,0 @@
-{
-    "active_project": "Titan",
-    "current_step": "Développement du State Manager",
-    "last_user_message": "continue",
-    "last_titan_response": "OK, on continue sur l’étape actuelle : **connecter le State Manager au Brain**.\n\nMais pour que je te donne les instructions **fichier par fichier** (avec le bon code exact à coller), il me manque toujours ces 3 infos. Réponds en 3 lignes :\n\n1) Ton repo est en **Python** (FastAPI/CLI) ou **Node/TS** ?  \n2) Donne-moi l’arborescence rapide (les dossiers principaux). Ex : `src/brain`, `src/state_manager`, etc.  \n3) La persistance du state : **JSON local**, **SQLite**, ou **Postgres** ?\n\nDès que tu m’envoies ça, je te sors la V1 complète :\n- interface `StateStore`\n- événements (`state_updated`)\n- point d’intégration exact dans le `Brain` (où appeler `load()`/`save()` et comment).",
-    "next_action": "Connecter le State Manager au Brain",
-    "progress": "En développement"
-}

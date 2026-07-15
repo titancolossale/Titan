@@ -19,10 +19,17 @@ AGENT_TOOL_ALLOWLIST: dict[str, frozenset[str]] = {
             "python_exec",
             "web_search",
             "calendar",
+            "email",
+            "trading",
+            "github",
+            "obsidian",
+            "browser",
         }
     ),
-    "coding": frozenset({"time", "file_read", "file_write", "python_exec"}),
-    "research": frozenset({"time", "web_search"}),
+    "coding": frozenset(
+        {"time", "file_read", "file_write", "python_exec", "github", "obsidian", "browser"}
+    ),
+    "research": frozenset({"time", "web_search", "github", "obsidian", "browser", "email", "trading"}),
     "planning": frozenset({"time"}),
     "reasoning": frozenset({"time"}),
     "memory": frozenset({"time"}),

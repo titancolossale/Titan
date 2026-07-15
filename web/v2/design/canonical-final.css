@@ -1,0 +1,1487 @@
+/* =====================================
+   Titan Web App — CANONICAL FINAL REFERENCE
+   Authority: attached final visual specification
+   docs/design/screenshots/titan-final-canonical-reference.png
+   Loaded LAST — single composition/visual authority.
+   Presentation only. No Brain / API / runtime changes.
+   ===================================== */
+
+:root {
+  /* Geometry — match final reference proportions */
+  --tdl-sidebar-width: 228px;
+  --tdl-orchestrator-width: 312px;
+  --tdl-sidebar-rail: 64px;
+  --tdl-workspace-padding: 0.85rem;
+  --tdl-workspace-gap: 0.75rem;
+  --tdl-topbar-height: 52px;
+  --tdl-status-cards-height: 108px;
+  --tdl-composer-min-height: 52px;
+  --tdl-bottom-dock-min-height: 11.75rem;
+
+  /* Void + smoked glass — near-black, subtly translucent */
+  --tdl-cf-void: #000000;
+  --tdl-cf-glass: linear-gradient(
+    168deg,
+    rgba(10, 7, 7, 0.48) 0%,
+    rgba(0, 0, 0, 0.36) 48%,
+    rgba(0, 0, 0, 0.68) 100%
+  );
+  --tdl-cf-glass-deep: linear-gradient(
+    175deg,
+    rgba(9, 6, 6, 0.55) 0%,
+    rgba(0, 0, 0, 0.44) 50%,
+    rgba(0, 0, 0, 0.74) 100%
+  );
+  --tdl-cf-glass-float: linear-gradient(
+    165deg,
+    rgba(12, 8, 8, 0.38) 0%,
+    rgba(0, 0, 0, 0.28) 45%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
+  --tdl-cf-edge: rgba(255, 255, 255, 0.04);
+  --tdl-cf-edge-lit: rgba(255, 255, 255, 0.07);
+  --tdl-cf-red-edge: rgba(225, 29, 46, 0.18);
+  --tdl-cf-red: #e11d2e;
+  --tdl-cf-red-hot: #ff6b75;
+  --tdl-cf-green: #32c48d;
+  --tdl-cf-blur: 32px;
+  --tdl-cf-radius: 10px;
+  --tdl-cf-radius-sm: 7px;
+}
+
+/* Kill decorative branding spheres — logo replaces them */
+.tdl-v2-root[data-canonical="final"] .tdl-v2-sidebar-toggle__glyph:not(.tdl-v2-brand-mark),
+.tdl-v2-root[data-canonical="final"] .tdl-v2-presence-card__orb:not(.tdl-v2-brand-mark),
+.tdl-v2-root[data-canonical="final"] .tdl-v2-mini-core:not(.tdl-v2-brand-mark),
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-state__orb,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-context-panel__placeholder-orb,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-topbar__logo-mark:not(.tdl-v2-brand-mark) {
+  background: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  filter: none !important;
+}
+
+/* Brand mark */
+.tdl-v2-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tdl-cf-red);
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.tdl-v2-brand-mark__svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.tdl-v2-brand-mark--sm {
+  width: 22px;
+  height: 22px;
+}
+
+.tdl-v2-brand-mark--md {
+  width: 28px;
+  height: 28px;
+}
+
+.tdl-v2-brand-mark--lg {
+  width: 34px;
+  height: 34px;
+}
+
+/* =====================================
+   PAGE / COMPOSITION
+   ===================================== */
+
+.tdl-v2-page {
+  background: var(--tdl-cf-void) !important;
+}
+
+.tdl-v2-root[data-canonical="final"] {
+  background: var(--tdl-cf-void);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-layer--workspace {
+  padding: var(--tdl-workspace-padding);
+  gap: 0;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-workspace-grid {
+  grid-template-columns: var(--tdl-sidebar-width) 1fr var(--tdl-orchestrator-width);
+  gap: var(--tdl-workspace-gap);
+}
+
+.tdl-v2-root[data-canonical="final"].tdl-v2--sidebar-collapsed:not(.tdl-v2--mode-tablet):not(.tdl-v2--mode-phone)
+  .tdl-v2-workspace-grid {
+  grid-template-columns: var(--tdl-sidebar-rail) 1fr var(--tdl-orchestrator-width);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-context-panel:not([data-open="true"]) {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* =====================================
+   RETIRE CONFLICTING VISUAL LAYERS
+   Prior phases stacked ambient / shafts / filaments.
+   Canonical final is the single visual authority.
+   ===================================== */
+
+/* Ambient: keep only soft radial depth — kill linear light shafts */
+.tdl-v2-root[data-canonical="final"] .tdl-v2-glow-ambient {
+  opacity: 0.55 !important;
+  pointer-events: none !important;
+  background:
+    radial-gradient(
+      ellipse 58% 42% at 50% 54%,
+      rgba(225, 29, 46, 0.07) 0%,
+      rgba(120, 16, 20, 0.03) 38%,
+      transparent 68%
+    ),
+    radial-gradient(
+      ellipse 90% 78% at 50% 52%,
+      transparent 30%,
+      rgba(0, 0, 0, 0.35) 72%,
+      rgba(0, 0, 0, 0.78) 100%
+    ) !important;
+  animation: none !important;
+  filter: none !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-living-comms,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-living-presence {
+  opacity: 0.18 !important;
+  pointer-events: none !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-living-comms__orbit {
+  display: none !important;
+}
+
+/* Depth bands — quieter far haze; Core canvas owns brightness */
+.tdl-v2-root[data-canonical="final"] .tdl-v2-neural-depth-band--far,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-neural-depth-band--distant,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-neural-depth-band--horizon {
+  opacity: 0.35 !important;
+  filter: blur(22px) !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-neural-depth-band--void {
+  opacity: 0.75 !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-neural-vignette {
+  background: radial-gradient(
+    ellipse 68% 58% at 50% 54%,
+    transparent 22%,
+    rgba(0, 0, 0, 0.42) 68%,
+    rgba(0, 0, 0, 0.88) 100%
+  ) !important;
+  opacity: 0.9 !important;
+}
+
+/* Kill legacy CSS yarn-beam filaments — embed paths owned below */
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__filament,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__filament--a,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__filament--b,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__filament--c,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__filament--d,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__filament--e,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__filament--f,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__gravity,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__heartbeat {
+  display: none !important;
+  opacity: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+
+/* =====================================
+   LEFT SIDEBAR
+   ===================================== */
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-region--sidebar {
+  padding: 1.1rem 0.85rem 0.9rem !important;
+  background: var(--tdl-cf-glass) !important;
+  backdrop-filter: blur(var(--tdl-cf-blur)) saturate(1.02) !important;
+  -webkit-backdrop-filter: blur(var(--tdl-cf-blur)) saturate(1.02) !important;
+  border-radius: var(--tdl-cf-radius) !important;
+  outline: 1px solid var(--tdl-cf-edge);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    inset 0 0 0 1px rgba(225, 29, 46, 0.045),
+    0 0 28px rgba(0, 0, 0, 0.5) !important;
+  overflow: hidden !important;
+  scrollbar-width: none !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-region--sidebar::-webkit-scrollbar,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-sidebar-nav::-webkit-scrollbar,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-region--sidebar *::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+  background: transparent !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-sidebar-nav {
+  overflow: hidden !important;
+  scrollbar-width: none !important;
+  gap: 0.12rem;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 1.15rem;
+  padding: 0 0.15rem;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-sidebar-toggle {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(225, 29, 46, 0.28);
+  border-radius: 8px;
+  background: rgba(225, 29, 46, 0.06);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: var(--tdl-cf-red);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-sidebar-toggle__glyph.tdl-v2-brand-mark,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-sidebar-toggle__logo {
+  width: 22px;
+  height: 22px;
+  background: none !important;
+  box-shadow: none !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-logo__wordmark {
+  font-size: 0.92rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #f5f5f5;
+  margin: 0;
+  line-height: 1.15;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-logo__accent {
+  color: #f5f5f5;
+  font-weight: 500;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-logo__tagline {
+  display: block;
+  margin-top: 0.18rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.38);
+  font-weight: 400;
+  text-transform: lowercase;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-nav-item {
+  min-height: 32px;
+  padding: 0.36rem 0.72rem;
+  margin: 0.06rem 0;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  color: rgba(255, 255, 255, 0.68);
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-nav-item--active,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-nav-item[aria-current="page"] {
+  background: rgba(140, 22, 32, 0.58) !important;
+  color: #fff !important;
+  border-color: rgba(225, 29, 46, 0.22);
+  box-shadow:
+    inset 0 0 0 1px rgba(225, 29, 46, 0.1),
+    0 0 12px rgba(225, 29, 46, 0.08);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-nav-item__badge {
+  font-size: 0.52rem;
+  letter-spacing: 0.08em;
+  padding: 0.12rem 0.35rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.42);
+  text-transform: uppercase;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-sidebar-footer {
+  margin-top: auto;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-presence-status {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  margin-bottom: 0.65rem;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-presence-status__pill {
+  font-size: 0.52rem;
+  letter-spacing: 0.06em;
+  text-align: center;
+  padding: 0.38rem 0.25rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.35);
+  text-transform: uppercase;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-presence-status__pill--online {
+  border-color: rgba(225, 29, 46, 0.45);
+  color: rgba(255, 220, 220, 0.9);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-presence-card {
+  padding: 0.65rem 0.55rem 0.55rem;
+  border-radius: var(--tdl-cf-radius-sm);
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px rgba(225, 29, 46, 0.05);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-presence-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.45rem;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-presence-card__title {
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-presence-card__logo.tdl-v2-brand-mark {
+  width: 18px;
+  height: 18px;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-presence-card__preview {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.45rem;
+  min-height: 28px;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-waveform {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 22px;
+  flex: 1;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-waveform__bar {
+  width: 2px;
+  background: linear-gradient(180deg, var(--tdl-cf-red-hot), var(--tdl-cf-red));
+  opacity: 0.75;
+  border-radius: 1px;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-presence-card__mark.tdl-v2-brand-mark {
+  width: 26px;
+  height: 26px;
+  filter: drop-shadow(0 0 6px rgba(225, 29, 46, 0.45));
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-presence-card__copy {
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.62);
+  font-weight: 300;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-sidebar-collapse {
+  display: block;
+  width: 100%;
+  margin-top: 0.55rem;
+  padding: 0.35rem;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.58rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+/* =====================================
+   TOP TELEMETRY
+   ===================================== */
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-region--topbar {
+  min-height: var(--tdl-topbar-height);
+  height: auto;
+  padding: 0.35rem 0.55rem;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  background: var(--tdl-cf-glass) !important;
+  border-radius: var(--tdl-cf-radius) !important;
+  outline: 1px solid var(--tdl-cf-edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-topbar__pills {
+  display: flex;
+  flex: 1;
+  gap: 0.35rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-topbar__pill {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 6px 1fr;
+  grid-template-rows: auto auto auto;
+  column-gap: 0.42rem;
+  row-gap: 0.06rem;
+  padding: 0.38rem 0.5rem;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.032);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-topbar__pill-dot {
+  grid-row: 1 / span 2;
+  width: 5px;
+  height: 5px;
+  margin-top: 0.28rem;
+  border-radius: 50%;
+  background: var(--tdl-cf-red);
+  box-shadow: 0 0 6px rgba(225, 29, 46, 0.55);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-topbar__pill-label {
+  font-size: 0.52rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+  white-space: nowrap;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-topbar__pill-value {
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.86);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-topbar__pill-spark {
+  grid-column: 2;
+  height: 10px;
+  margin-top: 0.12rem;
+  opacity: 0.85;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-topbar__pill-spark svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-topbar__presence {
+  display: none;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-topbar__brain-mode {
+  display: none;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-topbar__profile {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.25rem 0.45rem 0.25rem 0.25rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  cursor: pointer;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-topbar__profile-avatar.tdl-v2-brand-mark {
+  width: 24px;
+  height: 24px;
+  border-radius: 0;
+  background: none !important;
+  box-shadow: none !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-topbar__profile-name {
+  font-size: 0.68rem;
+  color: #f0f0f0;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-topbar__profile-role {
+  display: block;
+  font-size: 0.5rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* =====================================
+   CENTRAL NEURAL + CORE LABEL
+   Authority: Core must sit near true center of the neural workspace.
+   ===================================== */
+
+/* Field must fill the neural-labels host — never collapse (legacy LP bug). */
+.tdl-v2-root[data-canonical="final"] .tdl-v2-neural-labels,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-field {
+  position: absolute !important;
+  inset: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  min-height: 100% !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  z-index: 4 !important;
+  padding: 0.2rem 0.5rem !important;
+  isolation: isolate;
+}
+
+/* Soft elliptic aura — atmospheric glow illuminated by the nucleus */
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__halo {
+  display: block !important;
+  inset: -280% -240% !important;
+  border-radius: 50% !important;
+  background: radial-gradient(
+    ellipse 68% 52% at 50% 48%,
+    rgba(255, 245, 240, 0.06) 0%,
+    rgba(255, 140, 120, 0.18) 14%,
+    rgba(239, 68, 68, 0.14) 30%,
+    rgba(180, 30, 40, 0.06) 50%,
+    rgba(40, 4, 8, 0.03) 64%,
+    transparent 78%
+  ) !important;
+  filter: blur(3.2px) !important;
+  opacity: 0.75 !important;
+  z-index: -3 !important;
+  animation: tdl-cf-core-breathe 8.4s ease-in-out infinite;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__nucleus {
+  display: block !important;
+  position: absolute !important;
+  top: 42% !important;
+  left: 50% !important;
+  width: 42px !important;
+  height: 28px !important;
+  opacity: 0.62 !important;
+  border-radius: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  background: radial-gradient(
+    ellipse 70% 58% at 50% 50%,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 230, 220, 0.16) 16%,
+    rgba(255, 120, 100, 0.36) 36%,
+    rgba(225, 29, 46, 0.22) 58%,
+    rgba(60, 8, 12, 0.1) 78%,
+    transparent 92%
+  ) !important;
+  box-shadow:
+    0 0 8px rgba(255, 255, 255, 0.08),
+    0 0 28px rgba(255, 120, 100, 0.42),
+    0 0 64px rgba(239, 68, 68, 0.34),
+    0 0 100px rgba(180, 30, 30, 0.14) !important;
+  filter: blur(0.8px) !important;
+  z-index: -1 !important;
+  animation: tdl-cf-core-nucleus 7.6s ease-in-out infinite;
+}
+
+/* Type sits inside the organism — illuminated by the Core itself */
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__title {
+  position: relative;
+  z-index: 1;
+  font-size: 1.08rem;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  color: rgba(255, 250, 248, 0.96);
+  text-shadow:
+    0 0 4px rgba(255, 255, 255, 0.55),
+    0 0 12px rgba(255, 220, 210, 0.45),
+    0 0 28px rgba(255, 110, 90, 0.7),
+    0 0 56px rgba(225, 29, 46, 0.55),
+    0 0 90px rgba(180, 30, 30, 0.32);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__subtitle {
+  position: relative;
+  z-index: 1;
+  font-size: 0.54rem;
+  letter-spacing: 0.2em;
+  font-weight: 400;
+  color: rgba(255, 210, 200, 0.62);
+  text-transform: uppercase;
+  text-shadow:
+    0 0 10px rgba(255, 140, 120, 0.35),
+    0 0 24px rgba(225, 29, 46, 0.35);
+}
+
+/* Curved embed filaments — pass subtly in front of type (never yarn beams) */
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__tissue {
+  display: block !important;
+  position: absolute !important;
+  inset: -28% -48% !important;
+  pointer-events: none !important;
+  z-index: 3 !important;
+  overflow: visible !important;
+  opacity: 1 !important;
+  background: none !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__embed-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__embed-path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke: rgba(255, 190, 175, 0.55);
+  filter: drop-shadow(0 0 3px rgba(255, 140, 120, 0.5));
+  mix-blend-mode: screen;
+  opacity: 0.55;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__embed-path--a {
+  opacity: 0.48;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__embed-path--b {
+  stroke: rgba(255, 230, 220, 0.7);
+  opacity: 0.58;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__embed-path--c {
+  opacity: 0.35;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__embed-path--d {
+  opacity: 0.4;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__embed-path--e {
+  stroke: rgba(255, 245, 240, 0.65);
+  opacity: 0.5;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__embed-path--f {
+  opacity: 0.32;
+}
+
+/* Soft local red-white wrap — illuminated by nucleus, no panel behind type */
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__veil {
+  display: block !important;
+  position: absolute !important;
+  inset: -36% -55% !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+  opacity: 1 !important;
+  background: radial-gradient(
+    ellipse 58% 72% at 50% 46%,
+    rgba(255, 245, 240, 0.12) 0%,
+    rgba(255, 140, 120, 0.1) 28%,
+    rgba(225, 29, 46, 0.08) 48%,
+    transparent 74%
+  ) !important;
+  mix-blend-mode: screen;
+  filter: none !important;
+  box-shadow: none !important;
+}
+
+@keyframes tdl-cf-core-breathe {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes tdl-cf-core-nucleus {
+  0%,
+  100% {
+    opacity: 0.68;
+    transform: translate(-50%, -50%) scale(0.96);
+  }
+  50% {
+    opacity: 0.88;
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+}
+
+/* Kill broad red fog / particle wash overlays that dominate the top band */
+.tdl-v2-root[data-canonical="final"] .tdl-v2-center-stack::before,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-center-stack::after,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-layer--workspace::after {
+  opacity: 0 !important;
+  background: none !important;
+  animation: none !important;
+  filter: none !important;
+}
+
+/* Subsystems — neural clusters, not floating buttons */
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite {
+  opacity: 0.52;
+  filter: saturate(0.9);
+  transition: opacity 220ms ease, filter 220ms ease;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite[data-active="true"],
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite[data-state="active"],
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite--active {
+  opacity: 0.92;
+  filter: saturate(1.12) brightness(1.06);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite__title {
+  font-size: 0.56rem;
+  letter-spacing: 0.16em;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: rgba(255, 230, 230, 0.78);
+  text-shadow: 0 0 12px rgba(225, 29, 46, 0.25);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite__status {
+  font-size: 0.46rem;
+  letter-spacing: 0.1em;
+  opacity: 0.48;
+  text-transform: uppercase;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-satellite__node {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffb0b6, var(--tdl-cf-red) 62%, #4a0a10);
+  box-shadow:
+    0 0 8px rgba(225, 29, 46, 0.5),
+    0 0 16px rgba(225, 29, 46, 0.22);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-center-hud__title {
+  font-size: 0.52rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* =====================================
+   RIGHT ORCHESTRATOR
+   ===================================== */
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-region--orchestrator {
+  background: var(--tdl-cf-glass-deep) !important;
+  border-radius: var(--tdl-cf-radius) !important;
+  outline: 1px solid var(--tdl-cf-edge);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    inset 0 0 0 1px rgba(225, 29, 46, 0.04),
+    0 0 28px rgba(0, 0, 0, 0.4) !important;
+  padding: 0.55rem 0.7rem 0.4rem !important;
+  /* Override living-orchestrator overflow:hidden so full stack remains reachable */
+  overflow: hidden auto !important;
+  scrollbar-width: none !important;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  backdrop-filter: blur(var(--tdl-cf-blur)) saturate(1.02) !important;
+  -webkit-backdrop-filter: blur(var(--tdl-cf-blur)) saturate(1.02) !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-sections {
+  gap: 0.32rem;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden auto !important;
+  scrollbar-width: none !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-sections::-webkit-scrollbar,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-region--orchestrator::-webkit-scrollbar {
+  width: 0 !important;
+  display: none !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.035);
+  flex-shrink: 0;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-header__title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-header__neural.tdl-v2-brand-mark {
+  width: 26px;
+  height: 26px;
+  margin-top: 0.1rem;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-header__title {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #f3f3f3;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-header__subtitle {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.52rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-header__alive {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(50, 196, 141, 0.1);
+  border: 1px solid rgba(50, 196, 141, 0.35);
+  color: var(--tdl-cf-green);
+  font-size: 0.52rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-header__alive-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tdl-cf-green);
+  box-shadow: 0 0 6px rgba(50, 196, 141, 0.7);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orch-activity-marker,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-header__activity {
+  display: none !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-section__title,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator--phase6 .tdl-v2-orchestrator-section__title {
+  font-size: 0.5rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.38);
+  margin: 0 0 0.22rem !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-objective__headline {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #f7f7f7;
+  margin: 0 0 0.08rem;
+  letter-spacing: 0.015em;
+  line-height: 1.15;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-objective__mission {
+  font-size: 0.55rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0 0 0.12rem;
+  line-height: 1.25;
+  font-weight: 300;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-objective__meta,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-objective__action,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-objective__pulse,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-objective__secondary {
+  display: none !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-objective__mode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-objective__mode-key {
+  display: block;
+  font-size: 0.5rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+  margin-bottom: 0.15rem;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-objective__status-chip {
+  font-size: 0.58rem;
+  color: var(--tdl-cf-green);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-objective__status-chip::before {
+  content: "● ";
+}
+
+.tdl-v2-root[data-canonical="final"] [data-section="monitor"],
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-idle-life,
+.tdl-v2-root[data-canonical="final"] [data-section="idle-life"] {
+  display: none !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-objective__headline {
+  font-size: 0.88rem;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-section,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator--phase6 .tdl-v2-orchestrator-section {
+  margin: 0 !important;
+  padding: 0.04rem 0 0.14rem !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.028) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-section:last-of-type,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator--phase6 .tdl-v2-orchestrator-section:last-of-type {
+  border-bottom: none !important;
+  padding-bottom: 0.08rem !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator--phase6 .tdl-v2-orchestrator-sections {
+  gap: 0.28rem !important;
+  padding-right: 0 !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-footer {
+  margin-top: 0.1rem !important;
+  padding: 0.15rem 0.05rem 0.05rem !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.035);
+  flex-shrink: 0;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-plan__idle {
+  display: none;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-steps__item {
+  display: grid;
+  grid-template-columns: 1rem 1fr auto;
+  gap: 0.22rem;
+  align-items: center;
+  padding: 0;
+  border-radius: 3px;
+  min-height: 1.05rem;
+  line-height: 1.1;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-steps__title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-steps__index {
+  font-size: 0.5rem;
+  color: rgba(255, 255, 255, 0.35);
+  margin-top: 0.1rem;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-steps__label {
+  font-size: 0.58rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.72);
+  line-height: 1.1;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-steps__status {
+  font-size: 0.44rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.32);
+  line-height: 1.1;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-steps__sub,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-steps__progress {
+  display: none;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-steps__item[data-status="completed"]
+  .tdl-v2-orchestrator-steps__label,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-steps__item[data-status="completed"]
+  .tdl-v2-orchestrator-steps__status {
+  color: var(--tdl-cf-green);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-steps__item[data-status="active"] {
+  background: rgba(225, 29, 46, 0.06);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-steps__item[data-status="active"]
+  .tdl-v2-orchestrator-steps__label,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-steps__item[data-status="active"]
+  .tdl-v2-orchestrator-steps__status {
+  color: var(--tdl-cf-red-hot);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-steps__item[data-status="waiting"]
+  .tdl-v2-orchestrator-steps__label,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-steps__item[data-status="pending"]
+  .tdl-v2-orchestrator-steps__label {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-steps__mark {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: transparent;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-steps__mark[data-status="completed"] {
+  background: var(--tdl-cf-green);
+  border-color: var(--tdl-cf-green);
+  box-shadow: 0 0 6px rgba(50, 196, 141, 0.45);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-steps__mark[data-status="active"] {
+  background: var(--tdl-cf-red);
+  border-color: var(--tdl-cf-red);
+  box-shadow: 0 0 8px rgba(225, 29, 46, 0.55);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-tools__item {
+  padding: 0.16rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.tdl-v2-root[data-canonical="final"] [data-section="tools"],
+.tdl-v2-root[data-canonical="final"] [data-section="sparkline"],
+.tdl-v2-root[data-canonical="final"] [data-section="plan"],
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-footer {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-tool-row__action {
+  display: none;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-tools__icon {
+  width: 14px;
+  height: 14px;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-tools__item,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator--phase6 .tdl-v2-orchestrator-tools__item,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-tool-row {
+  padding: 0.02rem 0.04rem !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.028) !important;
+  min-height: 0 !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-neural {
+  min-height: 22px !important;
+  margin-top: 0 !important;
+}
+
+.tdl-v2-root[data-canonical="final"] #tdl-v2-orchestrator-sparkline-canvas {
+  height: 16px !important;
+  opacity: 0.9;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-sparkline,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-sparkline__wave {
+  min-height: 0 !important;
+  height: auto !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator--phase6 .tdl-v2-orchestrator-tool-row {
+  padding: 0.02rem 0.04rem !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-tools__name {
+  font-size: 0.64rem !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-footer__grid {
+  gap: 0.25rem 0.55rem;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-footer__title {
+  margin-bottom: 0.28rem !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-sparkline__caption {
+  display: none;
+}
+
+.tdl-v2-root[data-canonical="final"] [data-section="tools"] .tdl-v2-orchestrator-section__title,
+.tdl-v2-root[data-canonical="final"] [data-section="sparkline"] .tdl-v2-orchestrator-section__title,
+.tdl-v2-root[data-canonical="final"] [data-section="plan"] .tdl-v2-orchestrator-section__title {
+  margin-bottom: 0.1rem !important;
+}
+
+.tdl-v2-root[data-canonical="final"] [data-section="sparkline"] {
+  padding-bottom: 0 !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-tools__name {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-tools__state {
+  font-size: 0.55rem;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: capitalize;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-tool-row__action {
+  display: none !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-footer {
+  margin-top: 0.1rem !important;
+  padding: 0.12rem 0.05rem 0.04rem !important;
+  flex-shrink: 0;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-footer__title {
+  font-size: 0.48rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 0 0 0.18rem !important;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-footer__value {
+  font-size: 0.58rem !important;
+  line-height: 1.15;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-footer__key {
+  font-size: 0.5rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-footer__value {
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-orchestrator-footer__value[data-tone="live"] {
+  color: var(--tdl-cf-green);
+}
+
+/* =====================================
+   FLOATING WORKSPACES
+   ===================================== */
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-dock-status-cards,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-workspace-dock {
+  min-height: var(--tdl-status-cards-height);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.55rem;
+  align-items: stretch;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-workspace-card,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-status-card {
+  position: relative;
+  padding: 0.58rem 0.65rem 0.52rem;
+  border-radius: 9px;
+  background: var(--tdl-cf-glass-float) !important;
+  border: 1px solid rgba(255, 255, 255, 0.045) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    inset 0 0 0 1px rgba(225, 29, 46, 0.03),
+    0 10px 28px rgba(0, 0, 0, 0.32) !important;
+  backdrop-filter: blur(22px) saturate(1.04) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.04) !important;
+  min-height: var(--tdl-status-cards-height);
+  overflow: hidden;
+}
+
+/* Restrained local life — scan line */
+.tdl-v2-root[data-canonical="final"] .tdl-v2-workspace-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.015) 48%,
+    transparent 52%
+  );
+  opacity: 0.55;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-status-card__title {
+  font-size: 0.55rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-status-card__indicator {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--tdl-cf-red);
+  box-shadow: 0 0 6px rgba(225, 29, 46, 0.5);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-workspace-line--primary {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.82);
+  margin: 0.15rem 0;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-workspace-line--meta,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-workspace-line--quiet {
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.42);
+  margin: 0.08rem 0;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-workspace-metrics {
+  display: flex;
+  gap: 0.65rem;
+  margin-top: 0.35rem;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-workspace-metric__key {
+  display: block;
+  font-size: 0.48rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-workspace-metric__value {
+  font-size: 0.62rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-float-card__status {
+  position: absolute;
+  right: 0.55rem;
+  bottom: 0.4rem;
+  font-size: 0.5rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.28);
+}
+
+/* =====================================
+   COMPOSER + STATUS STRIP
+   ===================================== */
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-composer {
+  min-height: var(--tdl-composer-min-height);
+  border-radius: 999px !important;
+  background: rgba(0, 0, 0, 0.72) !important;
+  border: 1px solid rgba(255, 255, 255, 0.07) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 10px 28px rgba(0, 0, 0, 0.45) !important;
+  padding: 0.35rem 0.45rem 0.35rem 0.7rem !important;
+  gap: 0.45rem;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-composer__input {
+  font-size: 0.85rem;
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-composer__input::placeholder {
+  color: rgba(255, 255, 255, 0.32);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-composer__send {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  border-radius: 50% !important;
+  padding: 0 !important;
+  background: linear-gradient(145deg, #ff3b4a, #b01020) !important;
+  border: none !important;
+  box-shadow: 0 0 14px rgba(225, 29, 46, 0.4);
+  display: grid;
+  place-items: center;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-composer__send-label {
+  display: none;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-dock-telemetry--system,
+.tdl-v2-root[data-canonical="final"] .tdl-v2-region--dock-telemetry {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.85rem;
+  min-height: 1.35rem;
+  font-size: 0.55rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-telemetry__group--primary {
+  display: flex;
+  gap: 0.85rem;
+  align-items: center;
+}
+
+.tdl-v2-root[data-canonical="final"] .tdl-v2-telemetry__value {
+  color: rgba(255, 255, 255, 0.55);
+  margin-left: 0.25rem;
+}
+
+/* =====================================
+   MOTION — restrained
+   ===================================== */
+
+@media (prefers-reduced-motion: no-preference) {
+  .tdl-v2-root[data-canonical="final"] .tdl-v2-waveform__bar {
+    animation: tdl-cf-bar-breathe 2.8s ease-in-out infinite;
+  }
+
+  .tdl-v2-root[data-canonical="final"] .tdl-v2-waveform__bar:nth-child(odd) {
+    animation-delay: 0.2s;
+  }
+
+  .tdl-v2-root[data-canonical="final"] .tdl-v2-workspace-card:hover {
+    border-color: rgba(225, 29, 46, 0.18) !important;
+    transform: translateY(-1px);
+    transition: border-color 180ms ease, transform 180ms ease;
+  }
+}
+
+@keyframes tdl-cf-bar-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scaleY(0.85);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scaleY(1.05);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tdl-v2-root[data-canonical="final"] .tdl-v2-waveform__bar,
+  .tdl-v2-root[data-canonical="final"] .tdl-v2-workspace-card,
+  .tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__halo {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .tdl-v2-root[data-canonical="final"] .tdl-v2-satellite-core__embed-path {
+    filter: none;
+  }
+}
+
+/* =====================================
+   RESPONSIVE — desktop fidelity first
+   ===================================== */
+
+@media (max-width: 1280px) {
+  .tdl-v2-root[data-canonical="final"] {
+    --tdl-sidebar-width: 200px;
+    --tdl-orchestrator-width: 280px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .tdl-v2-root[data-canonical="final"] .tdl-v2-topbar__pill-spark {
+    display: none;
+  }
+}

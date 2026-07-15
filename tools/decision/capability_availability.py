@@ -15,7 +15,12 @@ from tools.providers.provider_registry import ProviderRegistry
 from tools.tool_capability import ToolCapability
 from tools.tool_enums import RiskLevel, ToolHealthState
 
-_BLOCKED_STATES = frozenset({ToolHealthState.OFFLINE, ToolHealthState.DISABLED})
+_BLOCKED_STATES = frozenset({
+    ToolHealthState.OFFLINE,
+    ToolHealthState.DISABLED,
+    ToolHealthState.MISCONFIGURED,
+    ToolHealthState.MISSING_CREDENTIALS,
+})
 
 _DEGRADED_PENALTY = 12.0
 _VERSION_MISMATCH_PENALTY = 8.0

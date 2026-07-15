@@ -21,8 +21,16 @@ _EXPLICIT_TOOL_INTENTS: frozenset[Intent] = frozenset(
     {
         Intent.WEB_SEARCH,
         Intent.FILE,
+        Intent.FILE_LIST,
+        Intent.FILE_SEARCH,
+        Intent.FILE_READ,
+        Intent.FILE_METADATA,
+        Intent.WORKSPACE_EXPLAIN,
         Intent.SYSTEM,
         Intent.CALENDAR,
+        Intent.GITHUB,
+        Intent.OBSIDIAN,
+        Intent.BROWSER,
     },
 )
 
@@ -30,6 +38,7 @@ _NO_TOOL_INTENTS: frozenset[Intent] = frozenset(
     {
         Intent.GENERAL_CHAT,
         Intent.MEMORY,
+        Intent.WORKSPACE_MODIFY,
     },
 )
 

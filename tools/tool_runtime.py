@@ -13,13 +13,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from config.settings import (
+    TITAN_FALLBACK_TIMEOUT,
+    TITAN_PROVIDER_FALLBACK_ENABLED,
     TITAN_TOOL_AUDIT_ENABLED,
     TITAN_TOOL_DEFAULT_EXECUTION_MODE,
     TITAN_TOOL_PERSIST_METRICS,
     TITAN_TOOL_PERSIST_RUNS,
+    TITAN_TOOL_PERSIST_TELEMETRY,
     TITAN_TOOL_POLL_TIMEOUT_SECONDS,
     TITAN_TOOL_QUOTA_ENABLED,
     TOOL_METRICS_PATH,
+    TOOL_TELEMETRY_PATH,
 )
 from core.exceptions import (
     ToolDependencyError,
@@ -33,6 +37,8 @@ from tools.audit.tool_audit_models import ToolAuditEvent, compute_params_digest
 from tools.capability_catalog import CapabilityCatalog
 from tools.decision.execution_context import extract_decision_report
 from tools.decision.models import ToolDecisionReport
+from tools.decision.rollback_manager import RollbackManager, get_rollback_manager
+from tools.providers.provider_fallback_policy import FallbackDecision, ProviderFallbackPolicy
 from tools.cancellation_registry import CancellationRegistry
 from tools.confirmation_gate import ConfirmationGate
 from tools.dependency_resolver import DependencyResolver
@@ -40,8 +46,13 @@ from tools.executors.async_executor import AsyncExecutor
 from tools.executors.sync_executor import SyncExecutor
 from tools.health_monitor import HealthMonitor
 from tools.permission_engine import PermissionEngine
-from tools.providers.defaults import register_default_providers
+from tools.permission_facade import PermissionFacade
+from tools.permission_manager import PermissionLevel, PermissionManager, resolve_tool_action
+from tools.providers.defaults import create_provider_bootstrap, register_default_providers
+from tools.providers.provider_executor import ProviderExecutor
+from tools.providers.provider_performance_model import ProviderPerformanceModel
 from tools.providers.provider_registry import ProviderRegistry
+from tools.providers.telemetry_persistence import TelemetryPersistenceManager
 from tools.retry_policy import RetryPolicy
 from tools.tool_capability import ToolCapability
 from tools.tool_enums import ExecutionMode, InvocationMode, ToolHealthState
@@ -49,7 +60,7 @@ from tools.tool_metrics import MetricsCollector
 from tools.tool_quota import QuotaTracker
 from tools.tool_registry import ToolRegistry
 from tools.tool_result import ToolResult
-from tools.tool_run_models import ToolExecutionContext, ToolRun, ToolRunOutcome, ToolRunStatus
+from tools.tool_run_models import ToolExecutionContext, ToolRun, ToolRunOutcome, ToolRunStatus, ConfirmationRequest
 from tools.tool_run_store import ToolRunStore
 from tools.tool_policy import ToolPolicy
 
@@ -77,6 +88,8 @@ class ToolRuntime:
     metrics_collector: MetricsCollector = field(default_factory=MetricsCollector)
     quota_tracker: QuotaTracker = field(default_factory=QuotaTracker)
     permission_engine: PermissionEngine | None = None
+    permission_manager: PermissionManager | None = None
+    permission_facade: PermissionFacade | None = None
     confirmation_gate: ConfirmationGate | None = None
     sync_executor: SyncExecutor | None = None
     async_executor: AsyncExecutor | None = None
@@ -84,18 +97,29 @@ class ToolRuntime:
     run_store: ToolRunStore | None = None
     audit_logger: ToolAuditLogger | None = None
     provider_registry: ProviderRegistry | None = None
+    provider_executor: ProviderExecutor | None = None
     retry_policy: RetryPolicy = field(default_factory=RetryPolicy)
     default_execution_mode: ExecutionMode = field(
         default_factory=lambda: _parse_execution_mode(TITAN_TOOL_DEFAULT_EXECUTION_MODE)
     )
     persist_runs: bool = TITAN_TOOL_PERSIST_RUNS
     persist_metrics: bool = TITAN_TOOL_PERSIST_METRICS
+    persist_telemetry: bool = TITAN_TOOL_PERSIST_TELEMETRY
     metrics_path: Path = field(default_factory=lambda: TOOL_METRICS_PATH)
+    telemetry_path: Path = field(default_factory=lambda: TOOL_TELEMETRY_PATH)
+    telemetry_persistence: TelemetryPersistenceManager | None = None
+    performance_model: ProviderPerformanceModel | None = None
     poll_timeout_seconds: float = float(TITAN_TOOL_POLL_TIMEOUT_SECONDS)
+    project_root: Path | None = None
+    rollback_manager: RollbackManager | None = None
 
     def __post_init__(self) -> None:
+        if self.permission_facade is None:
+            self.permission_facade = PermissionFacade(policy=self.policy)
         if self.permission_engine is None:
-            self.permission_engine = PermissionEngine(policy=self.policy)
+            self.permission_engine = self.permission_facade.permission_engine
+        if self.permission_manager is None:
+            self.permission_manager = self.permission_facade.permission_manager
         if self.confirmation_gate is None:
             self.confirmation_gate = ConfirmationGate()
         if self.sync_executor is None:
@@ -114,13 +138,55 @@ class ToolRuntime:
         if self.audit_logger is None:
             self.audit_logger = ToolAuditLogger(enabled=TITAN_TOOL_AUDIT_ENABLED)
         if self.provider_registry is None:
-            self.provider_registry = ProviderRegistry()
+            credential_manager, configuration_store = create_provider_bootstrap()
+            self.provider_registry = ProviderRegistry(
+                credential_manager=credential_manager,
+                configuration_store=configuration_store,
+            )
+        if self.provider_executor is None:
+            self.provider_executor = ProviderExecutor(
+                registry=self.provider_registry,
+                health_monitor=self.health_monitor,
+            )
         self.dependency_resolver.health_monitor = self.health_monitor
         register_default_providers(self.provider_registry)
         self._wire_providers()
         self.quota_tracker.enabled = TITAN_TOOL_QUOTA_ENABLED
         self._load_persisted_metrics()
+        if self.telemetry_persistence is None:
+            self.telemetry_persistence = TelemetryPersistenceManager(
+                file_path=self.telemetry_path,
+                persist=self.persist_telemetry,
+            )
+        if self.provider_executor is not None:
+            self.telemetry_persistence.reload_on_startup(self.provider_executor.telemetry)
+        self.wire_performance_model()
         register_legacy_tools(self.registry, self.catalog, self.dependency_resolver)
+        if self.rollback_manager is None and self.project_root is not None:
+            self.rollback_manager = get_rollback_manager(self.project_root)
+
+    def get_rollback_history(self) -> list[dict]:
+        """Expose available rollback history to Brain (P12B2-006)."""
+        if self.rollback_manager is None:
+            return []
+        return self.rollback_manager.list_history_summary()
+
+    def rollback_history_size(self) -> int:
+        """Return count of persisted rollback snapshots (P12B2-006)."""
+        if self.rollback_manager is None:
+            return 0
+        return self.rollback_manager.history_size()
+
+    def wire_performance_model(self) -> None:
+        """Bind or refresh performance model to the active telemetry collector (P10B-1301)."""
+        if self.provider_executor is None:
+            return
+        collector = self.provider_executor.telemetry
+        if self.performance_model is None:
+            self.performance_model = ProviderPerformanceModel(collector=collector)
+        elif self.performance_model.collector is collector:
+            self.performance_model.invalidate()
+        self.provider_executor.performance_model = self.performance_model
 
     def refresh_catalog(self) -> None:
         """Re-sync capabilities from registry after tools are added."""
@@ -205,7 +271,12 @@ class ToolRuntime:
         )
 
         try:
-            self._preflight(tool_name, capability, effective_context)
+            self._preflight(
+                tool_name,
+                capability,
+                effective_context,
+                params=params_dict,
+            )
         except ToolPermissionDenied as exc:
             return self._finalize_failed(
                 run_id,
@@ -299,6 +370,7 @@ class ToolRuntime:
             capability,
             health_state,
             params_digest=params_digest,
+            decision_report=decision_report,
         )
 
     def get_run(self, run_id: str) -> ToolRun | None:
@@ -389,6 +461,7 @@ class ToolRuntime:
         health_state: ToolHealthState,
         *,
         params_digest: str,
+        decision_report: ToolDecisionReport | None = None,
     ) -> ToolRunOutcome:
         """Execute synchronously with audit and persistence."""
         assert self.run_store is not None
@@ -424,7 +497,14 @@ class ToolRuntime:
         timed_out = False
 
         try:
-            result = self._execute_with_retries(tool_name, params, capability, run_id=run_id)
+            result = self._execute_with_retries(
+                tool_name,
+                params,
+                capability,
+                run_id=run_id,
+                context=context,
+                decision_report=decision_report,
+            )
         finally:
             duration_ms = (time.perf_counter() - perf_start) * 1000.0
             self.quota_tracker.record_finish(tool_name, capability.quota)
@@ -441,6 +521,22 @@ class ToolRuntime:
         result.run_id = run_id
         result.metadata["execution_mode"] = context.execution_mode.value
         result.metadata["health_state"] = health_state.value
+        self._record_provider_telemetry(
+            run_id=run_id,
+            tool_name=tool_name,
+            context=context,
+            result=result,
+            decision_report=decision_report,
+            duration_ms=duration_ms,
+        )
+        self._emit_provider_audit(
+            run_id=run_id,
+            tool_name=tool_name,
+            context=context,
+            capability=capability,
+            result=result,
+            decision_report=decision_report,
+        )
 
         if not result.success:
             return self._finalize_run(
@@ -630,12 +726,20 @@ class ToolRuntime:
         tool_name: str,
         capability: ToolCapability,
         context: ToolExecutionContext,
+        params: dict | None = None,
     ) -> None:
-        """Run permission, quota, dependency, and health gates."""
-        assert self.permission_engine is not None
+        """Run unified permission, quota, dependency, and health gates."""
+        assert self.permission_facade is not None
 
-        permission = self.permission_engine.evaluate(tool_name, capability, context)
-        if not permission.allowed:
+        decision_report = extract_decision_report(context)
+        permission = self.permission_facade.evaluate(
+            tool_name,
+            capability,
+            context,
+            params,
+            decision_report=decision_report,
+        )
+        if not permission.allowed and not permission.confirmation_required:
             raise ToolPermissionDenied(permission.reason)
 
         quota_result = self.quota_tracker.check(tool_name, capability.quota)
@@ -659,8 +763,75 @@ class ToolRuntime:
         """Run confirmation gate; return pending outcome when approval is required."""
         assert self.confirmation_gate is not None
 
-        if decision_report is not None and not decision_report.confirmation_required:
+        action_permission_required = False
+        action_permission_reason = ""
+        if self.permission_facade is not None:
+            action = resolve_tool_action(tool_name, params, decision_report)
+            action_permission = self.permission_facade.evaluate_action_only(
+                tool_name,
+                action,
+                params,
+                decision_report=decision_report,
+                confirmed=context.confirmed,
+            )
+            if action_permission.level == PermissionLevel.CONFIRMATION_REQUIRED:
+                action_permission_required = True
+                action_permission_reason = action_permission.reason
+
+        if (
+            decision_report is not None
+            and not decision_report.confirmation_required
+            and not action_permission_required
+        ):
             return None
+
+        if action_permission_required and context.confirmed:
+            if self.confirmation_gate.validate_confirmation(context, tool_name, params):
+                return None
+
+        if action_permission_required and not context.confirmed:
+            request = self.confirmation_gate.issue_request(
+                tool_name,
+                capability,
+                context,
+                params,
+                params_digest,
+            )
+            if action_permission_reason:
+                request = ConfirmationRequest(
+                    token=request.token,
+                    tool_name=request.tool_name,
+                    description=action_permission_reason,
+                    params_digest=request.params_digest,
+                )
+            self._audit(
+                event_type="confirmation_requested",
+                run_id=run_id,
+                tool_name=tool_name,
+                context=context,
+                capability=capability,
+                params_digest=params_digest,
+            )
+            pending = ToolRun(
+                run_id=run_id,
+                tool_name=tool_name,
+                status=ToolRunStatus.PENDING_CONFIRMATION,
+                caller=context.caller,
+                user=context.user,
+                session_id=context.session_id,
+                turn_id=context.turn_id,
+                execution_mode=context.execution_mode,
+                error=action_permission_reason or "Confirmation requise",
+                started_at=_utc_now_iso(),
+            )
+            assert self.run_store is not None
+            self.run_store.upsert(pending)
+            return ToolRunOutcome(
+                run_id=run_id,
+                status=ToolRunStatus.PENDING_CONFIRMATION,
+                confirmation_request=request,
+                error=action_permission_reason or "Confirmation requise",
+            )
 
         result = self.confirmation_gate.evaluate(
             tool_name,
@@ -719,6 +890,8 @@ class ToolRuntime:
         capability: ToolCapability,
         *,
         run_id: str,
+        context: ToolExecutionContext | None = None,
+        decision_report: ToolDecisionReport | None = None,
     ) -> ToolResult:
         """Execute via sync executor with optional retries and cancellation checks."""
         assert self.sync_executor is not None
@@ -726,6 +899,12 @@ class ToolRuntime:
         max_retries = capability.max_retries
         attempt = 0
         result = ToolResult(tool_name=tool_name, success=False, error="Aucune tentative")
+        tool_params = self._inject_execution_context(
+            params,
+            run_id=run_id,
+            context=context,
+            decision_report=decision_report,
+        )
 
         while True:
             if self.cancellation_registry.is_cancelled(run_id):
@@ -741,12 +920,162 @@ class ToolRuntime:
             attempt += 1
             result = self.sync_executor.execute(
                 tool_name,
-                params,
+                tool_params,
                 timeout_seconds=capability.timeout_seconds,
             )
             if not self.retry_policy.should_retry(attempt, max_retries, result):
                 return result
             time.sleep(self.retry_policy.delay_seconds(attempt))
+
+    @staticmethod
+    def _inject_execution_context(
+        params: dict,
+        *,
+        run_id: str,
+        context: ToolExecutionContext | None,
+        decision_report: ToolDecisionReport | None,
+    ) -> dict:
+        """Pass runtime/decision correlation into provider-backed tools."""
+        tool_params = dict(params)
+        fallback_decision = ""
+        fallback_policy = ""
+        allow_fallback = TITAN_PROVIDER_FALLBACK_ENABLED
+        if decision_report is not None:
+            fallback_decision = decision_report.fallback_decision
+            fallback_policy = decision_report.fallback_policy
+            if fallback_decision:
+                try:
+                    allow_fallback = ProviderFallbackPolicy.allows_fallback(
+                        FallbackDecision(fallback_decision),
+                    )
+                except ValueError:
+                    allow_fallback = TITAN_PROVIDER_FALLBACK_ENABLED
+
+        exec_ctx = {
+            "runtime_id": run_id,
+            "decision_id": decision_report.decision_id if decision_report else "",
+            "allow_fallback": allow_fallback,
+            "fallback_decision": fallback_decision,
+            "fallback_policy": fallback_policy,
+            "fallback_timeout": TITAN_FALLBACK_TIMEOUT,
+        }
+        if decision_report is not None and decision_report.selected_provider:
+            exec_ctx["pinned_provider"] = decision_report.selected_provider
+            exec_ctx["planned_provider"] = (
+                decision_report.planned_provider or decision_report.selected_provider
+            )
+        if context is not None:
+            exec_ctx["execution_mode"] = context.execution_mode.value
+        tool_params["_execution_context"] = exec_ctx
+        return tool_params
+
+    def _record_provider_telemetry(
+        self,
+        *,
+        run_id: str,
+        tool_name: str,
+        context: ToolExecutionContext,
+        result: ToolResult,
+        decision_report: ToolDecisionReport | None,
+        duration_ms: float,
+    ) -> None:
+        """Record provider telemetry after every provider-backed execution (P10B-1005)."""
+        provider_id = result.metadata.get("provider_id")
+        if not provider_id or self.provider_executor is None:
+            return
+        from tools.providers.provider_telemetry import ProviderExecutionRecord
+
+        execution_path = result.metadata.get("execution_path", [])
+        path_tuple = tuple(execution_path) if isinstance(execution_path, list) else ()
+        record = ProviderExecutionRecord(
+            provider_selected=str(provider_id),
+            duration_ms=float(result.metadata.get("duration_ms", duration_ms)),
+            provider_health=str(result.metadata.get("provider_health", "")),
+            provider_version=str(result.metadata.get("provider_version", "")),
+            success=result.success,
+            retry_count=int(result.metadata.get("retry_count", 0)),
+            decision_id=(
+                decision_report.decision_id if decision_report is not None else ""
+            ),
+            runtime_id=run_id,
+            execution_path=path_tuple,
+            tool_name=tool_name,
+            action=str(result.metadata.get("action", "")),
+            error=result.error or "",
+            fallback_used=bool(result.metadata.get("fallback_used", False)),
+            fallback_reason=str(result.metadata.get("fallback_reason", "")),
+            execution_mode=context.execution_mode.value,
+        )
+        matching = [
+            record
+            for record in self.provider_executor.telemetry.list_records()
+            if record.runtime_id == run_id and record.provider_selected == str(provider_id)
+        ]
+        if matching:
+            indexed = matching[-1]
+        else:
+            indexed = self.provider_executor.telemetry.record(record)
+        result.metadata["telemetry_record_index"] = indexed.record_index
+        snapshot = self.provider_executor.telemetry.snapshot()
+        result.metadata["telemetry_snapshot_at"] = snapshot.generated_at
+        self._persist_telemetry_snapshot()
+        if self.performance_model is not None:
+            self.performance_model.invalidate(str(provider_id))
+
+    def _persist_telemetry_snapshot(self) -> None:
+        """Write provider telemetry when persistence is enabled (P10B-1101)."""
+        if (
+            not self.persist_telemetry
+            or self.telemetry_persistence is None
+            or self.provider_executor is None
+        ):
+            return
+        self.telemetry_persistence.save_snapshot(self.provider_executor.telemetry)
+
+    def _emit_provider_audit(
+        self,
+        *,
+        run_id: str,
+        tool_name: str,
+        context: ToolExecutionContext,
+        capability: ToolCapability,
+        result: ToolResult,
+        decision_report: ToolDecisionReport | None,
+    ) -> None:
+        """Emit provider telemetry audit when provider metadata is present."""
+        provider_id = result.metadata.get("provider_id")
+        if not provider_id:
+            return
+        assert self.audit_logger is not None
+        latency = result.metadata.get("duration_ms")
+        if latency is None:
+            latency = result.metadata.get("provider_latency_ms")
+        event = ToolAuditEvent.build(
+            event_type="provider_executed",
+            run_id=run_id,
+            tool_name=tool_name,
+            caller=context.caller,
+            user=context.user,
+            session_id=context.session_id,
+            turn_id=context.turn_id,
+            risk_level=capability.risk_level.value,
+            success=result.success,
+            duration_ms=latency,
+            latency_ms=latency,
+            execution_mode=context.execution_mode.value,
+            health_state=str(result.metadata.get("provider_health", "")),
+            provider_version=str(result.metadata.get("provider_version", "")),
+            provider_name=str(provider_id),
+            provider_health=str(result.metadata.get("provider_health", "")),
+            fallback_used=bool(result.metadata.get("fallback_used", False)),
+            fallback_reason=str(result.metadata.get("fallback_reason", "")),
+            retry_count=int(result.metadata.get("retry_count", 0)),
+            decision_id=(
+                decision_report.decision_id if decision_report is not None else ""
+            ),
+            message=str(provider_id),
+        )
+        self.audit_logger.log(event)
 
     def _validate_params(self, tool_name: str, params: dict) -> str | None:
         tool = self.registry.get(tool_name)
@@ -923,6 +1252,13 @@ class ToolRuntime:
         error_code: str = "",
         message: str = "",
         dependencies_checked: bool = False,
+        provider_name: str = "",
+        provider_health: str = "",
+        fallback_used: bool = False,
+        fallback_reason: str = "",
+        retry_count: int = 0,
+        decision_id: str = "",
+        latency_ms: float | None = None,
     ) -> None:
         """Emit a structured audit event."""
         assert self.audit_logger is not None
@@ -958,6 +1294,13 @@ class ToolRuntime:
             quota_remaining=quota_remaining,
             dependencies_checked=dependencies_checked,
             message=message,
+            provider_name=provider_name,
+            provider_health=provider_health,
+            fallback_used=fallback_used,
+            fallback_reason=fallback_reason,
+            retry_count=retry_count,
+            decision_id=decision_id,
+            latency_ms=latency_ms if latency_ms is not None else duration_ms,
         )
         self.audit_logger.log(event)
 

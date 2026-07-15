@@ -34,11 +34,11 @@ def test_orchestrator_agent_failure_is_logged(
         side_effect=RuntimeError("simulated agent failure")
     )
 
-    with caplog.at_level("ERROR", logger="core.execution_coordinator"):
+    with caplog.at_level("ERROR", logger="core.task_orchestrator"):
         brain.think("test code python")
 
     assert any(
-        "Agent" in record.message and "failed during execution" in record.message
+        "Agent" in record.message and "failed during orchestration" in record.message
         for record in caplog.records
     )
     assert any(record.exc_info is not None for record in caplog.records)

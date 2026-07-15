@@ -1,0 +1,665 @@
+/* =====================================
+   Titan Web App — Phase 5.4
+   FLOATING COGNITIVE WORKSPACES
+   Canonical target: sprint-2.7-reference-composition.png
+                     + TITAN_DESIGN_CONSTITUTION.md
+   Scope: lower workspace dock only.
+   Titan Core / neural field / satellites / sidebar / topbar untouched.
+   Loaded LAST — workspace material authority.
+   ===================================== */
+
+:root {
+  --tdl-fw-glass: linear-gradient(
+    168deg,
+    rgba(10, 8, 8, 0.38) 0%,
+    rgba(0, 0, 0, 0.22) 46%,
+    rgba(0, 0, 0, 0.48) 100%
+  );
+  --tdl-fw-edge: rgba(255, 255, 255, 0.055);
+  --tdl-fw-edge-lit: rgba(255, 255, 255, 0.11);
+  --tdl-fw-neural-bleed: rgba(220, 38, 38, 0.045);
+  --tdl-fw-highlight: rgba(255, 255, 255, 0.07);
+  --tdl-fw-radius: 8px;
+  --tdl-fw-title: rgba(120, 112, 112, 0.95);
+  --tdl-fw-primary: rgba(244, 241, 241, 0.92);
+  --tdl-fw-meta: rgba(154, 147, 147, 0.88);
+  --tdl-fw-quiet: rgba(107, 99, 99, 0.82);
+}
+
+/* =====================================
+   DOCK — horizontal floating command strip
+   ===================================== */
+
+.tdl-v2-region--dock.tdl-v2-dock--floating {
+  gap: 0.45rem;
+  padding: 0.1rem 0.4rem 0.08rem;
+  align-items: stretch;
+}
+
+.tdl-v2-workspace-dock.tdl-v2-dock-status-cards--float,
+.tdl-v2-dock-status-cards--float.tdl-v2-workspace-dock {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0.62rem;
+  overflow-x: auto;
+  overflow-y: visible;
+  padding: 0.45rem 0.2rem 0.55rem;
+  margin-top: 0.15rem;
+  scroll-snap-type: x proximity;
+  background: transparent;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(220, 38, 38, 0.18) transparent;
+}
+
+.tdl-v2-workspace-dock::-webkit-scrollbar {
+  height: 3px;
+}
+
+.tdl-v2-workspace-dock::-webkit-scrollbar-thumb {
+  background: rgba(220, 38, 38, 0.22);
+  border-radius: 999px;
+}
+
+/* Keep dock below Titan Core — never climb into the neural stage */
+.tdl-v2-region--dock[data-role="floating-workspaces"] {
+  z-index: var(--tdl-z-floating, 15);
+  max-height: min(42vh, 22rem);
+}
+
+.tdl-v2-dock-composer {
+  padding-top: 0.05rem;
+}
+
+.tdl-v2-dock-status-lines {
+  opacity: 0.42;
+  gap: 1.2rem;
+}
+
+/* =====================================
+   CARD MATERIAL — smoked neural glass
+   ===================================== */
+
+.tdl-v2-workspace-card.tdl-v2-float-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+  flex: 1 1 10.5rem;
+  min-width: 10.25rem;
+  max-width: 15.5rem;
+  min-height: 6.4rem;
+  padding: 0.62rem 0.72rem 0.55rem;
+  border-radius: var(--tdl-fw-radius);
+  border: none !important;
+  outline: 1px solid var(--tdl-fw-edge);
+  outline-offset: -1px;
+  background: var(--tdl-fw-glass) !important;
+  backdrop-filter: blur(18px) saturate(1.02);
+  -webkit-backdrop-filter: blur(18px) saturate(1.02);
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.48),
+    0 1px 0 var(--tdl-fw-highlight) inset,
+    0 -10px 28px var(--tdl-fw-neural-bleed) inset;
+  overflow: hidden;
+  scroll-snap-align: start;
+  transform: translateY(0);
+  transition:
+    transform 220ms ease,
+    box-shadow 220ms ease,
+    outline-color 220ms ease,
+    background 220ms ease;
+  animation: tdl-fw-breathe 7.2s ease-in-out infinite;
+}
+
+.tdl-v2-workspace-card[data-width="wide"] {
+  flex: 1.35 1 12.5rem;
+  max-width: 17.5rem;
+}
+
+.tdl-v2-workspace-card[data-width="mid"] {
+  flex: 1 1 10.75rem;
+  max-width: 14.5rem;
+}
+
+.tdl-v2-workspace-card[data-width="presence"] {
+  flex: 1.15 1 11.5rem;
+  max-width: 15.5rem;
+}
+
+.tdl-v2-workspace-card:nth-child(1) { animation-delay: 0s; }
+.tdl-v2-workspace-card:nth-child(2) { animation-delay: 0.35s; }
+.tdl-v2-workspace-card:nth-child(3) { animation-delay: 0.7s; }
+.tdl-v2-workspace-card:nth-child(4) { animation-delay: 1.05s; }
+.tdl-v2-workspace-card:nth-child(5) { animation-delay: 1.4s; }
+
+@keyframes tdl-fw-breathe {
+  0%, 100% { opacity: 0.94; }
+  50% { opacity: 1; }
+}
+
+.tdl-v2-workspace-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 14%;
+  right: 14%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.14) 50%,
+    transparent 100%
+  );
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.tdl-v2-workspace-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    145deg,
+    rgba(220, 38, 38, 0.03) 0%,
+    transparent 42%,
+    transparent 100%
+  );
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.tdl-v2-workspace-card:hover {
+  transform: translateY(-3px);
+  outline-color: var(--tdl-fw-edge-lit);
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.55),
+    0 1px 0 rgba(255, 255, 255, 0.09) inset,
+    0 0 28px rgba(220, 38, 38, 0.06);
+}
+
+.tdl-v2-workspace-card:focus-within {
+  outline-color: rgba(239, 68, 68, 0.28);
+}
+
+.tdl-v2-workspace-card[data-live="true"] {
+  outline-color: rgba(239, 68, 68, 0.18);
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.5),
+    0 1px 0 var(--tdl-fw-highlight) inset,
+    0 -12px 30px rgba(220, 38, 38, 0.07) inset,
+    0 0 22px rgba(220, 38, 38, 0.04);
+}
+
+.tdl-v2-workspace-card[data-collapsed="true"] {
+  min-height: 2.1rem;
+}
+
+.tdl-v2-workspace-card[data-collapsed="true"] .tdl-v2-workspace-card__body,
+.tdl-v2-workspace-card[data-collapsed="true"] .tdl-v2-float-card__status,
+.tdl-v2-workspace-card[data-collapsed="true"] .tdl-v2-presence-ring,
+.tdl-v2-workspace-card[data-collapsed="true"] .tdl-v2-workspace-obsidian__mark,
+.tdl-v2-workspace-card[data-collapsed="true"] .tdl-v2-workspace-browser__preview,
+.tdl-v2-workspace-card[data-collapsed="true"] .tdl-v2-workspace-cognitive__viz,
+.tdl-v2-workspace-card[data-collapsed="true"] .tdl-v2-workspace-presence,
+.tdl-v2-workspace-card[data-collapsed="true"] .tdl-v2-workspace-card__scan {
+  display: none;
+}
+
+/* =====================================
+   HEADER — quiet premium chrome
+   ===================================== */
+
+.tdl-v2-workspace-card__header {
+  position: relative;
+  z-index: 1;
+  min-height: 1rem;
+}
+
+.tdl-v2-workspace-card .tdl-v2-status-card__title {
+  font-size: 0.46rem;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--tdl-fw-title);
+}
+
+.tdl-v2-workspace-card .tdl-v2-status-card__indicator {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+}
+
+.tdl-v2-workspace-card .tdl-v2-status-card__indicator--idle {
+  background: rgba(248, 113, 113, 0.32);
+  box-shadow: none;
+  animation: tdl-fw-dot-breathe 5.6s ease-in-out infinite;
+}
+
+.tdl-v2-workspace-card .tdl-v2-status-card__indicator--live {
+  background: rgba(239, 68, 68, 0.95);
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.45);
+  animation: tdl-fw-dot-live 2.6s ease-in-out infinite;
+}
+
+@keyframes tdl-fw-dot-breathe {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.95; }
+}
+
+@keyframes tdl-fw-dot-live {
+  0%, 100% { opacity: 0.75; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+.tdl-v2-workspace-card .tdl-v2-float-card__close {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  font-size: 0.78rem;
+  color: rgba(107, 99, 99, 0.75);
+  opacity: 0.7;
+}
+
+.tdl-v2-workspace-card .tdl-v2-float-card__close:hover {
+  opacity: 1;
+  color: rgba(244, 241, 241, 0.9);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tdl-v2-workspace-card__body {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  min-height: 0;
+}
+
+.tdl-v2-workspace-card .tdl-v2-float-card__status {
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
+  font-size: 0.4rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tdl-fw-quiet);
+}
+
+.tdl-v2-workspace-line {
+  margin: 0;
+  line-height: 1.35;
+}
+
+.tdl-v2-workspace-line--primary {
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: var(--tdl-fw-primary);
+}
+
+.tdl-v2-workspace-line--meta {
+  font-size: 0.58rem;
+  font-weight: 300;
+  color: var(--tdl-fw-meta);
+}
+
+.tdl-v2-workspace-line--quiet {
+  font-size: 0.52rem;
+  font-weight: 300;
+  letter-spacing: 0.02em;
+  color: var(--tdl-fw-quiet);
+}
+
+/* Subtle idle scanning line (Recent Memory) */
+.tdl-v2-workspace-card__scan {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  height: 1px;
+  bottom: 1.35rem;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(239, 68, 68, 0.18) 50%,
+    transparent 100%
+  );
+  opacity: 0;
+  pointer-events: none;
+  animation: tdl-fw-scan 9s ease-in-out infinite;
+}
+
+.tdl-v2-workspace-card[data-kind="memory"] .tdl-v2-workspace-card__scan {
+  opacity: 0.55;
+}
+
+@keyframes tdl-fw-scan {
+  0%, 100% { transform: translateX(-8%); opacity: 0.15; }
+  50% { transform: translateX(8%); opacity: 0.55; }
+}
+
+/* =====================================
+   CARD 1 — Recent Memory
+   ===================================== */
+
+.tdl-v2-workspace-memory-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.tdl-v2-workspace-memory-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.18rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.035);
+}
+
+.tdl-v2-workspace-memory-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.tdl-v2-workspace-memory-item__icon {
+  flex-shrink: 0;
+  width: 0.85rem;
+  margin-top: 0.08rem;
+  font-size: 0.58rem;
+  line-height: 1;
+  color: rgba(248, 113, 113, 0.55);
+  opacity: 0.85;
+}
+
+.tdl-v2-workspace-memory-item__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+  min-width: 0;
+}
+
+.tdl-v2-workspace-memory-item__title {
+  font-size: 0.66rem;
+  font-weight: 400;
+  color: var(--tdl-fw-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tdl-v2-workspace-memory-item__meta {
+  font-size: 0.5rem;
+  font-weight: 300;
+  letter-spacing: 0.02em;
+  color: var(--tdl-fw-quiet);
+}
+
+.tdl-v2-workspace-card[data-kind="memory"][data-live="true"] .tdl-v2-workspace-memory-item__icon {
+  color: rgba(239, 68, 68, 0.85);
+}
+
+/* =====================================
+   CARD 2 — Obsidian
+   ===================================== */
+
+.tdl-v2-workspace-obsidian__mark {
+  position: absolute;
+  top: 1.55rem;
+  right: 0.65rem;
+  width: 1.35rem;
+  height: 1.35rem;
+  color: rgba(167, 139, 250, 0.42);
+  opacity: 0.7;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.tdl-v2-workspace-obsidian__glyph {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.tdl-v2-workspace-card[data-kind="obsidian"][data-live="true"] .tdl-v2-workspace-obsidian__mark {
+  color: rgba(196, 181, 253, 0.72);
+  opacity: 0.95;
+  filter: drop-shadow(0 0 6px rgba(167, 139, 250, 0.25));
+}
+
+/* =====================================
+   CARD 3 — Browser
+   ===================================== */
+
+.tdl-v2-workspace-browser__preview {
+  position: absolute;
+  top: 1.55rem;
+  right: 0.6rem;
+  width: 1.7rem;
+  height: 1.2rem;
+  border-radius: 3px;
+  outline: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.7;
+}
+
+.tdl-v2-workspace-browser__bar {
+  position: relative;
+  display: block;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    rgba(239, 68, 68, 0.25),
+    rgba(255, 255, 255, 0.06)
+  );
+}
+
+.tdl-v2-workspace-browser__pane {
+  display: block;
+  margin: 3px 3px 0;
+  height: calc(100% - 7px);
+  border-radius: 1px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.04),
+    rgba(220, 38, 38, 0.05)
+  );
+}
+
+.tdl-v2-workspace-card[data-kind="browser"][data-live="true"] .tdl-v2-workspace-browser__preview {
+  opacity: 1;
+  outline-color: rgba(239, 68, 68, 0.22);
+  box-shadow: 0 0 12px rgba(220, 38, 38, 0.12);
+}
+
+/* =====================================
+   CARD 4 — Cognitive State
+   ===================================== */
+
+.tdl-v2-workspace-cognitive__viz {
+  position: absolute;
+  top: 1.65rem;
+  right: 0.7rem;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 1.05rem;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.tdl-v2-workspace-cognitive__pulse {
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.35);
+  animation: tdl-fw-cognitive-pulse 3.8s ease-in-out infinite;
+}
+
+.tdl-v2-workspace-cognitive__pulse:nth-child(1) {
+  height: 45%;
+  animation-delay: 0s;
+}
+
+.tdl-v2-workspace-cognitive__pulse:nth-child(2) {
+  height: 80%;
+  animation-delay: 0.35s;
+}
+
+.tdl-v2-workspace-cognitive__pulse:nth-child(3) {
+  height: 55%;
+  animation-delay: 0.7s;
+}
+
+@keyframes tdl-fw-cognitive-pulse {
+  0%, 100% { opacity: 0.35; transform: scaleY(0.85); }
+  50% { opacity: 0.85; transform: scaleY(1.08); }
+}
+
+.tdl-v2-workspace-card[data-kind="cognitive"][data-live="true"] .tdl-v2-workspace-cognitive__pulse {
+  background: rgba(239, 68, 68, 0.78);
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.35);
+  animation-duration: 1.8s;
+}
+
+.tdl-v2-workspace-card[data-cognitive-ui="error"] {
+  outline-color: rgba(239, 68, 68, 0.28);
+}
+
+.tdl-v2-workspace-card[data-cognitive-ui="thinking"],
+.tdl-v2-workspace-card[data-cognitive-ui="planning"],
+.tdl-v2-workspace-card[data-cognitive-ui="executing"],
+.tdl-v2-workspace-card[data-cognitive-ui="learning"] {
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.5),
+    0 1px 0 var(--tdl-fw-highlight) inset,
+    0 -12px 28px rgba(220, 38, 38, 0.08) inset;
+}
+
+/* =====================================
+   CARD 5 — Presence
+   ===================================== */
+
+.tdl-v2-workspace-presence {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.55rem;
+  flex: 1;
+}
+
+.tdl-v2-workspace-presence .tdl-v2-workspace-card__body,
+.tdl-v2-workspace-presence .tdl-v2-status-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.tdl-v2-workspace-presence__ring.tdl-v2-presence-ring {
+  position: relative;
+  width: 2.55rem;
+  height: 2.55rem;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.tdl-v2-workspace-presence__breath {
+  position: absolute;
+  inset: 18%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(239, 68, 68, 0.16) 0%,
+    transparent 70%
+  );
+  animation: tdl-fw-presence-breath 4.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes tdl-fw-presence-breath {
+  0%, 100% { opacity: 0.35; transform: scale(0.92); }
+  50% { opacity: 0.8; transform: scale(1.05); }
+}
+
+.tdl-v2-workspace-card[data-kind="presence"] .tdl-v2-presence-ring__fill {
+  stroke: rgba(239, 68, 68, 0.85);
+  filter: drop-shadow(0 0 3px rgba(220, 38, 38, 0.35));
+}
+
+.tdl-v2-workspace-card[data-kind="presence"] .tdl-v2-presence-ring__value {
+  font-size: 0.5rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: rgba(244, 241, 241, 0.88);
+}
+
+.tdl-v2-workspace-card[data-kind="presence"] #tdl-v2-presence-card-value {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--tdl-fw-primary);
+}
+
+.tdl-v2-workspace-card[data-presence="engaged"] {
+  outline-color: rgba(239, 68, 68, 0.16);
+}
+
+/* =====================================
+   RESPONSIVE — horizontal overflow dock
+   ===================================== */
+
+.tdl-v2--mode-tablet .tdl-v2-workspace-dock,
+.tdl-v2--mode-phone .tdl-v2-workspace-dock {
+  justify-content: flex-start;
+  padding-left: 0.15rem;
+  padding-right: 0.15rem;
+}
+
+.tdl-v2--mode-tablet .tdl-v2-workspace-card,
+.tdl-v2--mode-phone .tdl-v2-workspace-card {
+  flex: 0 0 auto;
+  min-width: 11rem;
+  max-width: 13.5rem;
+}
+
+.tdl-v2--mode-phone .tdl-v2-workspace-card {
+  min-width: 10.25rem;
+  min-height: 5.8rem;
+}
+
+/* =====================================
+   REDUCED MOTION
+   ===================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .tdl-v2-workspace-card,
+  .tdl-v2-workspace-card .tdl-v2-status-card__indicator--idle,
+  .tdl-v2-workspace-card .tdl-v2-status-card__indicator--live,
+  .tdl-v2-workspace-card__scan,
+  .tdl-v2-workspace-cognitive__pulse,
+  .tdl-v2-workspace-presence__breath {
+    animation: none !important;
+  }
+
+  .tdl-v2-workspace-card:hover {
+    transform: none;
+  }
+}
+
+.tdl-v2--reduced-motion .tdl-v2-workspace-card,
+.tdl-v2--reduced-motion .tdl-v2-workspace-card .tdl-v2-status-card__indicator--idle,
+.tdl-v2--reduced-motion .tdl-v2-workspace-card .tdl-v2-status-card__indicator--live,
+.tdl-v2--reduced-motion .tdl-v2-workspace-card__scan,
+.tdl-v2--reduced-motion .tdl-v2-workspace-cognitive__pulse,
+.tdl-v2--reduced-motion .tdl-v2-workspace-presence__breath {
+  animation: none !important;
+}

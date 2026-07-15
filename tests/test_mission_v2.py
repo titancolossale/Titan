@@ -16,16 +16,18 @@ from core.mission_manager import MissionManager
 from core.mission_migrator import SCHEMA_VERSION, default_schema, migrate
 
 
-def test_default_schema_is_v2() -> None:
+def test_default_schema_is_v3() -> None:
     """P8-001: default schema includes schema_version and completed_steps."""
     schema = default_schema()
     assert schema["schema_version"] == SCHEMA_VERSION
     assert schema["completed_steps"] == []
     assert schema["status"] == "idle"
+    assert schema["missions"] == {}
+    assert schema["active_mission_id"] is None
 
 
 def test_migrate_v1_adds_completed_steps_and_schema_version() -> None:
-    """P8-002: legacy mission without schema_version migrates to v2."""
+    """P8-002: legacy mission without schema_version migrates to v3."""
     legacy = {
         "active": True,
         "title": "Legacy",
@@ -39,6 +41,8 @@ def test_migrate_v1_adds_completed_steps_and_schema_version() -> None:
     assert result["completed_steps"] == []
     assert result["steps"] == ["Step B", "Step C"]
     assert result["current_step"] == "Step B"
+    assert result["active_mission_id"] is not None
+    assert len(result["missions"]) == 1
 
 
 def test_migrate_v1_reinserts_orphan_current_step() -> None:

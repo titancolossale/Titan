@@ -1,0 +1,957 @@
+/* =====================================
+   Titan Web App — Sprint 2.10
+   Reference Visual Fidelity
+   Canonical target: sprint-2.7-reference-composition.png
+   Smoked acrylic · quiet chrome · neural-lit depth
+   Loaded last — frontend chrome only; no backend coupling
+   ===================================== */
+
+:root {
+  /* --- Geometry: thinner rail, breathing dock --- */
+  --tdl-sidebar-width: 200px;
+  --tdl-orchestrator-width: 300px;
+  --tdl-workspace-padding: 0.95rem;
+  --tdl-workspace-gap: 0.85rem;
+  --tdl-status-cards-height: 92px;
+  --tdl-composer-min-height: 54px;
+  --tdl-topbar-height: 42px;
+
+  /* --- Materials: polished black acrylic / smoked glass --- */
+  --tdl-acrylic-bg: linear-gradient(
+    165deg,
+    rgba(22, 20, 20, 0.28) 0%,
+    rgba(0, 0, 0, 0.22) 42%,
+    rgba(0, 0, 0, 0.38) 100%
+  );
+  --tdl-acrylic-bg-deep: linear-gradient(
+    168deg,
+    rgba(18, 16, 16, 0.36) 0%,
+    rgba(0, 0, 0, 0.3) 48%,
+    rgba(0, 0, 0, 0.46) 100%
+  );
+  --tdl-acrylic-edge: rgba(255, 255, 255, 0.038);
+  --tdl-acrylic-edge-lit: rgba(255, 255, 255, 0.07);
+  --tdl-acrylic-reflect: rgba(255, 255, 255, 0.04);
+  --tdl-acrylic-neural-bleed: rgba(220, 38, 38, 0.035);
+  --tdl-acrylic-blur: 40px;
+  --tdl-acrylic-depth:
+    0 18px 48px rgba(0, 0, 0, 0.42),
+    0 1px 0 var(--tdl-acrylic-reflect) inset,
+    0 -12px 36px var(--tdl-acrylic-neural-bleed) inset;
+}
+
+/* =====================================
+   OBJECTIVE 8 — Cinematic depth overlays
+   (chrome atmosphere; neural canvas untouched)
+   ===================================== */
+
+.tdl-v2-layer--glow {
+  pointer-events: none;
+}
+
+.tdl-v2-glow-ambient {
+  display: block !important;
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse 58% 48% at 50% 42%,
+      rgba(120, 18, 18, 0.09) 0%,
+      rgba(60, 8, 8, 0.03) 38%,
+      transparent 68%
+    ),
+    radial-gradient(
+      ellipse 100% 80% at 50% 50%,
+      transparent 42%,
+      rgba(0, 0, 0, 0.28) 100%
+    ),
+    radial-gradient(
+      ellipse 90% 70% at 50% 100%,
+      rgba(0, 0, 0, 0.35) 0%,
+      transparent 55%
+    );
+  opacity: 1;
+  mix-blend-mode: normal;
+}
+
+.tdl-v2-layer--workspace::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(
+      ellipse 70% 55% at 50% 40%,
+      transparent 30%,
+      rgba(0, 0, 0, 0.18) 100%
+    );
+  opacity: 0.85;
+}
+
+.tdl-v2-layer--workspace > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* =====================================
+   OBJECTIVE 1 + 7 — Premium materials
+   Absorb neural light · no thick borders
+   ===================================== */
+
+.tdl-v2-glass-panel,
+.tdl-v2-region--sidebar.tdl-v2-glass-panel,
+.tdl-v2-region--orchestrator.tdl-v2-glass-panel {
+  background: var(--tdl-acrylic-bg);
+  backdrop-filter: blur(var(--tdl-acrylic-blur)) saturate(1.04);
+  -webkit-backdrop-filter: blur(var(--tdl-acrylic-blur)) saturate(1.04);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--tdl-acrylic-depth);
+  outline: 1px solid var(--tdl-acrylic-edge);
+  outline-offset: -1px;
+}
+
+.tdl-v2-root[data-presence="idle"] .tdl-v2-region--orchestrator.tdl-v2-glass-panel,
+.tdl-v2-root:not([data-presence]) .tdl-v2-region--orchestrator.tdl-v2-glass-panel {
+  animation: tdl-v2-acrylic-breathe 7.2s var(--tdl-ease-organic) infinite;
+}
+
+@keyframes tdl-v2-acrylic-breathe {
+  0%, 100% {
+    box-shadow:
+      0 18px 48px rgba(0, 0, 0, 0.42),
+      0 1px 0 var(--tdl-acrylic-reflect) inset,
+      0 -12px 36px var(--tdl-acrylic-neural-bleed) inset;
+  }
+  50% {
+    box-shadow:
+      0 20px 52px rgba(0, 0, 0, 0.48),
+      0 1px 0 rgba(255, 255, 255, 0.05) inset,
+      0 -14px 40px rgba(220, 38, 38, 0.05) inset,
+      0 0 32px rgba(220, 38, 38, 0.03);
+  }
+}
+
+/* =====================================
+   OBJECTIVE 2 + 9 — Visual rhythm & alignment
+   ===================================== */
+
+.tdl-v2-layer--workspace {
+  padding: var(--tdl-workspace-padding);
+  gap: var(--tdl-workspace-gap);
+}
+
+.tdl-v2-workspace-grid {
+  gap: var(--tdl-workspace-gap);
+}
+
+.tdl-v2--sidebar-expanded:not(.tdl-v2--mode-tablet):not(.tdl-v2--mode-phone) .tdl-v2-workspace-grid,
+.tdl-v2-root:not(.tdl-v2--sidebar-collapsed):not(.tdl-v2--mode-tablet):not(.tdl-v2--mode-phone)
+  .tdl-v2-workspace-grid {
+  grid-template-columns: var(--tdl-sidebar-width) 1fr var(--tdl-orchestrator-width);
+}
+
+.tdl-v2-dock {
+  gap: 0.7rem;
+}
+
+/* =====================================
+   OBJECTIVE 3 — Sidebar reconstruction
+   Thinner · quieter · integrated
+   ===================================== */
+
+.tdl-v2-region--sidebar {
+  padding: 0.85rem 0.55rem 0.75rem;
+  background: var(--tdl-acrylic-bg) !important;
+  border: none !important;
+  outline: 1px solid transparent;
+  box-shadow:
+    0 16px 44px rgba(0, 0, 0, 0.28),
+    0 1px 0 rgba(255, 255, 255, 0.028) inset;
+}
+
+.tdl-v2-region--sidebar .tdl-v2-logo {
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.028);
+  gap: 0.55rem;
+}
+
+.tdl-v2-region--sidebar .tdl-v2-logo__wordmark {
+  font-size: 0.95rem;
+  font-weight: 300;
+  letter-spacing: 0.1em;
+}
+
+.tdl-v2-logo__accent {
+  font-weight: 400;
+  color: var(--tdl-text-primary);
+}
+
+.tdl-v2-region--sidebar .tdl-v2-logo__tagline {
+  margin-top: 0.2rem;
+  font-size: 0.5rem;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  color: var(--tdl-text-muted);
+  opacity: 0.85;
+}
+
+.tdl-v2-sidebar-toggle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.tdl-v2-sidebar-toggle:hover {
+  border: none;
+  box-shadow: 0 0 14px rgba(220, 38, 38, 0.25);
+}
+
+.tdl-v2-sidebar-toggle__glyph {
+  width: 14px;
+  height: 14px;
+  box-shadow:
+    0 0 10px rgba(239, 68, 68, 0.55),
+    0 0 18px rgba(220, 38, 38, 0.25);
+}
+
+.tdl-v2-region--sidebar .tdl-v2-sidebar-nav {
+  gap: 0.12rem;
+}
+
+.tdl-v2-region--sidebar .tdl-v2-nav-item {
+  padding: 0.42rem 0.55rem;
+  gap: 0.6rem;
+  font-size: 0.68rem;
+  font-weight: 300;
+  letter-spacing: 0.04em;
+  color: rgba(244, 241, 241, 0.62);
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.tdl-v2-region--sidebar .tdl-v2-nav-item::before {
+  width: 12px;
+  height: 12px;
+  opacity: 0.42;
+}
+
+.tdl-v2-region--sidebar .tdl-v2-nav-item::after {
+  display: none;
+}
+
+.tdl-v2-region--sidebar .tdl-v2-nav-item:hover:not(.tdl-v2-nav-item--active) {
+  background: rgba(255, 255, 255, 0.028);
+  color: var(--tdl-text-primary);
+  transform: none;
+}
+
+.tdl-v2-region--sidebar .tdl-v2-nav-item--conversation {
+  margin-bottom: 0.35rem;
+  padding: 0.48rem 0.6rem;
+  font-size: 0.62rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.tdl-v2-region--sidebar .tdl-v2-nav-item--conversation.tdl-v2-nav-item--active,
+.tdl-v2-region--sidebar .tdl-v2-nav-item--active {
+  background: rgba(220, 38, 38, 0.1);
+  border: none;
+  box-shadow:
+    0 0 20px rgba(220, 38, 38, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  color: var(--tdl-text-primary);
+  outline: 1px solid rgba(239, 68, 68, 0.16);
+  outline-offset: -1px;
+}
+
+.tdl-v2-region--sidebar .tdl-v2-nav-item--active::before {
+  opacity: 0.9;
+  color: var(--tdl-red-glow);
+}
+
+.tdl-v2-region--sidebar .tdl-v2-nav-item[data-placeholder="true"]::after {
+  display: none;
+}
+
+.tdl-v2-nav-item__badge {
+  font-size: 0.38rem;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  color: rgba(107, 99, 99, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  padding: 0.08rem 0.28rem;
+}
+
+.tdl-v2-sidebar-presence {
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.028);
+  gap: 0.45rem;
+}
+
+.tdl-v2-presence-status__pill {
+  font-size: 0.4rem;
+  letter-spacing: 0.12em;
+  padding: 0.16rem 0.32rem;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.tdl-v2-presence-status__pill--online {
+  color: var(--tdl-red-glow);
+  border-color: rgba(239, 68, 68, 0.28);
+}
+
+.tdl-v2-presence-card {
+  padding: 0.5rem 0.55rem;
+  border-radius: 10px;
+  border: none;
+  outline: 1px solid rgba(255, 255, 255, 0.035);
+  outline-offset: -1px;
+  background: rgba(0, 0, 0, 0.32);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+}
+
+.tdl-v2-presence-card__title {
+  font-size: 0.48rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+}
+
+.tdl-v2-presence-card__copy {
+  font-size: 0.54rem;
+  font-weight: 300;
+  color: rgba(154, 147, 147, 0.9);
+}
+
+.tdl-v2-region--sidebar .tdl-v2-sidebar-collapse {
+  opacity: 0.45;
+  font-size: 0.5rem;
+  letter-spacing: 0.08em;
+  font-weight: 300;
+  padding: 0.15rem 0.35rem;
+}
+
+/* =====================================
+   Top telemetry — quieter instrument strip
+   ===================================== */
+
+.tdl-v2-topbar--telemetry {
+  min-height: var(--tdl-topbar-height);
+  padding: 0.32rem 0.75rem;
+  gap: 1rem;
+  background: var(--tdl-acrylic-bg);
+  border: none;
+  outline: 1px solid var(--tdl-acrylic-edge);
+  outline-offset: -1px;
+  border-radius: 10px;
+  backdrop-filter: blur(28px) saturate(1.03);
+  -webkit-backdrop-filter: blur(28px) saturate(1.03);
+  box-shadow:
+    0 10px 32px rgba(0, 0, 0, 0.32),
+    0 1px 0 var(--tdl-acrylic-reflect) inset;
+}
+
+.tdl-v2-topbar__pill {
+  gap: 0.38rem;
+  padding: 0.22rem 0.5rem;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+}
+
+.tdl-v2-topbar__pill:hover {
+  background: rgba(255, 255, 255, 0.022);
+  border-color: transparent;
+}
+
+.tdl-v2-topbar__pill[data-status="active"],
+.tdl-v2-topbar__pill[data-status="live"] {
+  background: rgba(220, 38, 38, 0.05);
+  outline: 1px solid rgba(239, 68, 68, 0.12);
+  outline-offset: -1px;
+  border: none;
+}
+
+.tdl-v2-topbar__pill-dot {
+  width: 3.5px;
+  height: 3.5px;
+}
+
+.tdl-v2-topbar__pill-label {
+  font-size: 0.44rem;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+}
+
+.tdl-v2-topbar__pill-value {
+  font-size: 0.52rem;
+  font-weight: 300;
+  letter-spacing: 0.03em;
+}
+
+.tdl-v2-topbar__presence-copy {
+  font-size: 0.6rem;
+  font-weight: 300;
+  letter-spacing: 0.03em;
+  opacity: 0.85;
+}
+
+.tdl-v2-topbar__brain-mode {
+  padding: 0.26rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(239, 68, 68, 0.38);
+  background: transparent;
+  color: var(--tdl-red-glow);
+  font-size: 0.52rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  box-shadow: 0 0 12px rgba(220, 38, 38, 0.08);
+}
+
+.tdl-v2-topbar__brain-mode:hover {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.tdl-v2-topbar__profile-name {
+  font-size: 0.54rem;
+  font-weight: 400;
+}
+
+.tdl-v2-topbar__profile-role {
+  font-size: 0.42rem;
+  font-weight: 300;
+  letter-spacing: 0.12em;
+}
+
+.tdl-v2-topbar__icon-btn {
+  width: 28px;
+  height: 28px;
+  opacity: 0.65;
+}
+
+/* =====================================
+   OBJECTIVE 4 — Orchestrator command center
+   Hierarchy through space, not boxes
+   ===================================== */
+
+.tdl-v2-region--orchestrator {
+  padding: 0.85rem 0.75rem 0.9rem;
+  background: var(--tdl-acrylic-bg-deep) !important;
+  border: none !important;
+  outline: 1px solid var(--tdl-acrylic-edge);
+  outline-offset: -1px;
+}
+
+.tdl-v2-orchestrator--reference .tdl-v2-orchestrator-header {
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.tdl-v2-orchestrator--reference .tdl-v2-orchestrator-header__title {
+  margin: 0;
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(248, 113, 113, 0.92);
+  text-shadow: 0 0 18px rgba(239, 68, 68, 0.28);
+}
+
+.tdl-v2-orchestrator-header__alive {
+  font-size: 0.4rem;
+  letter-spacing: 0.16em;
+  opacity: 0.7;
+}
+
+.tdl-v2-orchestrator-header__alive-dot {
+  width: 4px;
+  height: 4px;
+}
+
+.tdl-v2-orchestrator-sections {
+  gap: 0.95rem;
+}
+
+.tdl-v2-orchestrator-section {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.tdl-v2-orchestrator-section__title {
+  margin: 0 0 0.55rem;
+  font-size: 0.48rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(107, 99, 99, 0.95);
+}
+
+.tdl-v2-orchestrator-presence {
+  gap: 0;
+}
+
+.tdl-v2-orchestrator-presence__row {
+  padding: 0.32rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.025);
+}
+
+.tdl-v2-orchestrator-presence__key {
+  font-size: 0.48rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+}
+
+.tdl-v2-orchestrator-presence__value {
+  font-size: 0.56rem;
+  font-weight: 300;
+}
+
+.tdl-v2-orchestrator-state {
+  gap: 0.65rem;
+  padding: 0.35rem 0;
+}
+
+.tdl-v2-orchestrator-state__orb {
+  width: 36px;
+  height: 36px;
+}
+
+.tdl-v2-orchestrator-state__badge {
+  font-size: 0.5rem;
+  letter-spacing: 0.1em;
+}
+
+.tdl-v2-orchestrator-state__row {
+  font-size: 0.58rem;
+  font-weight: 300;
+}
+
+.tdl-v2-orchestrator-state__key {
+  font-size: 0.46rem;
+  letter-spacing: 0.1em;
+}
+
+.tdl-v2-orchestrator-plan__idle {
+  padding: 0.4rem 0;
+  margin: 0 0 0.5rem;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  font-size: 0.52rem;
+  font-weight: 300;
+  color: rgba(154, 147, 147, 0.85);
+  line-height: 1.5;
+}
+
+.tdl-v2-orchestrator-steps {
+  gap: 0.32rem;
+}
+
+.tdl-v2-orchestrator-steps::before {
+  left: 0.48rem;
+  background: linear-gradient(
+    180deg,
+    rgba(239, 68, 68, 0.18) 0%,
+    rgba(255, 255, 255, 0.04) 50%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+}
+
+.tdl-v2-orchestrator-steps__item {
+  font-size: 0.54rem;
+  font-weight: 300;
+  letter-spacing: 0.01em;
+  gap: 0.45rem;
+}
+
+.tdl-v2-orchestrator-steps__index {
+  width: 0.95rem;
+  height: 0.95rem;
+  font-size: 0.4rem;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.tdl-v2-orchestrator-steps__item[data-status="waiting"] {
+  opacity: 0.55;
+}
+
+.tdl-v2-orchestrator-steps__status {
+  font-size: 0.38rem;
+  letter-spacing: 0.08em;
+}
+
+.tdl-v2-orchestrator-tools {
+  gap: 0.35rem;
+}
+
+.tdl-v2-orchestrator-tools__item {
+  font-size: 0.56rem;
+  font-weight: 300;
+  padding: 0.12rem 0;
+}
+
+.tdl-v2-orchestrator-tools__dot {
+  width: 5px;
+  height: 5px;
+}
+
+.tdl-v2-orchestrator-tools__state {
+  font-size: 0.4rem;
+  letter-spacing: 0.1em;
+}
+
+.tdl-v2-orchestrator-sparkline {
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  outline: 1px solid rgba(255, 255, 255, 0.035);
+  outline-offset: -1px;
+  background: rgba(0, 0, 0, 0.28);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+}
+
+.tdl-v2-orchestrator-sparkline__caption {
+  margin: 0.4rem 0 0;
+  font-size: 0.48rem;
+  font-weight: 300;
+  letter-spacing: 0.06em;
+}
+
+/* =====================================
+   OBJECTIVE 5 — Floating workspaces
+   Not widgets · active work environments
+   ===================================== */
+
+.tdl-v2-dock-status-cards--float {
+  gap: 0.7rem;
+  padding: 0.35rem 0.05rem 0.45rem;
+}
+
+.tdl-v2-float-card {
+  min-height: var(--tdl-status-cards-height);
+  padding: 0.65rem 0.75rem;
+  border-radius: 12px;
+  border: none;
+  outline: 1px solid var(--tdl-acrylic-edge);
+  outline-offset: -1px;
+  background: linear-gradient(
+    168deg,
+    rgba(24, 20, 20, 0.38) 0%,
+    rgba(0, 0, 0, 0.3) 45%,
+    rgba(0, 0, 0, 0.48) 100%
+  );
+  backdrop-filter: blur(32px) saturate(1.03);
+  -webkit-backdrop-filter: blur(32px) saturate(1.03);
+  box-shadow:
+    0 14px 40px rgba(0, 0, 0, 0.48),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 -10px 28px rgba(220, 38, 38, 0.025) inset;
+  max-width: 15rem;
+}
+
+.tdl-v2-float-card::before {
+  left: 10%;
+  right: 10%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.14) 50%,
+    transparent 100%
+  );
+  opacity: 0.85;
+}
+
+.tdl-v2-float-card:hover {
+  border: none;
+  outline-color: var(--tdl-acrylic-edge-lit);
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.55),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 0 28px rgba(220, 38, 38, 0.04);
+  transform: translateY(-2px);
+}
+
+.tdl-v2-float-card .tdl-v2-status-card__title {
+  font-size: 0.48rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  color: rgba(107, 99, 99, 0.95);
+}
+
+.tdl-v2-float-card .tdl-v2-status-card__body {
+  font-size: 0.68rem;
+  font-weight: 300;
+  letter-spacing: 0.01em;
+  color: rgba(244, 241, 241, 0.92);
+  line-height: 1.45;
+}
+
+.tdl-v2-float-card__status {
+  font-size: 0.4rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  opacity: 0.7;
+}
+
+.tdl-v2-float-card__close {
+  width: 16px;
+  height: 16px;
+  opacity: 0.4;
+  font-size: 0.75rem;
+}
+
+.tdl-v2-float-card__close:hover {
+  opacity: 0.85;
+}
+
+.tdl-v2-presence-ring {
+  opacity: 0.95;
+}
+
+.tdl-v2-presence-ring__value {
+  font-size: 0.58rem;
+  font-weight: 300;
+  letter-spacing: 0.04em;
+}
+
+/* =====================================
+   OBJECTIVE 6 — Typography: quieter · lighter
+   ===================================== */
+
+.tdl-v2-page,
+.tdl-v2-root {
+  font-weight: 300;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.tdl-v2-status-line {
+  font-size: 0.52rem;
+  font-weight: 300;
+  letter-spacing: 0.04em;
+  opacity: 0.65;
+}
+
+/* Mid-dock status chatter stays quiet — cards + composer own the story */
+.tdl-v2-dock-status-lines {
+  display: flex;
+  gap: 1.25rem;
+  justify-content: center;
+  opacity: 0.42;
+  min-height: 0;
+  padding: 0.1rem 0;
+}
+
+.tdl-v2-dock-status-lines .tdl-v2-status-line {
+  margin: 0;
+  font-size: 0.48rem;
+  letter-spacing: 0.06em;
+}
+
+.tdl-v2-dock-telemetry--system {
+  font-size: 0.48rem;
+  font-weight: 300;
+  letter-spacing: 0.12em;
+  padding: 0.28rem 0.65rem;
+  background: rgba(0, 0, 0, 0.22);
+  border: none;
+  outline: 1px solid rgba(255, 255, 255, 0.03);
+  outline-offset: -1px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.tdl-v2-telemetry__value {
+  font-weight: 400;
+}
+
+/* =====================================
+   Composer — premium command rail
+   ===================================== */
+
+.tdl-v2-composer--reference,
+.tdl-v2-composer--console {
+  min-height: var(--tdl-composer-min-height);
+  padding: 0.4rem 0.45rem 0.4rem 0.55rem;
+  border: none;
+  outline: 1px solid var(--tdl-acrylic-edge);
+  outline-offset: -1px;
+  background: linear-gradient(
+    180deg,
+    rgba(16, 14, 14, 0.48) 0%,
+    rgba(0, 0, 0, 0.58) 100%
+  );
+  backdrop-filter: blur(34px) saturate(1.04);
+  -webkit-backdrop-filter: blur(34px) saturate(1.04);
+  box-shadow:
+    0 16px 44px rgba(0, 0, 0, 0.5),
+    0 1px 0 rgba(255, 255, 255, 0.045) inset,
+    0 -10px 28px rgba(220, 38, 38, 0.025);
+}
+
+.tdl-v2-composer--console:focus-within,
+.tdl-v2-composer--reference:focus-within {
+  border: none;
+  outline-color: rgba(239, 68, 68, 0.28);
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.55),
+    0 0 36px rgba(220, 38, 38, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+
+.tdl-v2-composer--console .tdl-v2-composer__input,
+.tdl-v2-composer--reference .tdl-v2-composer__input {
+  font-size: 0.82rem;
+  font-weight: 300;
+  letter-spacing: 0.02em;
+}
+
+.tdl-v2-composer--console .tdl-v2-composer__input::placeholder,
+.tdl-v2-composer--reference .tdl-v2-composer__input::placeholder {
+  font-weight: 300;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+}
+
+.tdl-v2-composer--console .tdl-v2-voice-mic,
+.tdl-v2-composer--console .tdl-v2-composer-attach,
+.tdl-v2-composer--reference .tdl-v2-voice-mic,
+.tdl-v2-composer--reference .tdl-v2-composer-attach {
+  width: 36px;
+  height: 36px;
+  opacity: 0.7;
+}
+
+.tdl-v2-composer--console .tdl-v2-composer__send,
+.tdl-v2-composer--reference .tdl-v2-composer__send {
+  min-width: 4.6rem;
+  height: 2.35rem;
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+}
+
+/* =====================================
+   Center — Titan Core label quieter
+   ===================================== */
+
+.tdl-v2-satellite-core__title {
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.32em;
+  text-shadow: 0 0 24px rgba(239, 68, 68, 0.35);
+}
+
+.tdl-v2-satellite-core__subtitle {
+  font-size: 0.46rem;
+  font-weight: 300;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.tdl-v2-satellite__label {
+  font-size: 0.52rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+}
+
+.tdl-v2-satellite__status {
+  font-size: 0.4rem;
+  font-weight: 300;
+  letter-spacing: 0.1em;
+}
+
+/* Context panel — same acrylic language */
+.tdl-v2-context-panel {
+  background: var(--tdl-acrylic-bg-deep);
+  border: none;
+  outline: 1px solid var(--tdl-acrylic-edge);
+  outline-offset: -1px;
+  backdrop-filter: blur(var(--tdl-acrylic-blur));
+  -webkit-backdrop-filter: blur(var(--tdl-acrylic-blur));
+  box-shadow: var(--tdl-acrylic-depth);
+}
+
+.tdl-v2-context-panel__title {
+  font-size: 0.58rem;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+}
+
+.tdl-v2-context-panel__section {
+  padding: 0.85rem 0;
+  border: none;
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.028);
+}
+
+.tdl-v2-context-panel__section-title {
+  font-size: 0.52rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.tdl-v2-context-panel__badge {
+  font-size: 0.38rem;
+  letter-spacing: 0.1em;
+  opacity: 0.65;
+  border-color: rgba(255, 255, 255, 0.05);
+  background: transparent;
+}
+
+.tdl-v2-context-panel__placeholder-text {
+  font-size: 0.58rem;
+  font-weight: 300;
+  line-height: 1.45;
+  color: rgba(154, 147, 147, 0.85);
+}
+
+/* =====================================
+   Reduced motion
+   ===================================== */
+
+.tdl-v2--reduced-motion .tdl-v2-region--orchestrator.tdl-v2-glass-panel,
+.tdl-v2--reduced-motion .tdl-v2-float-card {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tdl-v2-root[data-presence="idle"] .tdl-v2-region--orchestrator.tdl-v2-glass-panel,
+  .tdl-v2-float-card {
+    animation: none;
+  }
+}
+
+@media (min-width: 1920px) {
+  :root {
+    --tdl-sidebar-width: 212px;
+    --tdl-orchestrator-width: 312px;
+    --tdl-workspace-padding: 1.1rem;
+    --tdl-workspace-gap: 0.95rem;
+  }
+}
+
+@media (min-width: 2560px) {
+  :root {
+    --tdl-sidebar-width: 228px;
+    --tdl-orchestrator-width: 328px;
+  }
+}

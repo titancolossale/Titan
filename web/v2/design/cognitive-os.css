@@ -1,0 +1,286 @@
+/* =====================================
+   Titan Web App — Phase 9
+   COGNITIVE OPERATING SYSTEM
+   Presentation only — reinforce intelligence, never redesign.
+   No new colors · no layout rebuild · no neural rewrite · no extra glow.
+   Loaded LAST — cognitive OS authority over presence/runtime cascade.
+   ===================================== */
+
+:root {
+  --tdl-cos-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --tdl-cos-organic: cubic-bezier(0.37, 0, 0.63, 1);
+  --tdl-cos-whisper: rgba(239, 68, 68, 0.06);
+  --tdl-cos-soft: rgba(239, 68, 68, 0.14);
+}
+
+/* =====================================
+   TOP BAR — module cognitive states
+   Idle · Reading · Searching · Planning · Reasoning · Writing · Waiting · Finished
+   ===================================== */
+
+.tdl-v2-topbar--cognitive-os .tdl-v2-topbar__pill {
+  transition:
+    opacity 0.45s var(--tdl-cos-ease),
+    background-color 0.45s var(--tdl-cos-ease),
+    border-color 0.45s var(--tdl-cos-ease);
+}
+
+.tdl-v2-topbar--cognitive-os .tdl-v2-topbar__pill:hover {
+  opacity: 0.92;
+}
+
+.tdl-v2-topbar--cognitive-os .tdl-v2-topbar__pill-value {
+  transition: color 0.4s var(--tdl-cos-ease), opacity 0.4s var(--tdl-cos-ease);
+}
+
+.tdl-v2-topbar--cognitive-os .tdl-v2-topbar__pill-dot {
+  transition: opacity 0.5s var(--tdl-cos-ease), transform 0.5s var(--tdl-cos-organic);
+}
+
+.tdl-v2-topbar--cognitive-os .tdl-v2-topbar__pill[data-cognitive="idle"] .tdl-v2-topbar__pill-dot {
+  opacity: 0.35;
+  animation: tdl-cos-pill-breathe 8.5s var(--tdl-cos-organic) infinite;
+}
+
+.tdl-v2-topbar--cognitive-os .tdl-v2-topbar__pill[data-cognitive="waiting"] .tdl-v2-topbar__pill-dot {
+  opacity: 0.55;
+  animation: tdl-cos-pill-wait 3.8s var(--tdl-cos-organic) infinite;
+}
+
+.tdl-v2-topbar--cognitive-os .tdl-v2-topbar__pill[data-cognitive="reasoning"] .tdl-v2-topbar__pill-dot,
+.tdl-v2-topbar--cognitive-os .tdl-v2-topbar__pill[data-cognitive="planning"] .tdl-v2-topbar__pill-dot,
+.tdl-v2-topbar--cognitive-os .tdl-v2-topbar__pill[data-cognitive="reading"] .tdl-v2-topbar__pill-dot,
+.tdl-v2-topbar--cognitive-os .tdl-v2-topbar__pill[data-cognitive="searching"] .tdl-v2-topbar__pill-dot,
+.tdl-v2-topbar--cognitive-os .tdl-v2-topbar__pill[data-cognitive="writing"] .tdl-v2-topbar__pill-dot {
+  opacity: 0.85;
+  animation: tdl-cos-pill-attention 2.6s var(--tdl-cos-organic) infinite;
+}
+
+.tdl-v2-topbar--cognitive-os .tdl-v2-topbar__pill[data-cognitive="finished"] .tdl-v2-topbar__pill-dot {
+  opacity: 0.45;
+  animation: none;
+}
+
+.tdl-v2-topbar--cognitive-os .tdl-v2-topbar__presence-copy {
+  transition: opacity 0.5s var(--tdl-cos-ease);
+}
+
+.tdl-v2-topbar--cognitive-os .tdl-v2-topbar__icon-btn,
+.tdl-v2-topbar--cognitive-os .tdl-v2-topbar__brain-mode,
+.tdl-v2-topbar--cognitive-os .tdl-v2-topbar__profile {
+  transition: opacity 0.35s var(--tdl-cos-ease), transform 0.35s var(--tdl-cos-ease);
+}
+
+.tdl-v2-topbar--cognitive-os .tdl-v2-topbar__icon-btn:hover,
+.tdl-v2-topbar--cognitive-os .tdl-v2-topbar__brain-mode:hover {
+  opacity: 0.88;
+  transform: translateY(-0.5px);
+}
+
+/* =====================================
+   WORKSPACES — live cognitive surfaces
+   ===================================== */
+
+.tdl-v2-workspace-dock--cognitive-os .tdl-v2-workspace-card {
+  transition:
+    opacity 0.55s var(--tdl-cos-ease),
+    border-color 0.55s var(--tdl-cos-ease),
+    transform 0.55s var(--tdl-cos-organic);
+}
+
+.tdl-v2-workspace-dock--cognitive-os .tdl-v2-workspace-card:hover {
+  opacity: 0.97;
+  transform: translateY(-1px);
+}
+
+.tdl-v2-workspace-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 0.9rem;
+  margin-top: 0.35rem;
+  padding: 0 0.15rem;
+}
+
+.tdl-v2-workspace-metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+  opacity: 0.72;
+  transition: opacity 0.4s var(--tdl-cos-ease);
+}
+
+.tdl-v2-workspace-metric__key {
+  opacity: 0.55;
+  text-transform: uppercase;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+}
+
+.tdl-v2-workspace-metric__value {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+  transition: opacity 0.45s var(--tdl-cos-ease);
+}
+
+.tdl-v2-workspace-card[data-cognitive="reading"] .tdl-v2-workspace-metric[data-metric="scan"] .tdl-v2-workspace-metric__value,
+.tdl-v2-workspace-card[data-cognitive="writing"] .tdl-v2-workspace-metric[data-metric="scan"] .tdl-v2-workspace-metric__value {
+  opacity: 1;
+  animation: tdl-cos-metric-pulse 2.8s var(--tdl-cos-organic) infinite;
+}
+
+.tdl-v2-workspace-dock--cognitive-os .tdl-v2-workspace-line--quiet {
+  transition: opacity 0.4s var(--tdl-cos-ease);
+}
+
+.tdl-v2-workspace-dock--cognitive-os .tdl-v2-workspace-card[data-live="true"] .tdl-v2-workspace-line--quiet {
+  opacity: 0.88;
+}
+
+.tdl-v2-workspace-dock--cognitive-os .tdl-v2-status-card__indicator {
+  transition: opacity 0.4s var(--tdl-cos-ease), transform 0.4s var(--tdl-cos-organic);
+}
+
+.tdl-v2-workspace-dock--cognitive-os .tdl-v2-workspace-card[data-live="true"] .tdl-v2-status-card__indicator--live {
+  animation: tdl-cos-indicator-soft 3.2s var(--tdl-cos-organic) infinite;
+}
+
+/* =====================================
+   ORCHESTRATOR — runtime monitor
+   ===================================== */
+
+.tdl-v2-orchestrator--cognitive-os .tdl-v2-orchestrator-section[data-section="monitor"] {
+  position: relative;
+}
+
+.tdl-v2-orchestrator-monitor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+  padding: 0.1rem 0;
+}
+
+.tdl-v2-orchestrator-monitor__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.12rem 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  transition: opacity 0.4s var(--tdl-cos-ease);
+}
+
+.tdl-v2-orchestrator-monitor__row:hover {
+  opacity: 0.95;
+}
+
+.tdl-v2-orchestrator-monitor__key {
+  flex: 0 0 auto;
+  opacity: 0.5;
+  letter-spacing: 0.03em;
+  text-transform: none;
+}
+
+.tdl-v2-orchestrator-monitor__value {
+  flex: 1 1 auto;
+  text-align: right;
+  opacity: 0.78;
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.45s var(--tdl-cos-ease);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 58%;
+}
+
+.tdl-v2-orchestrator-monitor__value[data-tone="live"] {
+  opacity: 0.92;
+  animation: tdl-cos-monitor-live 3.6s var(--tdl-cos-organic) infinite;
+}
+
+.tdl-v2-orchestrator-monitor[data-alive="true"] {
+  animation: tdl-cos-monitor-breathe 7.2s var(--tdl-cos-organic) infinite;
+}
+
+.tdl-v2-orchestrator--cognitive-os .tdl-v2-orchestrator-objective {
+  transition: opacity 0.5s var(--tdl-cos-ease);
+}
+
+.tdl-v2-orchestrator--cognitive-os .tdl-v2-orchestrator-section__title {
+  transition: opacity 0.35s var(--tdl-cos-ease);
+}
+
+.tdl-v2-orchestrator--cognitive-os .tdl-v2-orchestrator-tools__item {
+  transition: opacity 0.4s var(--tdl-cos-ease);
+}
+
+.tdl-v2-orchestrator--cognitive-os .tdl-v2-orchestrator-tools__item:hover {
+  opacity: 0.94;
+}
+
+/* =====================================
+   KEYFRAMES — subtle only
+   ===================================== */
+
+@keyframes tdl-cos-pill-breathe {
+  0%, 100% { opacity: 0.32; transform: scale(1); }
+  50% { opacity: 0.48; transform: scale(1.04); }
+}
+
+@keyframes tdl-cos-pill-wait {
+  0%, 100% { opacity: 0.42; }
+  50% { opacity: 0.68; }
+}
+
+@keyframes tdl-cos-pill-attention {
+  0%, 100% { opacity: 0.72; transform: scale(1); }
+  50% { opacity: 0.95; transform: scale(1.06); }
+}
+
+@keyframes tdl-cos-metric-pulse {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+
+@keyframes tdl-cos-indicator-soft {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+@keyframes tdl-cos-monitor-live {
+  0%, 100% { opacity: 0.82; }
+  50% { opacity: 0.98; }
+}
+
+@keyframes tdl-cos-monitor-breathe {
+  0%, 100% { opacity: 0.96; }
+  50% { opacity: 1; }
+}
+
+/* =====================================
+   REDUCED MOTION
+   ===================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .tdl-v2-topbar--cognitive-os .tdl-v2-topbar__pill-dot,
+  .tdl-v2-workspace-dock--cognitive-os .tdl-v2-status-card__indicator--live,
+  .tdl-v2-orchestrator-monitor[data-alive="true"],
+  .tdl-v2-orchestrator-monitor__value[data-tone="live"],
+  .tdl-v2-workspace-card[data-cognitive="reading"] .tdl-v2-workspace-metric__value,
+  .tdl-v2-workspace-card[data-cognitive="writing"] .tdl-v2-workspace-metric__value {
+    animation: none !important;
+  }
+
+  .tdl-v2-workspace-dock--cognitive-os .tdl-v2-workspace-card:hover {
+    transform: none;
+  }
+}
+
+.tdl-v2--reduced-motion .tdl-v2-topbar--cognitive-os .tdl-v2-topbar__pill-dot,
+.tdl-v2--reduced-motion .tdl-v2-orchestrator-monitor[data-alive="true"],
+.tdl-v2--reduced-motion .tdl-v2-orchestrator-monitor__value[data-tone="live"] {
+  animation: none !important;
+}

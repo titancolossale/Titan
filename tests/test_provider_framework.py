@@ -119,7 +119,9 @@ def test_register_default_providers_idempotent() -> None:
     registry = ProviderRegistry(runtime_version="0.10.0")
     register_default_providers(registry)
     register_default_providers(registry)
-    assert len(registry.list_ids()) == 2
+    assert len(registry.list_ids()) == 5
+    assert "file_system" in registry.list_ids()
+    assert "github" in registry.list_ids()
 
 
 def test_web_search_tool_backward_compat_injected_provider() -> None:

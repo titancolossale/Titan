@@ -1,0 +1,149 @@
+/* =====================================
+   Titan Frontend V3 — Neural Stage
+   Canvas-only living brain (no CSS wallpaper)
+   ===================================== */
+
+.tdl-v2-neural-host {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #030303;
+}
+
+.tdl-v2-neural-camera {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 48%;
+  will-change: transform;
+}
+
+.tdl-v2-neural-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+.tdl-v2-neural-depth-layers,
+.tdl-v2-neural-node-layer,
+.tdl-v2-neural-signal-layer,
+.tdl-v2-neural-ghost-layer,
+.tdl-v2-neural-core-layer,
+.tdl-v2-neural-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Depth bands — structural only; canvas draws all atmosphere */
+.tdl-v2-neural-depth-band {
+  display: none;
+}
+
+/* Core layer — no CSS halos; consciousness rendered on canvas */
+.tdl-v2-neural-core-layer::before,
+.tdl-v2-neural-core-layer::after {
+  display: none;
+}
+
+.tdl-v2-neural-vignette {
+  display: none;
+}
+
+.tdl-v2-neural-tool-regions,
+.tdl-v2-neural-memory-regions,
+.tdl-v2-neural-focus-regions {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.tdl-v2-neural-region-anchor {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.tdl-v2-neural-region-anchor--browser { right: 18%; top: 22%; }
+.tdl-v2-neural-region-anchor--memory { left: 16%; top: 24%; }
+.tdl-v2-neural-region-anchor--obsidian { left: 11%; top: 46%; }
+.tdl-v2-neural-region-anchor--tools { right: 14%; top: 44%; }
+.tdl-v2-neural-region-anchor--communication { left: 15%; bottom: 24%; top: auto; }
+.tdl-v2-neural-region-anchor--planning { left: 50%; top: 14%; transform: translateX(-50%); }
+.tdl-v2-neural-region-anchor--trading { left: 50%; bottom: 16%; top: auto; transform: translateX(-50%); }
+.tdl-v2-neural-region-anchor--calendar { right: 10%; bottom: 22%; top: auto; }
+.tdl-v2-neural-region-anchor--core { left: 50%; top: 44%; transform: translate(-50%, -50%); }
+
+.tdl-v2-glow-ambient {
+  display: none;
+}
+
+/* --- Canvas cognitive state filters --- */
+
+.tdl-v2-neural-canvas--thinking {
+  filter: brightness(1.38) saturate(1.12);
+}
+
+.tdl-v2-neural-canvas--listening {
+  filter: brightness(1.08) saturate(1.06);
+}
+
+.tdl-v2-neural-canvas--depth-recall,
+.tdl-v2-neural-canvas--cognitive-memory {
+  filter: brightness(1.14) contrast(1.04) saturate(1.1);
+}
+
+.tdl-v2-neural-canvas--cognitive-trading {
+  filter: brightness(1.22) contrast(1.06) saturate(1.14);
+}
+
+.tdl-v2-neural-canvas--cognitive-browser {
+  filter: brightness(1.16) saturate(1.08);
+}
+
+.tdl-v2-neural-canvas--cognitive-reasoning {
+  filter: brightness(1.32) contrast(1.05) saturate(1.12);
+}
+
+.tdl-v2-neural-canvas--cognitive-writing {
+  filter: brightness(1.1) saturate(1.02);
+}
+
+.tdl-v2-neural-canvas--cognitive-obsidian {
+  filter: brightness(1.08) contrast(1.02) saturate(1.06);
+}
+
+.tdl-v2-neural-canvas--cognitive-error,
+.tdl-v2-neural-canvas--error-master {
+  filter: brightness(1.26) contrast(1.12) saturate(1.16);
+}
+
+.tdl-v2-neural-canvas--cognitive-sleep,
+.tdl-v2-neural-canvas--sleep-master {
+  filter: brightness(0.62) saturate(0.58);
+  opacity: 0.84;
+}
+
+.tdl-v2-neural-canvas--booting {
+  opacity: 0;
+  animation: tdl-v2-neural-boot-in 700ms var(--tdl-ease-enter) 350ms forwards;
+}
+
+@keyframes tdl-v2-neural-boot-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.tdl-v2--reduced-motion .tdl-v2-neural-canvas--thinking,
+.tdl-v2--reduced-motion .tdl-v2-neural-canvas--listening,
+.tdl-v2--reduced-motion .tdl-v2-neural-canvas--depth-recall {
+  filter: none;
+}
+
+.tdl-v2--reduced-motion .tdl-v2-neural-canvas--booting {
+  animation: none;
+  opacity: 1;
+}

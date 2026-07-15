@@ -2,7 +2,7 @@
 # Titan Tool Audit Models
 # =====================================
 
-"""Structured audit event types for tool executions (Phase 10A — P10A-022)."""
+"""Structured audit event types for tool executions (Phase 10A — P10A-022, P10B-1001)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 
-AUDIT_SCHEMA_VERSION = 1
+AUDIT_SCHEMA_VERSION = 2
 
 
 def _utc_now_iso() -> str:
@@ -49,6 +49,13 @@ class ToolAuditEvent:
     quota_remaining: int | None = None
     dependencies_checked: bool = False
     message: str = ""
+    provider_name: str = ""
+    provider_health: str = ""
+    fallback_used: bool = False
+    fallback_reason: str = ""
+    retry_count: int = 0
+    decision_id: str = ""
+    latency_ms: float | None = None
     schema_version: int = AUDIT_SCHEMA_VERSION
 
     def to_dict(self) -> dict[str, Any]:
@@ -58,6 +65,8 @@ class ToolAuditEvent:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ToolAuditEvent:
         """Restore an audit event from persisted JSON."""
+        duration = data.get("duration_ms")
+        latency = data.get("latency_ms", duration)
         return cls(
             timestamp=str(data.get("timestamp", "")),
             event_type=str(data.get("event_type", "")),
@@ -69,7 +78,7 @@ class ToolAuditEvent:
             turn_id=str(data.get("turn_id", "")),
             risk_level=str(data.get("risk_level", "")),
             success=data.get("success"),
-            duration_ms=data.get("duration_ms"),
+            duration_ms=duration,
             error_code=str(data.get("error_code", "")),
             params_digest=str(data.get("params_digest", "")),
             execution_mode=str(data.get("execution_mode", "")),
@@ -78,6 +87,13 @@ class ToolAuditEvent:
             quota_remaining=data.get("quota_remaining"),
             dependencies_checked=bool(data.get("dependencies_checked", False)),
             message=str(data.get("message", "")),
+            provider_name=str(data.get("provider_name", "")),
+            provider_health=str(data.get("provider_health", "")),
+            fallback_used=bool(data.get("fallback_used", False)),
+            fallback_reason=str(data.get("fallback_reason", "")),
+            retry_count=int(data.get("retry_count", 0)),
+            decision_id=str(data.get("decision_id", "")),
+            latency_ms=latency,
             schema_version=int(data.get("schema_version", AUDIT_SCHEMA_VERSION)),
         )
 
@@ -103,8 +119,16 @@ class ToolAuditEvent:
         quota_remaining: int | None = None,
         dependencies_checked: bool = False,
         message: str = "",
+        provider_name: str = "",
+        provider_health: str = "",
+        fallback_used: bool = False,
+        fallback_reason: str = "",
+        retry_count: int = 0,
+        decision_id: str = "",
+        latency_ms: float | None = None,
     ) -> ToolAuditEvent:
         """Factory with UTC timestamp."""
+        resolved_latency = latency_ms if latency_ms is not None else duration_ms
         return cls(
             timestamp=_utc_now_iso(),
             event_type=event_type,
@@ -125,4 +149,11 @@ class ToolAuditEvent:
             quota_remaining=quota_remaining,
             dependencies_checked=dependencies_checked,
             message=message,
+            provider_name=provider_name,
+            provider_health=provider_health,
+            fallback_used=fallback_used,
+            fallback_reason=fallback_reason,
+            retry_count=retry_count,
+            decision_id=decision_id,
+            latency_ms=resolved_latency,
         )

@@ -1,0 +1,226 @@
+/* =====================================
+   Titan Design Language — Tokens
+   Phase 17.2 · Phase 18.0 · Phase 19.1 · Phase 20.1
+   ===================================== */
+
+:root {
+  /* --- Colors: void & surfaces --- */
+  --tdl-bg-void: #000000;
+  --tdl-bg-surface: #0a0a0a;
+  --tdl-bg-elevated: #111111;
+  --tdl-bg-overlay: rgba(0, 0, 0, 0.72);
+
+  /* --- Colors: signature red --- */
+  --tdl-red-core: #8b0000;
+  --tdl-red-glow: #b91c1c;
+  --tdl-red-dim: #5c0000;
+  --tdl-red-subtle: rgba(139, 0, 0, 0.15);
+  --tdl-red-pulse: rgba(185, 28, 28, 0.35);
+
+  /* --- Colors: text --- */
+  --tdl-text-primary: #f5f5f5;
+  --tdl-text-secondary: #a3a3a3;
+  --tdl-text-muted: #525252;
+  --tdl-text-inverse: #000000;
+
+  /* --- Colors: borders --- */
+  --tdl-border-subtle: rgba(255, 255, 255, 0.06);
+  --tdl-border-default: rgba(255, 255, 255, 0.1);
+  --tdl-border-active: rgba(139, 0, 0, 0.4);
+  --tdl-border-focus: rgba(185, 28, 28, 0.6);
+
+  /* --- Colors: semantic (badges only) --- */
+  --tdl-status-online: #22c55e;
+  --tdl-status-warning: #ca8a04;
+  --tdl-status-error: #dc2626;
+  --tdl-status-idle: #737373;
+
+  /* --- Spacing --- */
+  --tdl-space-2xs: 0.125rem;
+  --tdl-space-xs: 0.25rem;
+  --tdl-space-sm: 0.5rem;
+  --tdl-space-md: 0.75rem;
+  --tdl-space-base: 1rem;
+  --tdl-space-lg: 1.5rem;
+  --tdl-space-xl: 2rem;
+  --tdl-space-2xl: 3rem;
+  --tdl-space-3xl: 4rem;
+
+  /* --- Layout --- */
+  --tdl-sidebar-width: 220px;
+  --tdl-context-width: 300px;
+  --tdl-statusbar-height: 32px;
+  --tdl-content-max-width: 720px;
+  --tdl-chat-min-height: 200px;
+  --tdl-panel-padding: var(--tdl-space-lg);
+
+  /* --- Border radius --- */
+  --tdl-radius-sm: 4px;
+  --tdl-radius-md: 8px;
+  --tdl-radius-lg: 12px;
+  --tdl-radius-xl: 16px;
+  --tdl-radius-full: 9999px;
+  --tdl-radius-pill: var(--tdl-radius-full);
+
+  /* --- Panel surfaces (Phase 19.1 · 20.1 — glass over neural field) --- */
+  --tdl-panel-bg: rgba(0, 0, 0, 0.38);
+  --tdl-panel-bg-solid: rgba(0, 0, 0, 0.46);
+  --tdl-panel-border: rgba(255, 255, 255, 0.04);
+  --tdl-panel-blur: 16px;
+  --tdl-panel-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --tdl-panel-float-offset: 0px;
+
+  /* --- Reference Interface (Phase 24) --- */
+  --tdl-ref-sidebar-width: 218px;
+  --tdl-ref-orchestrator-width: 318px;
+  --tdl-ref-bottom-height: 11.75rem;
+  --tdl-ref-panel-bg: rgba(0, 0, 0, 0.58);
+  --tdl-ref-panel-border: rgba(255, 255, 255, 0.055);
+  --tdl-ref-panel-blur: 22px;
+  --tdl-ref-core-glow: rgba(255, 0, 0, 0.78);
+
+  /* --- Living Workspace (Phase 20.1) --- */
+  --tdl-workspace-padding: 1.25rem;
+  --tdl-workspace-gap: 0.875rem;
+  --tdl-orbit-nav-width: 196px;
+  --tdl-orbit-panel-width: 272px;
+  --tdl-orbit-shadow: 0 4px 24px rgba(0, 0, 0, 0.42), 0 1px 3px rgba(0, 0, 0, 0.28);
+  --tdl-orbit-shadow-focus: 0 6px 28px rgba(0, 0, 0, 0.5), 0 0 24px rgba(139, 0, 0, 0.08);
+  --tdl-orbit-presence-height: 2.75rem;
+  --tdl-orbit-statusbar-height: 2.25rem;
+
+  /* --- Depth & atmosphere (Phase 18.0 · 19.1) --- */
+  --tdl-depth-haze: rgba(0, 0, 0, 0.38);
+  --tdl-depth-parallax: 1;
+  --tdl-depth-void: rgba(0, 0, 0, 0.72);
+  --tdl-neural-pulse: 0.52;
+  --tdl-font-scale: 1;
+
+  /* --- Shadows & glow --- */
+  --tdl-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --tdl-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.6);
+  --tdl-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.7);
+  --tdl-glow-red-sm: 0 0 12px var(--tdl-red-pulse);
+  --tdl-glow-red-md: 0 0 24px var(--tdl-red-pulse), 0 0 48px rgba(139, 0, 0, 0.15);
+  --tdl-glow-red-lg: 0 0 32px var(--tdl-red-pulse), 0 0 64px rgba(139, 0, 0, 0.2);
+  --tdl-glow-white-sm: 0 0 8px rgba(255, 255, 255, 0.08);
+
+  /* --- Typography: families --- */
+  --tdl-font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --tdl-font-mono: "JetBrains Mono", "Cascadia Code", "Consolas", monospace;
+
+  /* --- Typography: sizes --- */
+  --tdl-text-xs: 0.75rem;
+  --tdl-text-sm: 0.875rem;
+  --tdl-text-base: 1rem;
+  --tdl-text-lg: 1.125rem;
+  --tdl-text-xl: 1.25rem;
+  --tdl-text-2xl: 1.5rem;
+  --tdl-text-display: 2.25rem;
+
+  /* --- Typography: weights --- */
+  --tdl-weight-normal: 400;
+  --tdl-weight-medium: 500;
+  --tdl-weight-semibold: 600;
+
+  /* --- Typography: tracking & leading --- */
+  --tdl-tracking-tight: -0.01em;
+  --tdl-tracking-normal: 0;
+  --tdl-tracking-wide: 0.04em;
+  --tdl-leading-tight: 1.25;
+  --tdl-leading-normal: 1.5;
+  --tdl-leading-relaxed: 1.65;
+
+  /* --- Animation: duration --- */
+  --tdl-duration-instant: 100ms;
+  --tdl-duration-fast: 200ms;
+  --tdl-duration-normal: 350ms;
+  --tdl-duration-slow: 600ms;
+  --tdl-duration-breath: 5.5s;
+  --tdl-duration-neural: 14s;
+  --tdl-duration-thinking: 2.4s;
+  --tdl-duration-presence-idle: 6s;
+
+  /* --- Animation: easing (single source — mirrored in motion.js) --- */
+  --tdl-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --tdl-ease-enter: cubic-bezier(0, 0, 0.2, 1);
+  --tdl-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --tdl-ease-organic: cubic-bezier(0.45, 0.05, 0.55, 0.95);
+
+  /* --- Animation: unified transition shorthand --- */
+  --tdl-transition-fast: var(--tdl-duration-fast) var(--tdl-ease-standard);
+  --tdl-transition-normal: var(--tdl-duration-normal) var(--tdl-ease-enter);
+  --tdl-transition-slow: var(--tdl-duration-slow) var(--tdl-ease-organic);
+  --tdl-transition-exit: var(--tdl-duration-normal) var(--tdl-ease-exit);
+
+  /* --- Z-index --- */
+  --tdl-z-neural: 0;
+  --tdl-z-glow: 1;
+  --tdl-z-content: 10;
+  --tdl-z-statusbar: 20;
+  --tdl-z-overlay: 100;
+  --tdl-z-toast: 110;
+
+  /* --- Presence engine (Phase 17.6) — driven by JS, defaults for idle --- */
+  --tdl-presence-glow: 0.38;
+  --tdl-presence-breathe: 1;
+  --tdl-presence-breathe-speed: 1;
+  --tdl-presence-ambient: 0.35;
+  --tdl-presence-brightness: 1;
+  --tdl-presence-ripple: 0;
+  --tdl-voice-ripple: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --tdl-duration-instant: 0.01ms;
+    --tdl-duration-fast: 0.01ms;
+    --tdl-duration-normal: 0.01ms;
+    --tdl-duration-slow: 0.01ms;
+    --tdl-duration-breath: 0.01ms;
+    --tdl-duration-neural: 0.01ms;
+    --tdl-duration-thinking: 0.01ms;
+    --tdl-depth-parallax: 0;
+  }
+}
+
+/* --- Accessibility modes (Phase 18.0 — toggled via JS) --- */
+
+.tdl-page--reduced-motion *,
+.tdl-page--reduced-motion *::before,
+.tdl-page--reduced-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+.tdl-page--high-contrast {
+  --tdl-border-subtle: rgba(255, 255, 255, 0.14);
+  --tdl-border-default: rgba(255, 255, 255, 0.22);
+  --tdl-text-muted: #bdbdbd;
+  --tdl-text-secondary: #e0e0e0;
+  --tdl-panel-bg: rgba(10, 10, 10, 0.88);
+  --tdl-red-pulse: rgba(185, 28, 28, 0.55);
+}
+
+.tdl-page--font-scale-112 {
+  font-size: calc(var(--tdl-text-base) * 1.12);
+}
+
+.tdl-page--font-scale-125 {
+  font-size: calc(var(--tdl-text-base) * 1.25);
+}
+
+@media (min-width: 1920px) {
+  :root {
+    --tdl-content-max-width: 780px;
+  }
+}
+
+@media (min-width: 2560px) {
+  :root {
+    --tdl-sidebar-width: 240px;
+    --tdl-context-width: 340px;
+    --tdl-content-max-width: 840px;
+  }
+}

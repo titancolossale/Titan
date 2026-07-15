@@ -17,6 +17,8 @@ class ToolHealthState(str, Enum):
     DEGRADED = "degraded"
     DISABLED = "disabled"
     UNKNOWN = "unknown"
+    MISCONFIGURED = "misconfigured"
+    MISSING_CREDENTIALS = "missing_credentials"
 
 
 class InvocationMode(str, Enum):
