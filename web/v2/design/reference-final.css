@@ -117,20 +117,16 @@
   animation: tdl-v2-acrylic-breathe 7.2s var(--tdl-ease-organic) infinite;
 }
 
+/* Opacity-only breathe — keep smoked glass static; avoid animating box-shadow. */
 @keyframes tdl-v2-acrylic-breathe {
-  0%, 100% {
-    box-shadow:
-      0 18px 48px rgba(0, 0, 0, 0.42),
-      0 1px 0 var(--tdl-acrylic-reflect) inset,
-      0 -12px 36px var(--tdl-acrylic-neural-bleed) inset;
-  }
-  50% {
-    box-shadow:
-      0 20px 52px rgba(0, 0, 0, 0.48),
-      0 1px 0 rgba(255, 255, 255, 0.05) inset,
-      0 -14px 40px rgba(220, 38, 38, 0.05) inset,
-      0 0 32px rgba(220, 38, 38, 0.03);
-  }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.97; }
+}
+
+/* Performance / chat-pending: freeze decorative CSS animation cost. */
+.tdl-v2--perf-light .tdl-v2-region--orchestrator.tdl-v2-glass-panel,
+.tdl-v2-root[data-quality-mode="performance"] .tdl-v2-region--orchestrator.tdl-v2-glass-panel {
+  animation: none !important;
 }
 
 /* =====================================

@@ -84,11 +84,13 @@ def test_engine_idempotent_init_and_visibility() -> None:
     assert "QualityController" in engine
     assert "notifyInteractive" in engine
     assert "renderLight" in engine
+    assert "getFrameScheduler" in engine
+    assert "MIN_RESIZE_DELTA_PX" in engine
 
 
 def test_stage_idempotent_mount() -> None:
     stage = (V2 / "neural" / "stage.js").read_text(encoding="utf-8")
-    assert "never start a second neural RAF loop" in stage
+    assert "never duplicate the primary RAF" in stage or "never start a second neural RAF loop" in stage
     assert "if (!this._engine)" in stage
 
 
@@ -220,10 +222,22 @@ def test_engine_single_raf_idempotent_hidden_resume() -> None:
         r"""
 // Minimal browser stubs — no jsdom dependency.
 const listeners = {};
-globalThis.window = globalThis;
 globalThis.document = {
   hidden: false,
-  documentElement: { classList: { contains: () => false, toggle: () => {} } },
+  documentElement: { classList: { contains: () => false, toggle: () => {} }, dataset: {} },
+  getElementById: () => null,
+  createElement: () => ({
+    width: 0, height: 0, style: {},
+    getContext: () => ({
+      setTransform() {}, fillRect() {}, fillStyle: '',
+      save() {}, restore() {}, beginPath() {}, arc() {}, fill() {}, stroke() {},
+      createRadialGradient: () => ({ addColorStop() {} }),
+      createLinearGradient: () => ({ addColorStop() {} }),
+      drawImage() {},
+      globalCompositeOperation: '', globalAlpha: 1,
+      lineCap: '', lineJoin: '', lineWidth: 1, strokeStyle: '',
+    }),
+  }),
   addEventListener: (type, fn) => {
     (listeners[type] ||= []).push(fn);
   },
@@ -231,6 +245,26 @@ globalThis.document = {
     listeners[type] = (listeners[type] || []).filter((f) => f !== fn);
   },
 };
+globalThis.OffscreenCanvas = class {
+  constructor(w, h) { this.width = w; this.height = h; }
+  getContext() {
+    return {
+      setTransform() {}, fillRect() {}, fillStyle: '',
+      save() {}, restore() {}, beginPath() {}, arc() {}, fill() {}, stroke() {},
+      createRadialGradient: () => ({ addColorStop() {} }),
+      createLinearGradient: () => ({ addColorStop() {} }),
+      drawImage() {},
+      globalCompositeOperation: '', globalAlpha: 1,
+      lineCap: '', lineJoin: '', lineWidth: 1, strokeStyle: '',
+    };
+  }
+};
+globalThis.window = globalThis;
+globalThis.addEventListener = (...a) => document.addEventListener(...a);
+globalThis.removeEventListener = (...a) => document.removeEventListener(...a);
+globalThis.innerWidth = 1280;
+globalThis.innerHeight = 720;
+globalThis.devicePixelRatio = 1;
 globalThis.matchMedia = () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} });
 globalThis.performance = { now: () => Date.now() };
 globalThis.ResizeObserver = class { observe() {} disconnect() {} };
@@ -246,77 +280,64 @@ globalThis.cancelAnimationFrame = (id) => {
   rafCallbacks.delete(id);
 };
 
+const stubCtx = () => new Proxy({
+  canvas: null,
+  fillStyle: '', strokeStyle: '', globalCompositeOperation: '', globalAlpha: 1,
+  lineCap: '', lineJoin: '', lineWidth: 1, shadowBlur: 0, shadowColor: '',
+  createRadialGradient: () => ({ addColorStop() {} }),
+  createLinearGradient: () => ({ addColorStop() {} }),
+}, { get: (t, p) => (p in t ? t[p] : () => t) });
 const canvas = {
   width: 0,
   height: 0,
   style: {},
   classList: { add() {}, remove() {}, toggle() {} },
   parentElement: { clientWidth: 1280, clientHeight: 720 },
-  getContext: () => ({
-    setTransform() {},
-    fillRect() {},
-    fillStyle: '',
-    save() {},
-    restore() {},
-    beginPath() {},
-    arc() {},
-    fill() {},
-    stroke() {},
-    createRadialGradient: () => ({ addColorStop() {} }),
-    globalCompositeOperation: '',
-    globalAlpha: 1,
-    lineCap: '',
-    lineJoin: '',
-    lineWidth: 1,
-    strokeStyle: '',
-  }),
+  getContext: () => stubCtx(),
+};
+document.createElement = () => ({ width: 0, height: 0, style: {}, getContext: () => stubCtx() });
+globalThis.OffscreenCanvas = class {
+  constructor(w, h) { this.width = w; this.height = h; }
+  getContext() { return stubCtx(); }
 };
 
 const { NeuralEngine } = await import('./web/v2/neural/engine.js');
+const { getFrameScheduler, resetFrameSchedulerForTests } = await import('./web/v2/neural/frame-scheduler.js');
+resetFrameSchedulerForTests();
 const engine = new NeuralEngine(canvas);
 engine.init();
 engine.init(); // idempotent
-const firstFrame = engine.frameId;
-if (firstFrame == null) throw new Error('expected RAF after init');
+const scheduler = getFrameScheduler();
+if (!scheduler.isRunning()) throw new Error('expected shared scheduler after init');
+if (scheduler.getActiveRafCount() !== 1) throw new Error('expected single primary RAF');
+if (engine.frameId == null) throw new Error('expected engine frame marker after init');
 
-// Drain one frame then hide.
-const cb = rafCallbacks.get(firstFrame);
-rafCallbacks.clear();
+// Hide — shared clock must stop without duplicating.
 document.hidden = true;
 for (const fn of listeners.visibilitychange || []) fn();
-if (engine.frameId !== null) throw new Error('RAF should stop when hidden');
+if (scheduler.getActiveRafCount() !== 0) throw new Error('RAF should stop when hidden');
+if (engine.frameId !== null) throw new Error('engine marker should clear when hidden');
 
 document.hidden = false;
 for (const fn of listeners.visibilitychange || []) fn();
+if (scheduler.getActiveRafCount() !== 1) throw new Error('RAF should resume when visible');
 if (engine.frameId == null) throw new Error('RAF should resume when visible');
-const resumeId = engine.frameId;
-
-// Ensure only one active callback slot after resume.
 if (rafCallbacks.size !== 1) throw new Error('duplicate RAF loops: ' + rafCallbacks.size);
 
+// Geometry must stay stable across ticks — stub render path via light mode.
+engine.setChatPending(true);
 const buildsBefore = engine.getGeometryBuildCount();
-// Tick without resize should not rebuild geometry.
-if (cb) cb(16);
+engine.tick(16);
 const buildsAfter = engine.getGeometryBuildCount();
-if (buildsAfter !== buildsBefore && buildsAfter > buildsBefore + 0) {
-  /* first resize already built; tick must not rebuild */
-}
-// Force: call tick path via remaining raf
-const tickCb = rafCallbacks.get(resumeId);
-if (tickCb) {
-  document.hidden = false;
-  engine.state.isPaused = false;
-  const b0 = engine.getGeometryBuildCount();
-  tickCb(32);
-  const b1 = engine.getGeometryBuildCount();
-  if (b1 !== b0) throw new Error('static geometry regenerated every frame');
-}
+if (buildsAfter !== buildsBefore) throw new Error('tick must not rebuild geometry');
+engine.setChatPending(false);
 
 engine.destroy();
 if (engine.frameId !== null) throw new Error('destroy must clear RAF');
 engine.init();
 engine.init();
 if (rafCallbacks.size > 1) throw new Error('re-init created duplicate loops');
+if (getFrameScheduler().getActiveRafCount() !== 1) throw new Error('re-init must keep single RAF');
 
 const dprBal = engine.quality.getBudgets().maxDpr;
 engine.setQualityMode('performance');
@@ -328,8 +349,8 @@ if (dprBal > 1.25) throw new Error('Balanced DPR cap broken');
 
 console.log(JSON.stringify({
   ok: true,
-  resumeId,
   rafSize: rafCallbacks.size,
+  activeRaf: getFrameScheduler().getActiveRafCount(),
   dprPerf,
   dprBal,
   dprCine,
@@ -344,40 +365,56 @@ console.log(JSON.stringify({
 def test_resize_debounced() -> None:
     out = _run_node(
         r"""
-globalThis.window = globalThis;
 const listeners = {};
 globalThis.document = {
   hidden: false,
-  documentElement: { classList: { contains: () => false } },
+  documentElement: { classList: { contains: () => false, toggle() {} }, dataset: {} },
+  getElementById: () => null,
   addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); },
   removeEventListener: () => {},
 };
+globalThis.window = globalThis;
+globalThis.addEventListener = (...a) => document.addEventListener(...a);
+globalThis.removeEventListener = (...a) => document.removeEventListener(...a);
+globalThis.innerWidth = 1000;
+globalThis.innerHeight = 800;
+globalThis.devicePixelRatio = 1;
 globalThis.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
 globalThis.performance = { now: () => 0 };
 let now = 0;
 const timers = [];
-globalThis.setTimeout = (fn, ms) => { timers.push({ fn, at: now + ms }); return timers.length; };
-globalThis.clearTimeout = () => {};
+globalThis.setTimeout = (fn, ms) => {
+  // Keep only the latest debounce timer (clearTimeout semantics).
+  timers.length = 0;
+  timers.push({ fn, at: now + ms });
+  return 1;
+};
+globalThis.clearTimeout = () => { timers.length = 0; };
 globalThis.requestAnimationFrame = () => 1;
 globalThis.cancelAnimationFrame = () => {};
 globalThis.ResizeObserver = class { observe() {} disconnect() {} };
 
+const stubCtx = () => new Proxy({
+  fillStyle: '', strokeStyle: '',
+  createRadialGradient: () => ({ addColorStop() {} }),
+  createLinearGradient: () => ({ addColorStop() {} }),
+}, { get: (t, p) => (p in t ? t[p] : () => t) });
 const canvas = {
   width: 0, height: 0, style: {},
   classList: { add() {}, remove() {}, toggle() {} },
   parentElement: { clientWidth: 1000, clientHeight: 800 },
-  getContext: () => ({
-    setTransform() {}, fillRect() {}, fillStyle: '', save() {}, restore() {},
-    beginPath() {}, arc() {}, fill() {}, stroke() {},
-    createRadialGradient: () => ({ addColorStop() {} }),
-    globalCompositeOperation: '', globalAlpha: 1, lineCap: '', lineJoin: '', lineWidth: 1, strokeStyle: '',
-  }),
+  getContext: () => stubCtx(),
 };
 
+const { resetFrameSchedulerForTests } = await import('./web/v2/neural/frame-scheduler.js');
+resetFrameSchedulerForTests();
 const { NeuralEngine } = await import('./web/v2/neural/engine.js');
 const engine = new NeuralEngine(canvas);
 engine.init();
 const builds0 = engine.getGeometryBuildCount();
+// Material size change required for rebuild under 11.P3 threshold.
+canvas.parentElement.clientWidth = 1200;
+canvas.parentElement.clientHeight = 900;
 engine._scheduleResize();
 engine._scheduleResize();
 engine._scheduleResize();
@@ -385,7 +422,7 @@ if (timers.length !== 1) throw new Error('debounce should keep one timer, got ' 
 now = 200;
 timers[0].fn();
 const builds1 = engine.getGeometryBuildCount();
-if (builds1 < builds0) throw new Error('resize should rebuild once');
+if (builds1 !== builds0 + 1) throw new Error('debounced resize should rebuild once, got ' + (builds1 - builds0));
 console.log(JSON.stringify({ ok: true, timers: timers.length, builds0, builds1 }));
 """
     )

@@ -16,6 +16,7 @@ import {
   formatPlanningQueue,
   formatReasoningStage,
 } from "../core/cognitive-os-telemetry.js";
+import { getFrameScheduler } from "../neural/frame-scheduler.js";
 
 /** Canonical 9-step execution pipeline (final reference — French). */
 export const IDLE_PLAN_STEPS = Object.freeze([
@@ -105,6 +106,8 @@ export class OrchestratorRegion {
     this._waveRaf = null;
     /** @type {number} */
     this._wavePhase = 0;
+    /** @type {(() => void) | null} */
+    this._unregisterWave = null;
     /** @type {Map<string, string>} */
     this._lastToolAction = new Map();
   }
@@ -959,22 +962,28 @@ export class OrchestratorRegion {
   }
 
   _startWaveform() {
-    if (this._waveRaf != null) return;
-    let lastPaint = 0;
-    const tick = (now) => {
-      if (document.hidden) {
-        this._waveRaf = window.requestAnimationFrame(tick);
-        return;
-      }
-      // Throttle sparkline to ~12 FPS — decorative, must not compete with neural RAF.
-      if (now - lastPaint >= 80) {
-        lastPaint = now;
-        this._wavePhase += 0.028;
+    // Shared display clock — cadence ~12 Hz via scheduler (no second RAF loop).
+    if (this._unregisterWave) return;
+    const scheduler = getFrameScheduler();
+    this._unregisterWave = scheduler.register(
+      "titan-orchestrator-sparkline",
+      (frame) => {
+        if (document.hidden) return;
+        this._wavePhase += 0.0017 * frame.deltaMs;
         this._paintWaveform();
-      }
-      this._waveRaf = window.requestAnimationFrame(tick);
-    };
-    this._waveRaf = window.requestAnimationFrame(tick);
+        this._waveRaf = 1;
+      },
+      { cadence: 5, phase: 2, priority: 10 },
+    );
+    this._waveRaf = scheduler.isRunning() ? 1 : null;
+  }
+
+  _stopWaveform() {
+    if (this._unregisterWave) {
+      this._unregisterWave();
+      this._unregisterWave = null;
+    }
+    this._waveRaf = null;
   }
 
   _paintWaveform() {

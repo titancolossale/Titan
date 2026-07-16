@@ -450,7 +450,10 @@ export class ConversationManager {
     } else if (sec >= 3) {
       text = `Titan réfléchit… (${sec}s)`;
     }
-    this._thinkingEl.textContent = text;
+    // Cheap text-only update — never triggers neural cache rebuild.
+    if (this._thinkingEl.textContent !== text) {
+      this._thinkingEl.textContent = text;
+    }
   }
 
   /** @param {boolean} visible */

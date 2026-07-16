@@ -37,10 +37,25 @@ export class NeuralRenderer {
     this._staticWidth = 0;
     this._staticHeight = 0;
     this._staticDpr = 0;
+    this._staticRebuildPending = false;
+    /** Reused foreground fog node list (avoids per-frame filter alloc). */
+    this._fgNodeScratch = [];
+    /** Cached vignette size key. */
+    this._vignetteKey = "";
+    this._lastDeltaMs = 16.7;
+    this._farFieldPhase = 0;
   }
 
   /** Invalidate cached far-field neural layers (rebuild on next draw). */
   invalidateStaticCache() {
+    this._staticDirty = true;
+  }
+
+  /**
+   * Keep last valid cache visible while a quality/size rebuild is staged.
+   */
+  markStaticRebuildPending() {
+    this._staticRebuildPending = true;
     this._staticDirty = true;
   }
 
@@ -56,13 +71,16 @@ export class NeuralRenderer {
    * @param {number} width
    * @param {number} height
    * @param {ReturnType<import("./quality-controller.js").QualityController["getBudgets"]> | null} [budgets]
+   * @param {{ invalidateStatic?: boolean, stageCache?: boolean }} [options]
    */
-  resize(width, height, budgets = null) {
+  resize(width, height, budgets = null, options = {}) {
     this.width = width;
     this.height = height;
     this._budgets = budgets;
     const maxDpr = budgets?.maxDpr ?? NEURAL_CONFIG.render.maxDpr;
-    this.dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
+    const nextDpr = Math.min(window.devicePixelRatio || 1, maxDpr);
+    const dprChanged = Math.abs(nextDpr - this.dpr) > 0.01;
+    this.dpr = nextDpr;
     this.canvas.width = Math.floor(width * this.dpr);
     this.canvas.height = Math.floor(height * this.dpr);
     this.canvas.style.width = `${width}px`;
@@ -70,7 +88,14 @@ export class NeuralRenderer {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this._rebuildDust(budgets?.dustCount);
     this._rebuildBokeh(budgets?.bokehCount);
-    this.invalidateStaticCache();
+    this._vignetteKey = "";
+    if (options.invalidateStatic !== false || dprChanged) {
+      if (options.stageCache) {
+        this.markStaticRebuildPending();
+      } else {
+        this.invalidateStaticCache();
+      }
+    }
   }
 
   /** @param {number} [count] */
@@ -110,18 +135,26 @@ export class NeuralRenderer {
 
   /**
    * Minimal frame used when chat input needs main-thread priority.
+   * Keeps last valid static blit + Core continuous (delta-time).
    * @param {import("./camera.js").NeuralCamera} camera
    * @param {import("./nodes.js").NeuralNodes} nodes
    * @param {import("./state.js").NeuralState} state
    * @param {ReturnType<import("./quality-controller.js").QualityController["getBudgets"]> | null} [budgets]
+   * @param {number} [deltaMs]
    */
-  renderLight(camera, nodes, state, budgets = null) {
+  renderLight(camera, nodes, state, budgets = null, deltaMs = 16.7) {
     const ctx = this.ctx;
     const w = this.width;
     const h = this.height;
     const COLORS = NEURAL_CONFIG.colors;
     const q = budgets ?? this._budgets;
-    if (q?.useStaticCache && this._staticCanvas && !this._staticDirty) {
+    this._lastDeltaMs = deltaMs;
+    this._time += deltaMs / 1000;
+    // Prefer last valid cache while rebuild pending — never flash void.
+    if (q?.useStaticCache && this._staticCanvas && (!this._staticDirty || this._staticRebuildPending)) {
+      this._blitStatic(ctx);
+    } else if (q?.useStaticCache && this._staticDirty && !this._staticCanvas) {
+      this._rebuildStaticCache(camera, nodes, state, q, COLORS);
       this._blitStatic(ctx);
     } else {
       ctx.fillStyle = NEURAL_CONFIG.render.voidColor;
@@ -234,6 +267,7 @@ export class NeuralRenderer {
     this._budgets = prevBudgets;
     this._tissueBudget = prevTissue;
     this._staticDirty = false;
+    this._staticRebuildPending = false;
     this._staticRebuildCount += 1;
   }
 
@@ -256,8 +290,21 @@ export class NeuralRenderer {
    * @param {import("./cognitive.js").CognitiveOverlay | null} cognitiveOverlay
    * @param {import("./ghosts.js").GhostLayer | null} ghostLayer
    * @param {ReturnType<import("./quality-controller.js").QualityController["getBudgets"]> | null} [budgets]
+   * @param {number} [deltaMs]
+   * @param {number} [frameIndex]
    */
-  render(camera, nodes, signals, state, depthField, cognitiveOverlay, ghostLayer, budgets = null) {
+  render(
+    camera,
+    nodes,
+    signals,
+    state,
+    depthField,
+    cognitiveOverlay,
+    ghostLayer,
+    budgets = null,
+    deltaMs = 16.7,
+    frameIndex = 0,
+  ) {
     const ctx = this.ctx;
     const w = this.width;
     const h = this.height;
@@ -273,15 +320,21 @@ export class NeuralRenderer {
     const recallDive = depthField?.getRecallDive?.() ?? 0;
     this._maxEdgesDrawn = q?.maxEdgesDrawn ?? NEURAL_CONFIG.performance.maxEdgesDrawn;
 
-    this._time += 0.016;
+    // Delta-time clock — never advance by fixed 1/60 per paint.
+    this._lastDeltaMs = deltaMs;
+    this._time += Math.max(0, deltaMs) / 1000;
     this._tissueBudget = q?.maxTissueDrawn ?? NEURAL_CONFIG.performance.maxTissueDrawn ?? 1600;
 
     const useCache = Boolean(q?.useStaticCache);
+    const farCadence = Math.max(1, q?.farFieldCadence ?? 1);
+    const farDue = frameIndex % farCadence === 0;
     if (useCache) {
-      if (this._staticDirty || !this._staticCanvas) {
+      if ((this._staticDirty || !this._staticCanvas) && (!this._staticRebuildPending || farDue || !this._staticCanvas)) {
         this._rebuildStaticCache(camera, nodes, state, q, COLORS);
       }
-      this._blitStatic(ctx);
+      if (this._staticCanvas) {
+        this._blitStatic(ctx);
+      }
     } else {
       ctx.fillStyle = NEURAL_CONFIG.render.voidColor;
       ctx.fillRect(0, 0, w, h);
@@ -1598,13 +1651,22 @@ export class NeuralRenderer {
   _drawForegroundFog(ctx, camera, nodes, w, h) {
     const padX = NEURAL_CONFIG.world.padding * camera.width;
     const padY = NEURAL_CONFIG.world.padding * camera.height;
-    const fgNodes = nodes.nodes.filter((n) => n.layer >= NEURAL_CONFIG.layers.length - 2 && !n.isCenter);
+    const layerCut = NEURAL_CONFIG.layers.length - 2;
+    const scratch = this._fgNodeScratch;
+    scratch.length = 0;
+    const src = nodes.nodes;
+    for (let i = 0; i < src.length; i++) {
+      const n = src[i];
+      if (n.layer >= layerCut && !n.isCenter) scratch.push(n);
+    }
+    if (!scratch.length) return;
 
     ctx.save();
     ctx.globalCompositeOperation = "source-over";
 
-    for (let i = 0; i < Math.min(fgNodes.length, 28); i++) {
-      const n = fgNodes[(i * 17 + 5) % fgNodes.length];
+    const limit = Math.min(scratch.length, 28);
+    for (let i = 0; i < limit; i++) {
+      const n = scratch[(i * 17 + 5) % scratch.length];
       const screen = this._screenPoint(camera, n, padX, padY);
       const r = 42 + n.radius * 8;
       const grad = ctx.createRadialGradient(screen.x, screen.y, 0, screen.x, screen.y, r);

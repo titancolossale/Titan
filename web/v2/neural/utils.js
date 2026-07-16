@@ -39,8 +39,15 @@ export function clamp01(t) {
 
 /** @returns {boolean} */
 export function prefersReducedMotion() {
-  return (
-    document.documentElement.classList.contains("tdl-v2--reduced-motion") ||
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
+  try {
+    if (typeof document === "undefined" || typeof window === "undefined") {
+      return false;
+    }
+    return (
+      document.documentElement?.classList?.contains("tdl-v2--reduced-motion") ||
+      Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)
+    );
+  } catch {
+    return false;
+  }
 }

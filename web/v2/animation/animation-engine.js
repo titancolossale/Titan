@@ -1,6 +1,7 @@
-/** Titan Frontend V2 — Animation framework (Phase E1 architecture). */
+/** Titan Frontend V2 — Animation framework (Phase E1 + 11.P3 shared clock). */
 
 import { DURATION, EASING } from "./tokens.js";
+import { getFrameScheduler } from "../neural/frame-scheduler.js";
 
 /**
  * @typedef {Object} AnimationTask
@@ -12,6 +13,8 @@ import { DURATION, EASING } from "./tokens.js";
  * @property {string} easing
  */
 
+const ANIM_FRAME_ID = "titan-animation-engine";
+
 export class AnimationEngine {
   /** @param {{ reducedMotion?: boolean }} [options] */
   constructor(options = {}) {
@@ -19,6 +22,8 @@ export class AnimationEngine {
     this._tasks = new Map();
     this._rafId = null;
     this._running = false;
+    this._unregister = /** @type {(() => void) | null} */ (null);
+    this._boundTick = (frame) => this._onFrame(frame);
   }
 
   /** @param {boolean} enabled */
@@ -51,6 +56,9 @@ export class AnimationEngine {
 
     return () => {
       this._tasks.delete(id);
+      if (this._tasks.size === 0) {
+        this._teardownLoop();
+      }
     };
   }
 
@@ -68,6 +76,7 @@ export class AnimationEngine {
     element.style.opacity = String(from);
     element.style.transition = `opacity ${duration}ms ${easing}`;
 
+    // One-shot paint — not a persistent RAF loop.
     const raf = requestAnimationFrame(() => {
       element.style.opacity = String(to);
     });
@@ -85,16 +94,33 @@ export class AnimationEngine {
   }
 
   _ensureLoop() {
-    if (this._running) {
+    if (this._running && this._unregister) {
       return;
     }
     this._running = true;
-    this._tick = this._tick.bind(this);
-    this._rafId = requestAnimationFrame(this._tick);
+    const scheduler = getFrameScheduler();
+    this._unregister = scheduler.register(ANIM_FRAME_ID, this._boundTick, {
+      cadence: 1,
+      priority: 50,
+    });
+    this._rafId = scheduler.isRunning() ? 1 : null;
   }
 
-  _tick(now) {
-    for (const [id, task] of [...this._tasks.entries()]) {
+  _teardownLoop() {
+    if (this._unregister) {
+      this._unregister();
+      this._unregister = null;
+    }
+    this._running = false;
+    this._rafId = null;
+  }
+
+  /**
+   * @param {{ timestamp: number, deltaMs: number }} frame
+   */
+  _onFrame(frame) {
+    const now = frame.timestamp;
+    for (const [id, task] of this._tasks) {
       if (now < task.startTime) {
         continue;
       }
@@ -112,12 +138,13 @@ export class AnimationEngine {
     }
 
     if (this._tasks.size === 0) {
-      this._running = false;
-      this._rafId = null;
-      return;
+      this._teardownLoop();
     }
+  }
 
-    this._rafId = requestAnimationFrame(this._tick);
+  /** Legacy alias used by older callers. */
+  _tick(now) {
+    this._onFrame({ timestamp: now, deltaMs: 16.7 });
   }
 
   /** @param {number} t 0–1 */
@@ -126,10 +153,7 @@ export class AnimationEngine {
   }
 
   destroy() {
-    if (this._rafId !== null) {
-      cancelAnimationFrame(this._rafId);
-    }
+    this._teardownLoop();
     this._tasks.clear();
-    this._running = false;
   }
 }

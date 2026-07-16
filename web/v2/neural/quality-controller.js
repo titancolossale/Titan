@@ -16,14 +16,17 @@ export const EMERGENCY_SESSION_KEY = "titan_visual_emergency_tier";
  * Modes scale draw/build budgets relative to those ceilings.
  */
 export const QUALITY_PRESETS = Object.freeze({
-  /** Conservative production default — Auto picks this until FPS proves otherwise. */
+  /**
+   * Auto — static cache + Core every display frame (60 Hz target).
+   * Decorative far-field is cached; do not skip whole frames (causes hitching).
+   */
   auto: Object.freeze({
     id: "auto",
     label: "Auto",
     maxDpr: 1.0,
-    targetFps: 50,
-    frameBudgetMs: 20,
-    targetVisualHz: 30,
+    targetFps: 60,
+    frameBudgetMs: 16.7,
+    targetVisualHz: 60,
     nodeDensityScale: 0.38,
     maxNodeCount: 3800,
     maxEdgesDrawn: 5200,
@@ -46,19 +49,22 @@ export const QUALITY_PRESETS = Object.freeze({
     softHaloFarLayers: false,
     nodeHaloEnabled: false,
     intersectionMarks: false,
-    idleFrameSkip: 1,
+    idleFrameSkip: 0,
     interactiveSkipDecorative: true,
     useStaticCache: true,
     adaptive: true,
     rebuildGeometry: true,
+    /** Low-priority decorative cadence (every N display frames). */
+    decorativeCadence: 2,
+    farFieldCadence: 3,
   }),
   performance: Object.freeze({
     id: "performance",
     label: "Performance",
     maxDpr: 1.0,
-    targetFps: 50,
-    frameBudgetMs: 20,
-    targetVisualHz: 28,
+    targetFps: 60,
+    frameBudgetMs: 16.7,
+    targetVisualHz: 60,
     nodeDensityScale: 0.32,
     maxNodeCount: 3200,
     maxEdgesDrawn: 4200,
@@ -81,19 +87,21 @@ export const QUALITY_PRESETS = Object.freeze({
     softHaloFarLayers: false,
     nodeHaloEnabled: false,
     intersectionMarks: false,
-    idleFrameSkip: 1,
+    idleFrameSkip: 0,
     interactiveSkipDecorative: true,
     useStaticCache: true,
     adaptive: false,
     rebuildGeometry: true,
+    decorativeCadence: 2,
+    farFieldCadence: 4,
   }),
   balanced: Object.freeze({
     id: "balanced",
     label: "Balanced",
     maxDpr: 1.25,
-    targetFps: 55,
-    frameBudgetMs: 18,
-    targetVisualHz: 45,
+    targetFps: 60,
+    frameBudgetMs: 16.7,
+    targetVisualHz: 60,
     nodeDensityScale: 0.55,
     maxNodeCount: 6500,
     maxEdgesDrawn: 10000,
@@ -121,13 +129,15 @@ export const QUALITY_PRESETS = Object.freeze({
     useStaticCache: true,
     adaptive: true,
     rebuildGeometry: true,
+    decorativeCadence: 1,
+    farFieldCadence: 2,
   }),
   cinematic: Object.freeze({
     id: "cinematic",
     label: "Cinematic",
     maxDpr: 1.75,
-    targetFps: 45,
-    frameBudgetMs: 22,
+    targetFps: 60,
+    frameBudgetMs: 16.7,
     targetVisualHz: 60,
     nodeDensityScale: 1.0,
     maxNodeCount: NEURAL_CONFIG.nodes.maxCount,
@@ -156,6 +166,8 @@ export const QUALITY_PRESETS = Object.freeze({
     useStaticCache: false,
     adaptive: false,
     rebuildGeometry: true,
+    decorativeCadence: 1,
+    farFieldCadence: 1,
   }),
 });
 
@@ -166,7 +178,8 @@ export const EMERGENCY_PRESET = Object.freeze({
   maxDpr: 1.0,
   targetFps: 45,
   frameBudgetMs: 22,
-  targetVisualHz: 24,
+  /** Keep Core on display clock; decorative cadence handles load. */
+  targetVisualHz: 60,
   nodeDensityScale: 0.22,
   maxNodeCount: 2200,
   maxEdgesDrawn: 2800,
@@ -189,14 +202,19 @@ export const EMERGENCY_PRESET = Object.freeze({
   softHaloFarLayers: false,
   nodeHaloEnabled: false,
   intersectionMarks: false,
-  idleFrameSkip: 2,
+  idleFrameSkip: 0,
   interactiveSkipDecorative: true,
   useStaticCache: true,
   adaptive: false,
   rebuildGeometry: true,
+  decorativeCadence: 3,
+  farFieldCadence: 4,
   /** Extra cut when rolling FPS stays below 25. */
   criticalScale: 0.65,
 });
+
+/** Soft lerp speed for quality draw-scale fades (per ms). */
+const QUALITY_FADE_RATE = 0.0035;
 
 /** Adaptive draw tiers applied inside Auto/Balanced (no geometry rebuild). */
 const ADAPTIVE_TIERS = Object.freeze([
@@ -347,6 +365,19 @@ export class QualityController {
     this._reducedMotionForced = false;
     this._chatPending = false;
     this._thinkingLight = false;
+    /** Cached budget object — rebuilt only when inputs change. */
+    this._budgetsCache = null;
+    this._budgetsCacheKey = "";
+    /** Soft-faded draw scales (avoid pop on tier / pending changes). */
+    this._fadeEdge = 1;
+    this._fadeTissue = 1;
+    this._fadeDust = 1;
+    this._fadeFilament = 1;
+    this._targetEdge = 1;
+    this._targetTissue = 1;
+    this._targetDust = 1;
+    this._targetFilament = 1;
+    this._lastFadeTs = 0;
   }
 
   /** @returns {QualityMode} */
@@ -404,6 +435,8 @@ export class QualityController {
       this._geometryDirty = true;
       this._staticCacheDirty = true;
     }
+    this._budgetsCache = null;
+    this._budgetsCacheKey = "";
     return changed;
   }
 
@@ -427,6 +460,8 @@ export class QualityController {
     persistSessionEmergencyTier(tier);
     this._geometryDirty = true;
     this._staticCacheDirty = true;
+    this._budgetsCache = null;
+    this._budgetsCacheKey = "";
     return true;
   }
 
@@ -461,8 +496,13 @@ export class QualityController {
 
   /** @param {boolean} pending */
   setChatPending(pending) {
-    this._chatPending = Boolean(pending);
-    if (pending) {
+    const next = Boolean(pending);
+    if (next === this._chatPending) return;
+    this._chatPending = next;
+    // Pending only trims draw budgets — never geometry / static rebuild.
+    this._budgetsCache = null;
+    this._budgetsCacheKey = "";
+    if (next) {
       this.notifyInteractive(8000);
       this._thinkingLight = true;
     } else {
@@ -506,7 +546,11 @@ export class QualityController {
     if (this._frameSamples.length < this._sampleWindow) {
       return;
     }
-    if (nowMs - this._lastTierChangeMs < this._hysteresisMs) {
+    // First adaptive decision has no prior change — do not block on hysteresis.
+    if (
+      this._lastTierChangeMs > 0 &&
+      nowMs - this._lastTierChangeMs < this._hysteresisMs
+    ) {
       return;
     }
 
@@ -519,14 +563,35 @@ export class QualityController {
         this._tier += 1;
         this._lastTierChangeMs = nowMs;
         this._frameSamples = [];
+        // Adaptive tiers adjust draw counts only — no static cache rebuild.
+        this._budgetsCache = null;
+        this._budgetsCacheKey = "";
       }
     } else if (avg < budget * 0.78 && this._tier > 0) {
       if (nowMs - this._lastTierChangeMs >= this._recoverHoldMs) {
         this._tier -= 1;
         this._lastTierChangeMs = nowMs;
         this._frameSamples = [];
+        this._budgetsCache = null;
+        this._budgetsCacheKey = "";
       }
     }
+  }
+
+  /**
+   * Advance soft quality fades toward current targets (delta-time based).
+   * @param {number} deltaMs
+   * @param {number} [nowMs]
+   */
+  advanceFade(deltaMs, nowMs = 0) {
+    const dt = Math.max(0, deltaMs || 0);
+    if (dt <= 0) return;
+    const t = Math.min(1, QUALITY_FADE_RATE * dt);
+    this._fadeEdge += (this._targetEdge - this._fadeEdge) * t;
+    this._fadeTissue += (this._targetTissue - this._fadeTissue) * t;
+    this._fadeDust += (this._targetDust - this._fadeDust) * t;
+    this._fadeFilament += (this._targetFilament - this._fadeFilament) * t;
+    this._lastFadeTs = nowMs || this._lastFadeTs;
   }
 
   /**
@@ -575,12 +640,24 @@ export class QualityController {
 
   /** Effective budgets for the current mode + adaptive tier + emergency + reduced motion. */
   getBudgets() {
-    const inEmergency = this.isEmergency();
-    const base = {
-      ...(inEmergency ? EMERGENCY_PRESET : QUALITY_PRESETS[this._mode]),
-    };
-    const tier = ADAPTIVE_TIERS[this._tier] ?? ADAPTIVE_TIERS[0];
     const reduced = prefersReducedMotion() || this._reducedMotionForced;
+    const cacheKey = [
+      this._mode,
+      this._tier,
+      this._emergencyTier,
+      this._chatPending ? 1 : 0,
+      reduced ? 1 : 0,
+      Math.round(this._fadeEdge * 100),
+      Math.round(this._fadeTissue * 100),
+    ].join("|");
+    if (this._budgetsCache && this._budgetsCacheKey === cacheKey) {
+      return this._budgetsCache;
+    }
+
+    const inEmergency = this.isEmergency();
+    const preset = inEmergency ? EMERGENCY_PRESET : QUALITY_PRESETS[this._mode];
+    const base = { ...preset };
+    const tier = ADAPTIVE_TIERS[this._tier] ?? ADAPTIVE_TIERS[0];
     const chatPending = this._chatPending;
 
     if (this._emergencyTier === "critical") {
@@ -590,12 +667,12 @@ export class QualityController {
       base.maxTissueDrawn = Math.floor(base.maxTissueDrawn * scale);
       base.filamentDrawScale *= scale;
       base.microNeuronDrawScale *= scale;
-      base.targetVisualHz = Math.min(base.targetVisualHz, 20);
       base.dustCount = 0;
       base.bokehCount = 0;
       base.enableVolumetricHaze = false;
       base.bloomSpotCount = 0;
       base.enableBloom = false;
+      base.decorativeCadence = Math.max(base.decorativeCadence ?? 2, 3);
     }
 
     if (chatPending) {
@@ -608,8 +685,8 @@ export class QualityController {
       base.enableLensDiffusion = false;
       base.enableForegroundFog = false;
       base.enableLightShafts = false;
-      base.targetVisualHz = Math.min(base.targetVisualHz ?? 30, 22);
-      base.idleFrameSkip = Math.max(base.idleFrameSkip, 2);
+      base.decorativeCadence = Math.max(base.decorativeCadence ?? 2, 3);
+      base.farFieldCadence = Math.max(base.farFieldCadence ?? 3, 4);
       base.interactiveSkipDecorative = true;
     }
 
@@ -627,9 +704,9 @@ export class QualityController {
       base.enableAtmosphericFog = false;
       base.enableVolumetricHaze = false;
       base.enableForegroundFog = false;
-      base.idleFrameSkip = Math.max(base.idleFrameSkip, 3);
       base.nodeHaloEnabled = false;
       base.intersectionMarks = false;
+      base.decorativeCadence = Math.max(base.decorativeCadence ?? 2, 4);
     }
 
     const edgeScale = inEmergency ? 1 : tier.edgeScale;
@@ -640,14 +717,25 @@ export class QualityController {
     const microScale = inEmergency ? 1 : tier.microScale;
     const effectMask = inEmergency ? 0b0001 : tier.effectMask;
 
-    const edges = Math.max(400, Math.floor(base.maxEdgesDrawn * edgeScale));
-    const tissue = Math.max(120, Math.floor(base.maxTissueDrawn * tissueScale));
-    const dust = Math.max(0, Math.floor(base.dustCount * dustScale));
+    // Soft targets — fade prevents visible pop on tier / pending changes.
+    this._targetEdge = edgeScale;
+    this._targetTissue = tissueScale;
+    this._targetDust = dustScale;
+    this._targetFilament = filamentScale;
+
+    const softEdge = this._fadeEdge;
+    const softTissue = this._fadeTissue;
+    const softDust = this._fadeDust;
+    const softFilament = this._fadeFilament;
+
+    const edges = Math.max(400, Math.floor(base.maxEdgesDrawn * softEdge));
+    const tissue = Math.max(120, Math.floor(base.maxTissueDrawn * softTissue));
+    const dust = Math.max(0, Math.floor(base.dustCount * softDust));
     const bokeh = Math.max(0, Math.floor(base.bokehCount * bokehScale));
 
     const effectsOk = (bit) => (effectMask & bit) !== 0;
 
-    return {
+    const budgets = {
       mode: this._mode,
       tier: this._tier,
       tierLabel: this.getTierLabel(),
@@ -655,7 +743,7 @@ export class QualityController {
       emergency: inEmergency,
       maxDpr: Math.min(base.maxDpr, inEmergency ? 1.0 : base.maxDpr),
       targetFps: base.targetFps,
-      targetVisualHz: base.targetVisualHz ?? 45,
+      targetVisualHz: base.targetVisualHz ?? 60,
       frameBudgetMs: base.frameBudgetMs,
       nodeDensityScale: base.nodeDensityScale,
       maxNodeCount: base.maxNodeCount,
@@ -663,8 +751,8 @@ export class QualityController {
       maxTissueDrawn: tissue,
       dustCount: dust,
       bokehCount: base.enableBokeh && effectsOk(0b1000) ? bokeh : 0,
-      filamentDrawScale: base.filamentDrawScale * filamentScale,
-      microNeuronDrawScale: base.microNeuronDrawScale * microScale,
+      filamentDrawScale: base.filamentDrawScale * softFilament,
+      microNeuronDrawScale: base.microNeuronDrawScale * microScale * softFilament,
       ambientPatchCount: base.ambientPatchCount,
       bloomSpotCount: base.enableBloom && effectsOk(0b0100) ? base.bloomSpotCount : 0,
       fogPatchCount: base.enableAtmosphericFog && effectsOk(0b0010) ? base.fogPatchCount : 0,
@@ -679,13 +767,20 @@ export class QualityController {
       softHaloFarLayers: base.softHaloFarLayers && this._tier === 0 && !inEmergency,
       nodeHaloEnabled: base.nodeHaloEnabled && this._tier < 2 && !inEmergency,
       intersectionMarks: base.intersectionMarks && this._tier < 2 && !inEmergency,
-      idleFrameSkip: base.idleFrameSkip + (this._tier >= 2 || inEmergency ? 1 : 0),
+      idleFrameSkip: 0,
       interactiveSkipDecorative: base.interactiveSkipDecorative,
       useStaticCache: Boolean(base.useStaticCache) || inEmergency || chatPending,
+      decorativeCadence: base.decorativeCadence ?? 2,
+      farFieldCadence: base.farFieldCadence ?? 3,
       chatPending,
       lightenThinking: this.shouldLightenThinking(),
       reducedMotion: reduced,
+      qualityFade: Math.min(softEdge, softTissue),
     };
+
+    this._budgetsCache = budgets;
+    this._budgetsCacheKey = cacheKey;
+    return budgets;
   }
 
   /** Snapshot for developer telemetry. */

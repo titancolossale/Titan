@@ -5,6 +5,7 @@ import { CognitiveOverlay, getAllCognitiveCssClasses, getCognitiveCssClass, getM
 import { NeuralCamera } from "./camera.js";
 import { DepthField } from "./depth.js";
 import { GhostLayer } from "./ghosts.js";
+import { getFrameScheduler } from "./frame-scheduler.js";
 import { NeuralNodes } from "./nodes.js";
 import { PerformanceMonitor } from "./performance-monitor.js";
 import { QualityController } from "./quality-controller.js";
@@ -14,7 +15,12 @@ import { NeuralSignals } from "./signals.js";
 import { NeuralState } from "./state.js";
 import { prefersReducedMotion } from "./utils.js";
 
-const RESIZE_DEBOUNCE_MS = 120;
+/** Debounce browser chrome / panel resize noise. */
+const RESIZE_DEBOUNCE_MS = 160;
+/** Ignore sub-threshold dimension jitter (mobile URL bar, scrollbar). */
+const MIN_RESIZE_DELTA_PX = 8;
+/** Scheduler registration id — single neural callback. */
+const NEURAL_FRAME_ID = "titan-neural-engine";
 
 export class NeuralEngine {
   /**
@@ -37,16 +43,14 @@ export class NeuralEngine {
     this.regionFocus = new RegionFocus();
     this.quality = new QualityController();
     this.perf = new PerformanceMonitor();
+    this.scheduler = getFrameScheduler();
 
     this.depthField.setInfiniteEnabled(true);
 
-    /** @type {number | null} */
+    /** @deprecated use scheduler — kept for diagnostics / tests */
     this.frameId = null;
     /** @type {ResizeObserver | null} */
     this.resizeObserver = null;
-    this._lastFrameTime = 0;
-    this._frameSkipCounter = 0;
-    this._idleSkipCounter = 0;
     this._baseDensity = options.density ?? NEURAL_CONFIG.nodes.densityDefault;
     this._fps = 60;
     this._initialized = false;
@@ -58,17 +62,21 @@ export class NeuralEngine {
     this._geometryBuildCount = 0;
     /** @type {boolean} */
     this._chatPending = false;
-    /** Last visual paint timestamp (for targetVisualHz capping). */
-    this._lastVisualPaintMs = 0;
-    this._visualSkipCount = 0;
+    this._unregisterFrame = /** @type {(() => void) | null} */ (null);
+    this._pendingEmergencyRebuild = false;
+    this._pendingQualityRebuild = false;
+    this._metaBudgets = /** @type {Record<string, number | boolean | string> | null} */ (null);
+    this._frameCounter = 0;
 
     this._boundResize = () => this._scheduleResize();
-    this._boundTick = (ts) => this.tick(ts);
     this._boundVisibility = () => this._onVisibilityChange();
+    this._boundFrame = (frame) => this._onFrame(frame);
   }
 
   init() {
     if (this._initialized) {
+      // Idempotent — ensure single scheduler registration.
+      this._ensureSchedulerRegistration();
       return;
     }
     this._initialized = true;
@@ -93,18 +101,17 @@ export class NeuralEngine {
 
     this.resize({ immediate: true });
     this._syncPresenceDecorations();
-    if (this.frameId === null) {
-      this.frameId = requestAnimationFrame(this._boundTick);
-    }
+    this._ensureSchedulerRegistration();
   }
 
   destroy() {
     this._destroyed = true;
     this._initialized = false;
-    if (this.frameId !== null) {
-      cancelAnimationFrame(this.frameId);
-      this.frameId = null;
+    if (this._unregisterFrame) {
+      this._unregisterFrame();
+      this._unregisterFrame = null;
     }
+    this.frameId = null;
     if (this._resizeTimer !== null) {
       clearTimeout(this._resizeTimer);
       this._resizeTimer = null;
@@ -115,19 +122,31 @@ export class NeuralEngine {
     this.resizeObserver = null;
   }
 
+  _ensureSchedulerRegistration() {
+    if (this._destroyed) return;
+    if (this._unregisterFrame) return;
+    this._unregisterFrame = this.scheduler.register(NEURAL_FRAME_ID, this._boundFrame, {
+      cadence: 1,
+      priority: 100,
+    });
+    this.frameId = this.scheduler.isRunning() ? 1 : null;
+  }
+
   _onVisibilityChange() {
     this.state.setVisible(!document.hidden);
-    this.perf.updateMeta({ paused: this.state.isPaused });
+    this.perf.updateMeta({
+      paused: this.state.isPaused || document.hidden,
+      rafLoops: this.scheduler.getActiveRafCount(),
+    });
     if (document.hidden) {
-      if (this.frameId !== null) {
-        cancelAnimationFrame(this.frameId);
-        this.frameId = null;
-      }
+      this.frameId = null;
       return;
     }
-    if (this.frameId === null && !this.state.isPaused && !this._destroyed) {
-      this._lastFrameTime = 0;
-      this.frameId = requestAnimationFrame(this._boundTick);
+    // Re-register + force start — scheduler visibility handler may run after us.
+    if (!this.state.isPaused && !this._destroyed) {
+      this._ensureSchedulerRegistration();
+      this.scheduler.start();
+      this.frameId = this.scheduler.isRunning() ? 1 : null;
     }
   }
 
@@ -137,9 +156,11 @@ export class NeuralEngine {
    */
   setQualityMode(mode) {
     const changed = this.quality.setMode(mode);
-    this.renderer.invalidateStaticCache();
     if (changed || this.quality.needsGeometryRebuild()) {
-      this.resize({ immediate: true, forceRebuild: true });
+      // Stage rebuild — keep last valid frame visible.
+      this._pendingQualityRebuild = true;
+      this.renderer.markStaticRebuildPending();
+      this.resize({ immediate: true, forceRebuild: true, stageCache: true });
     }
     this._syncPresenceDecorations();
     return this.quality.getSnapshot();
@@ -156,9 +177,12 @@ export class NeuralEngine {
 
   /** @param {boolean} pending */
   setChatPending(pending) {
-    this._chatPending = Boolean(pending);
-    this.quality.setChatPending(pending);
-    if (pending) {
+    const next = Boolean(pending);
+    if (next === this._chatPending) return;
+    this._chatPending = next;
+    this.quality.setChatPending(next);
+    // Chat pending must never rebuild static cache or geometry.
+    if (next) {
       this.quality.notifyInteractive(8000);
     }
     this._syncPresenceDecorations();
@@ -170,9 +194,12 @@ export class NeuralEngine {
     return {
       ...snap,
       emergencyTier: q.emergencyTier,
-      staticRebuilds: this.renderer.getStaticRebuildCount?.() ?? 0,
+      staticRebuilds: this.renderer.getStaticRebuildCount?.() ?? snap.staticRebuilds,
+      cacheRebuildCount: this.renderer.getStaticRebuildCount?.() ?? snap.cacheRebuildCount,
       chatPending: this._chatPending,
       budgets: q.budgets,
+      activeRafCount: this.scheduler.getActiveRafCount(),
+      rafLoops: this.scheduler.getActiveRafCount(),
     };
   }
 
@@ -487,7 +514,7 @@ export class NeuralEngine {
   }
 
   /**
-   * @param {{ immediate?: boolean, forceRebuild?: boolean }} [options]
+   * @param {{ immediate?: boolean, forceRebuild?: boolean, stageCache?: boolean }} [options]
    */
   resize(options = {}) {
     if (options.immediate && this._resizeTimer !== null) {
@@ -501,23 +528,32 @@ export class NeuralEngine {
     if (width < 1 || height < 1) return;
 
     const budgets = this.quality.getBudgets();
-    const sizeChanged =
-      Math.abs(width - this._lastWidth) > 1 || Math.abs(height - this._lastHeight) > 1;
-    const needsRebuild =
-      options.forceRebuild || this.quality.needsGeometryRebuild() || sizeChanged;
+    const dw = Math.abs(width - this._lastWidth);
+    const dh = Math.abs(height - this._lastHeight);
+    const sizeChangedMaterially =
+      this._lastWidth === 0 ||
+      this._lastHeight === 0 ||
+      dw >= MIN_RESIZE_DELTA_PX ||
+      dh >= MIN_RESIZE_DELTA_PX;
+    const needsGeometry =
+      options.forceRebuild || this.quality.needsGeometryRebuild() || sizeChangedMaterially;
+
+    // Minor chrome resize — update canvas CSS size only, keep cache.
+    if (!needsGeometry && !sizeChangedMaterially) {
+      return;
+    }
 
     this._lastWidth = width;
     this._lastHeight = height;
 
     this.camera.resize(width, height);
-    this.renderer.resize(width, height, budgets);
-    this.quality.markStaticCacheDirty();
-    this.renderer.invalidateStaticCache();
+    this.renderer.resize(width, height, budgets, {
+      invalidateStatic: Boolean(needsGeometry || options.forceRebuild),
+      stageCache: Boolean(options.stageCache),
+    });
 
-    if (needsRebuild) {
+    if (needsGeometry) {
       this._rebuildGeometry(width, height, budgets);
-    } else if (this.quality.needsStaticCacheRebuild()) {
-      this.renderer.invalidateStaticCache();
     }
 
     this.perf.updateMeta({
@@ -526,14 +562,8 @@ export class NeuralEngine {
       dpr: this.renderer.dpr,
       qualityMode: budgets.mode,
       qualityTier: budgets.tierLabel,
-      budgets: {
-        maxEdgesDrawn: budgets.maxEdgesDrawn,
-        maxTissueDrawn: budgets.maxTissueDrawn,
-        maxNodeCount: budgets.maxNodeCount,
-        dustCount: budgets.dustCount,
-        nodeDensityScale: budgets.nodeDensityScale,
-      },
-      rafLoops: this.frameId !== null ? 1 : 0,
+      rafLoops: this.scheduler.getActiveRafCount(),
+      staticRebuilds: this.renderer.getStaticRebuildCount(),
       paused: this.state.isPaused,
     });
   }
@@ -544,8 +574,7 @@ export class NeuralEngine {
    * @param {ReturnType<QualityController["getBudgets"]>} budgets
    */
   _rebuildGeometry(width, height, budgets) {
-    const density =
-      this._baseDensity * budgets.nodeDensityScale;
+    const density = this._baseDensity * budgets.nodeDensityScale;
     this.nodes.setDensity(density);
     this.nodes.setMaxNodeCount(budgets.maxNodeCount);
     const densityScale = this.state.getDensityScale();
@@ -556,6 +585,7 @@ export class NeuralEngine {
     this.renderer.invalidateStaticCache();
     this._geometryBuildCount += 1;
     this.perf.recordGeometryRebuild();
+    this._pendingQualityRebuild = false;
   }
 
   /** Pause decorative DOM particles when emergency / chat pending. */
@@ -568,128 +598,108 @@ export class NeuralEngine {
     root.dataset.qualityTier = budgets.tierLabel;
   }
 
-  /** @param {number} timestamp */
-  tick(timestamp) {
+  /**
+   * Primary display-clock callback (shared FrameScheduler).
+   * @param {{ timestamp: number, deltaMs: number, frameIndex: number, clamped?: boolean }} frame
+   */
+  _onFrame(frame) {
     if (this._destroyed || this.state.isPaused || document.hidden) {
       this.frameId = null;
       this.perf.updateMeta({ paused: true, rafLoops: 0 });
       return;
     }
 
-    if (!this._lastFrameTime) {
-      this._lastFrameTime = timestamp;
-    }
-
-    let deltaMs = Math.min(timestamp - this._lastFrameTime, 50);
+    this.frameId = 1;
+    this._frameCounter = frame.frameIndex;
+    const deltaMs = frame.deltaMs;
+    const timestamp = frame.timestamp;
     const budgets = this.quality.getBudgets();
     const reduced = prefersReducedMotion() || budgets.reducedMotion;
-    const thinking = this.state.isThinking();
     const interactive = this.quality.isInteractive();
     const chatPending = Boolean(this._chatPending) || budgets.chatPending;
 
-    // Reduced motion: heavy throttle.
-    if (reduced) {
-      this._frameSkipCounter += 1;
-      if (this._frameSkipCounter % 4 !== 0) {
-        this.perf.recordSkippedFrame();
-        this.frameId = requestAnimationFrame(this._boundTick);
-        return;
-      }
-      deltaMs = 0;
-    } else {
-      this._frameSkipCounter = 0;
-    }
+    this.quality.advanceFade(deltaMs, timestamp);
 
-    // Cap visual update rate (DOM/input stay on RAF; canvas reuses last frame).
-    const visualHz = Math.max(12, budgets.targetVisualHz ?? 45);
-    const minVisualGap = 1000 / visualHz;
-    const sincePaint = timestamp - this._lastVisualPaintMs;
-    const visualDue = this._lastVisualPaintMs === 0 || sincePaint >= minVisualGap;
-
-    // Chat pending / emergency: prefer UI — skip decorative simulation frames.
-    if (chatPending || budgets.emergency) {
-      this._idleSkipCounter += 1;
-      const skipEvery = chatPending ? 3 : 2;
-      if (!visualDue || this._idleSkipCounter % skipEvery !== 0) {
-        this.perf.recordSkippedFrame();
-        this._visualSkipCount += 1;
-        this._lastFrameTime = timestamp;
-        this.frameId = requestAnimationFrame(this._boundTick);
-        return;
-      }
-    } else {
-      // Idle throttle — keep presence without full simulation cost.
-      const idleSkip = budgets.idleFrameSkip;
-      if (!thinking && !interactive && idleSkip > 0) {
-        this._idleSkipCounter += 1;
-        if (this._idleSkipCounter % (idleSkip + 1) !== 0) {
-          this.perf.recordSkippedFrame();
-          this._lastFrameTime = timestamp;
-          this.frameId = requestAnimationFrame(this._boundTick);
-          return;
-        }
-      } else if (!visualDue && !interactive) {
-        this.perf.recordSkippedFrame();
-        this._lastFrameTime = timestamp;
-        this.frameId = requestAnimationFrame(this._boundTick);
-        return;
-      } else {
-        this._idleSkipCounter = 0;
-      }
+    // Reduced motion: update Core slowly, skip most decorative.
+    if (reduced && frame.frameIndex % 4 !== 0) {
+      this.perf.recordSkippedFrame();
+      this.state.update(timestamp, 0);
+      this.renderer.renderLight(this.camera, this.nodes, this.state, budgets);
+      this._syncCameraDom();
+      return;
     }
 
     this._fps = deltaMs > 0 ? Math.round(1000 / deltaMs) : 60;
-    this._lastFrameTime = timestamp;
     this.perf.recordFrame(deltaMs || 16.7);
 
     const frameStart = performance.now();
     this.update(timestamp, deltaMs, budgets);
 
-    const elapsedUpdate = performance.now() - frameStart;
-    const skipDecorative =
-      (interactive || chatPending) &&
-      budgets.interactiveSkipDecorative &&
-      (elapsedUpdate > budgets.frameBudgetMs * 0.45 || chatPending);
-
-    if (skipDecorative && chatPending) {
-      this.perf.recordDroppedDecorative();
-      this.renderer.renderLight(this.camera, this.nodes, this.state, budgets);
-    } else if (skipDecorative) {
-      this.perf.recordDroppedDecorative();
-      this.renderer.renderLight(this.camera, this.nodes, this.state, budgets);
-    } else {
-      this.draw(budgets);
+    // Deferred emergency / quality rebuild — never hitch mid-draw.
+    if (this._pendingEmergencyRebuild) {
+      this._pendingEmergencyRebuild = false;
+      this.resize({ immediate: true, forceRebuild: true, stageCache: true });
     }
 
-    this._lastVisualPaintMs = timestamp;
+    const elapsedUpdate = performance.now() - frameStart;
+    const overBudget = elapsedUpdate > budgets.frameBudgetMs * 0.55;
+    const decoCadence = Math.max(1, budgets.decorativeCadence ?? 2);
+    const decorativeDue = frame.frameIndex % decoCadence === 0;
+    const skipDecorative =
+      ((interactive || chatPending) && budgets.interactiveSkipDecorative) ||
+      overBudget ||
+      (chatPending && !decorativeDue);
+
+    if (skipDecorative) {
+      this.perf.recordDroppedDecorative();
+      this.renderer.renderLight(this.camera, this.nodes, this.state, budgets, deltaMs);
+    } else {
+      this.draw(budgets, deltaMs, frame.frameIndex);
+    }
+
     this.quality.sampleFrame(performance.now() - frameStart, timestamp);
 
-    // Auto emergency watchdog — do not remain at ~20 FPS indefinitely.
+    // Auto emergency watchdog — stage rebuild next frame (no mid-tick hitch).
     const rolling = this.perf.getSnapshot().rollingFps;
     const emergencyChanged = this.quality.sampleRollingFps(rolling, timestamp);
     if (emergencyChanged) {
-      this.resize({ immediate: true, forceRebuild: true });
+      this._pendingEmergencyRebuild = true;
+      this.renderer.markStaticRebuildPending();
       this._syncPresenceDecorations();
     }
 
     this._syncCameraDom();
+
+    // Throttle meta object churn — reuse one budgets summary.
+    if (!this._metaBudgets) this._metaBudgets = {};
+    this._metaBudgets.maxEdgesDrawn = budgets.maxEdgesDrawn;
+    this._metaBudgets.maxTissueDrawn = budgets.maxTissueDrawn;
+    this._metaBudgets.maxNodeCount = budgets.maxNodeCount;
+    this._metaBudgets.dustCount = budgets.dustCount;
+    this._metaBudgets.targetVisualHz = budgets.targetVisualHz;
+    this._metaBudgets.emergency = budgets.emergency;
     this.perf.updateMeta({
       paused: false,
-      rafLoops: 1,
+      rafLoops: this.scheduler.getActiveRafCount(),
       qualityMode: budgets.mode,
       qualityTier: this.quality.getTierLabel(),
       dpr: this.renderer.dpr,
-      budgets: {
-        maxEdgesDrawn: budgets.maxEdgesDrawn,
-        maxTissueDrawn: budgets.maxTissueDrawn,
-        maxNodeCount: budgets.maxNodeCount,
-        dustCount: budgets.dustCount,
-        targetVisualHz: budgets.targetVisualHz,
-        emergency: budgets.emergency,
-      },
+      budgets: this._metaBudgets,
+      staticRebuilds: this.renderer.getStaticRebuildCount(),
     });
+  }
 
-    this.frameId = requestAnimationFrame(this._boundTick);
+  /**
+   * Legacy entry — forwards to shared scheduler path for tests.
+   * @param {number} timestamp
+   */
+  tick(timestamp) {
+    this._onFrame({
+      timestamp,
+      deltaMs: 16.7,
+      frameIndex: this._frameCounter + 1,
+      clamped: false,
+    });
   }
 
   /**
@@ -707,7 +717,6 @@ export class NeuralEngine {
     this.regionFocus.decay(deltaMs);
     const attraction = this.regionFocus.getAttractionPoint(this.camera.worldWidth, this.camera.worldHeight);
 
-    // Local regional life — thinking / execution never flash the whole field.
     if (
       attraction &&
       attraction.pull > 0.08 &&
@@ -727,7 +736,6 @@ export class NeuralEngine {
       this.nodes.trySpawnConnection(timestamp, intensity, this.state.getConnectionProbabilityScale());
     }
 
-    // Cap signal simulation while pending / emergency — never denser when "thinking".
     this.state.signalLighten = Boolean(q.lightenThinking || q.emergency || q.chatPending);
     if (q.lightenThinking || q.emergency) {
       this.signals.update(timestamp, deltaMs * 0.35, this.state);
@@ -756,8 +764,12 @@ export class NeuralEngine {
     }
   }
 
-  /** @param {ReturnType<QualityController["getBudgets"]>} [budgets] */
-  draw(budgets) {
+  /**
+   * @param {ReturnType<QualityController["getBudgets"]>} [budgets]
+   * @param {number} [deltaMs]
+   * @param {number} [frameIndex]
+   */
+  draw(budgets, deltaMs = 16.7, frameIndex = 0) {
     const q = budgets ?? this.quality.getBudgets();
     this.renderer.render(
       this.camera,
@@ -768,6 +780,8 @@ export class NeuralEngine {
       this.cognitiveOverlay,
       this.ghostLayer,
       q,
+      deltaMs,
+      frameIndex,
     );
     if (!this.renderer.isStaticCacheDirty()) {
       this.quality.markStaticCacheClean();
@@ -839,5 +853,6 @@ export class NeuralEngine {
       this.regionFocus.setFocus(region, 0.85);
     }
   }
-
 }
+
+export { MIN_RESIZE_DELTA_PX, RESIZE_DEBOUNCE_MS, NEURAL_FRAME_ID };

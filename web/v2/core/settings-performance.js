@@ -125,6 +125,7 @@ function _syncFpsOverlay(store, neuralStage) {
     document.body.appendChild(el);
   }
   if (_fpsTimer) clearInterval(_fpsTimer);
+  // Throttled DOM — never update overlay every animation frame.
   _fpsTimer = setInterval(() => {
     const snap = neuralStage?.getPerformanceSnapshot?.();
     const st = store.getState();
@@ -135,13 +136,15 @@ function _syncFpsOverlay(store, neuralStage) {
     });
     const budgets = snap.budgets || {};
     el.textContent =
-      `FPS ${snap.rollingFps} (${snap.fps})\n` +
-      `${snap.frameMs}ms · ${snap.qualityMode}/${snap.qualityTier || snap.emergencyTier || ""}\n` +
-      `DPR ${snap.dpr} · ${snap.canvasWidth}×${snap.canvasHeight}\n` +
-      `edges ${budgets.maxEdgesDrawn ?? "?"} · tissue ${budgets.maxTissueDrawn ?? "?"}\n` +
+      `FPS ${snap.rollingFps} · med ${snap.medianFrameMs ?? "?"}ms\n` +
+      `p95 ${snap.p95FrameMs ?? "?"} · p99 ${snap.p99FrameMs ?? "?"}ms\n` +
+      `long>${snap.framesOver50 ?? 0} · skipDeco ${snap.skippedDecorative ?? snap.droppedDecorative ?? 0}\n` +
+      `${snap.qualityMode}/${snap.qualityTier || snap.emergencyTier || ""} · DPR ${snap.dpr}\n` +
+      `RAF ${snap.activeRafCount ?? snap.rafLoops ?? "?"} · cache×${snap.cacheRebuildCount ?? snap.staticRebuilds ?? 0}\n` +
+      `${snap.canvasWidth}×${snap.canvasHeight} · edges ${budgets.maxEdgesDrawn ?? "?"}\n` +
       `req ${st.lastRequestId ?? "—"} · ${st.chatStage ?? "idle"}\n` +
       `chat ${st.chatElapsedMs != null ? `${Math.round(st.chatElapsedMs / 1000)}s` : "—"}\n` +
       `HTTP ${st.lastHttpStatus ?? "—"} · provider ${st.providerDurationMs ?? "—"}ms` +
       (snap.paused ? "\nPAUSED" : "");
-  }, 400);
+  }, 500);
 }

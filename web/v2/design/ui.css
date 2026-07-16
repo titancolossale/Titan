@@ -337,9 +337,10 @@
   to { transform: rotate(360deg); }
 }
 
+/* Prefer opacity over filter — filter:brightness composites every frame and hitchs. */
 @keyframes tdl-v2-core-breathe-alt {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.2); }
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.92; transform: scale(1.015); }
 }
 
 /* --- Topbar --- */

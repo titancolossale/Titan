@@ -49,7 +49,7 @@ export class NeuralStage {
       return;
     }
 
-    // Idempotent — never start a second neural RAF loop.
+    // Idempotent — shared FrameScheduler; never duplicate the primary RAF.
     if (!this._engine) {
       this._engine = new NeuralEngine(this._canvas, { cameraEl: this._cameraEl });
       this._engine.init();

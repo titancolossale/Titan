@@ -67,8 +67,10 @@ def test_thinking_does_not_increase_load() -> None:
     assert "signalLighten" in engine
     assert "targetVisualHz" in engine
     assert "sampleRollingFps" in engine
-    # Chat pending throttles even while thinking (old bug skipped only !thinking).
-    assert "chatPending || budgets.emergency" in engine
+    # Chat pending lightens decorative work without densifying thinking.
+    assert "chatPending" in engine
+    assert "setChatPending" in engine
+    assert "interactiveSkipDecorative" in engine
 
     signals = (V2 / "neural" / "signals.js").read_text(encoding="utf-8")
     assert "signalLighten" in signals
@@ -148,6 +150,9 @@ globalThis.sessionStorage = {
   removeItem: (k) => store.delete(k),
 };
 globalThis.localStorage = globalThis.sessionStorage;
+globalThis.document = {
+  documentElement: { classList: { contains: () => false } },
+};
 globalThis.window = globalThis;
 globalThis.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
 globalThis.performance = { now: () => Date.now() };
@@ -192,7 +197,8 @@ const crit = qc.getBudgets();
 if (crit.maxEdgesDrawn >= emerg.maxEdgesDrawn) {
   throw new Error('critical must cut further');
 }
-if (crit.targetVisualHz > 20) throw new Error('critical visual Hz too high');
+// 11.P3: Core stays on display clock; decorative cadence carries the cut.
+if ((crit.decorativeCadence ?? 1) < 2) throw new Error('critical must raise decorative cadence');
 
 // Thinking/chat pending must not increase budgets
 qc.setChatPending(true);
@@ -224,28 +230,18 @@ def test_static_cache_not_rebuilt_every_frame() -> None:
     out = _run_node(
         r"""
 const listeners = {};
+const stubCtx = () => new Proxy({
+  fillStyle: '', strokeStyle: '', globalCompositeOperation: 'source-over', globalAlpha: 1,
+  lineCap: '', lineJoin: '', lineWidth: 1, shadowBlur: 0, shadowColor: '',
+  createRadialGradient: () => ({ addColorStop() {} }),
+  createLinearGradient: () => ({ addColorStop() {} }),
+}, { get: (t, p) => (p in t ? t[p] : () => t) });
 globalThis.window = globalThis;
 globalThis.document = {
   hidden: false,
   documentElement: { classList: { contains: () => false, toggle: () => {}, dataset: {} } },
   getElementById: () => ({ classList: { toggle() {} }, dataset: {} }),
-  createElement: (tag) => {
-    const el = { width: 0, height: 0, style: {}, getContext: null };
-    el.getContext = () => ({
-      setTransform() {},
-      fillRect() {},
-      fillStyle: '',
-      save() {},
-      restore() {},
-      beginPath() {},
-      arc() {},
-      fill() {},
-      drawImage() {},
-      createRadialGradient: () => ({ addColorStop() {} }),
-      globalCompositeOperation: 'source-over',
-    });
-    return el;
-  },
+  createElement: () => ({ width: 0, height: 0, style: {}, getContext: () => stubCtx() }),
   addEventListener: (type, fn) => { (listeners[type] ||= []).push(fn); },
   removeEventListener: () => {},
 };
@@ -253,34 +249,14 @@ globalThis.matchMedia = () => ({ matches: false, addEventListener() {}, removeEv
 globalThis.performance = { now: () => Date.now() };
 globalThis.OffscreenCanvas = class {
   constructor(w, h) { this.width = w; this.height = h; }
-  getContext() {
-    return {
-      setTransform() {},
-      fillRect() {},
-      fillStyle: '',
-      save() {},
-      restore() {},
-      beginPath() {},
-      arc() {},
-      fill() {},
-      createRadialGradient: () => ({ addColorStop() {} }),
-      globalCompositeOperation: 'source-over',
-    };
-  }
+  getContext() { return stubCtx(); }
 };
 globalThis.devicePixelRatio = 2;
 
 const { NeuralRenderer } = await import('./web/v2/neural/renderer.js');
 const canvas = {
   width: 0, height: 0, style: {},
-  getContext: () => ({
-    setTransform() {}, fillRect() {}, fillStyle: '', save() {}, restore() {},
-    beginPath() {}, arc() {}, fill() {}, drawImage() {},
-    createRadialGradient: () => ({ addColorStop() {} }),
-    globalCompositeOperation: 'source-over',
-    moveTo() {}, lineTo() {}, stroke() {}, strokeStyle: '', lineWidth: 1,
-    quadraticCurveTo() {}, bezierCurveTo() {}, closePath() {},
-  }),
+  getContext: () => stubCtx(),
 };
 const renderer = new NeuralRenderer(canvas);
 const budgets = {
@@ -309,10 +285,15 @@ const camera = {
   width: 800, height: 600, worldWidth: 800, worldHeight: 600,
   worldToScreen: (x, y) => ({ x, y }),
 };
+const emptyCore = new Proxy(
+  { centerNodeId: null, pulse: 0.5, breathePhase: 0, radius: 12 },
+  { get: (t, p) => (p in t ? t[p] : []) },
+);
 const nodes = {
   nodes: [], edges: [],
-  core: { centerNodeId: null },
+  core: emptyCore,
   getCachedLayerNodes: () => [],
+  getNodesForLayer: () => [],
   getFieldTissue: () => ({ veryFar: [], far: [], mid: [], bridge: [], near: [], foreground: [] }),
 };
 const state = {
@@ -321,13 +302,11 @@ const state = {
   getVitality: () => 0.5,
   getCognitiveSignature: () => ({}),
 };
-const signals = { signals: [], trails: [] };
-
 const before = renderer.getStaticRebuildCount();
-renderer.render(camera, nodes, signals, state, null, null, null, budgets);
+renderer.render(camera, nodes, null, state, null, null, null, budgets);
 const mid = renderer.getStaticRebuildCount();
-renderer.render(camera, nodes, signals, state, null, null, null, budgets);
-renderer.render(camera, nodes, signals, state, null, null, null, budgets);
+renderer.render(camera, nodes, null, state, null, null, null, budgets);
+renderer.render(camera, nodes, null, state, null, null, null, budgets);
 const after = renderer.getStaticRebuildCount();
 if (mid !== before + 1) throw new Error('expected one static rebuild on first frame');
 if (after !== mid) throw new Error('static cache rebuilt every frame: ' + after);
