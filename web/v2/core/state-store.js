@@ -65,6 +65,7 @@
  * @property {string | null} runtimeModel
  * @property {number | null} clientFps
  * @property {number | null} clientFrameMs
+ * @property {boolean} chatPending
  */
 
 /** @type {AppState} */
@@ -128,6 +129,7 @@ const DEFAULT_STATE = Object.freeze({
   runtimeModel: null,
   clientFps: null,
   clientFrameMs: null,
+  chatPending: false,
 });
 
 export class StateStore {

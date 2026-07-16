@@ -48,10 +48,15 @@ export class PanelMount {
    */
   transitionTo(slot, panelId, options = {}) {
     if (this._activeId === panelId) {
-      return;
+      // First boot can leave activeId set without a node — remount if missing.
+      if (this._activeNode?.isConnected) {
+        return;
+      }
     }
 
-    const duration = options.reducedMotion ? 0 : (options.duration ?? SCREEN_TRANSITION.duration);
+    const duration = options.reducedMotion
+      ? 0
+      : (this._activeId == null ? 0 : (options.duration ?? SCREEN_TRANSITION.duration));
 
     if (duration === 0) {
       this.mount(slot, panelId);

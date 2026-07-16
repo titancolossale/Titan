@@ -56,6 +56,8 @@ export class NeuralEngine {
     this._lastWidth = 0;
     this._lastHeight = 0;
     this._geometryBuildCount = 0;
+    /** @type {boolean} */
+    this._chatPending = false;
 
     this._boundResize = () => this._scheduleResize();
     this._boundTick = (ts) => this.tick(ts);
@@ -144,6 +146,14 @@ export class NeuralEngine {
   /** Notify that input / chat UI needs main-thread priority. */
   notifyInteractive(durationMs = 220) {
     this.quality.notifyInteractive(durationMs);
+  }
+
+  /** @param {boolean} pending */
+  setChatPending(pending) {
+    this._chatPending = Boolean(pending);
+    if (pending) {
+      this.quality.notifyInteractive(8000);
+    }
   }
 
   getPerformanceSnapshot() {
@@ -544,6 +554,8 @@ export class NeuralEngine {
     const reduced = prefersReducedMotion() || budgets.reducedMotion;
     const thinking = this.state.isThinking();
     const interactive = this.quality.isInteractive();
+    // During chat submit, prefer UI responsiveness over decorative neural frames.
+    const chatPending = Boolean(this._chatPending);
 
     // Reduced motion: heavy throttle.
     if (reduced) {
@@ -558,9 +570,20 @@ export class NeuralEngine {
       this._frameSkipCounter = 0;
     }
 
+    // Chat pending: skip most decorative frames so DOM paint stays responsive.
+    if (chatPending && !thinking) {
+      this._idleSkipCounter += 1;
+      if (this._idleSkipCounter % 3 !== 0) {
+        this.perf.recordSkippedFrame();
+        this._lastFrameTime = timestamp;
+        this.frameId = requestAnimationFrame(this._boundTick);
+        return;
+      }
+    }
+
     // Idle throttle — keep presence without full simulation cost.
     const idleSkip = budgets.idleFrameSkip;
-    if (!thinking && !interactive && idleSkip > 0) {
+    if (!thinking && !interactive && !chatPending && idleSkip > 0) {
       this._idleSkipCounter += 1;
       if (this._idleSkipCounter % (idleSkip + 1) !== 0) {
         this.perf.recordSkippedFrame();
@@ -568,7 +591,7 @@ export class NeuralEngine {
         this.frameId = requestAnimationFrame(this._boundTick);
         return;
       }
-    } else {
+    } else if (!chatPending) {
       this._idleSkipCounter = 0;
     }
 

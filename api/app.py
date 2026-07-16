@@ -26,8 +26,11 @@ from api.auth_routes import router as auth_router
 from api.chat_models import ChatErrorResponse, ChatMessageRequest, ChatMessageResponse
 from api.chat_service import (
     BRAIN_FAILURE_CODE,
+    PROVIDER_TIMEOUT_CODE,
+    PROVIDER_TIMEOUT_MESSAGE,
     PROVIDER_UNAVAILABLE_CODE,
     PROVIDER_UNAVAILABLE_MESSAGE,
+    get_last_chat_diag,
     process_chat_message,
     validate_message_size,
 )
@@ -263,6 +266,20 @@ def create_app() -> FastAPI:
                 http_status=503,
             )
 
+        if payload.get("error_code") == PROVIDER_TIMEOUT_CODE or (
+            not payload.get("ok", True)
+            and PROVIDER_TIMEOUT_CODE in (payload.get("errors") or [])
+        ):
+            return _chat_contract_error(
+                code=PROVIDER_TIMEOUT_CODE,
+                message=PROVIDER_TIMEOUT_MESSAGE,
+                retryable=True,
+                request_id=payload.get("request_id"),
+                conversation_id=payload.get("conversation_id"),
+                message_id=payload.get("message_id"),
+                http_status=504,
+            )
+
         if BRAIN_FAILURE_CODE in (payload.get("errors") or []):
             return _chat_contract_error(
                 code=BRAIN_FAILURE_CODE,
@@ -389,6 +406,7 @@ def create_app() -> FastAPI:
 
         queue: asyncio.Queue[str | None] = asyncio.Queue()
         loop = asyncio.get_running_loop()
+        request_id = body.resolved_request_id()
 
         def emit(event_type: str, data: dict) -> None:
             frame = format_sse_event(event_type, data)
@@ -400,20 +418,26 @@ def create_app() -> FastAPI:
                     body.message,
                     user=body.user,
                     conversation_id=body.conversation_id,
-                    request_id=body.resolved_request_id(),
+                    request_id=request_id,
                     client_metadata=body.client_metadata,
                     emit=emit,
                 )
             except Exception:
                 error_frame = format_sse_event(
                     "error",
-                    {"code": "stream_failure", "message": "Erreur interne du flux."},
+                    {
+                        "code": "brain_failure",
+                        "message": "Erreur interne du flux.",
+                        "request_id": request_id,
+                        "retryable": True,
+                    },
                 )
                 loop.call_soon_threadsafe(queue.put_nowait, error_frame)
             finally:
                 loop.call_soon_threadsafe(queue.put_nowait, None)
 
         async def generate():
+            # Blocking Brain/provider work must never run on the event loop.
             task = asyncio.create_task(asyncio.to_thread(run_chat))
             try:
                 while True:
@@ -438,6 +462,34 @@ def create_app() -> FastAPI:
                 "X-Accel-Buffering": "no",
             },
         )
+
+    @app.get("/api/chat/diagnostics", dependencies=[Depends(require_web_auth)])
+    def chat_diagnostics() -> dict[str, Any]:
+        """Authenticated safe chat diagnostics — no secrets or message content."""
+        import os
+
+        from config.settings import LLM_MODEL
+
+        titan = get_titan()
+        brain = getattr(titan, "brain", None)
+        llm = getattr(brain, "llm", None)
+        provider_configured = bool(os.getenv("OPENAI_API_KEY"))
+        model_name = getattr(llm, "model", None) or LLM_MODEL
+        last = get_last_chat_diag()
+        return {
+            "ok": True,
+            "chat_endpoint_ready": True,
+            "brain_adapter_available": callable(
+                getattr(brain, "process_request", None),
+            ),
+            "provider_configured": provider_configured,
+            "model": model_name,
+            "event_stream_enabled": True,
+            "session_valid": True,
+            "last_error_code": last.get("error_code"),
+            "last_request_id": last.get("request_id"),
+            "last_error_at": last.get("at"),
+        }
 
     @app.get("/status", dependencies=[Depends(require_web_auth)])
     def status() -> dict[str, Any]:

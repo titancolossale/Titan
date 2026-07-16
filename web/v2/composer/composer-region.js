@@ -16,6 +16,8 @@ export class ComposerRegion {
     /** @type {HTMLTextAreaElement | null} */
     this._input = null;
     this._focusState = false;
+    /** @type {boolean} */
+    this._focusBound = false;
   }
 
   /**
@@ -115,6 +117,9 @@ export class ComposerRegion {
       document.getElementById("tdl-v2-chat-input")
     );
     if (!input || !this._brain) return;
+    // Idempotent — neural focus listeners must not stack across re-entry.
+    if (this._focusBound) return;
+    this._focusBound = true;
 
     input.addEventListener("focus", () => {
       this._focusState = true;
@@ -140,6 +145,7 @@ export class ComposerRegion {
       }
     });
 
+    // Neural pulse only — ConversationManager owns the actual send.
     document.getElementById("tdl-v2-send-chat")?.addEventListener("click", () => {
       this._neural?.notifyInteractive?.(800);
     });
@@ -149,10 +155,17 @@ export class ComposerRegion {
       if (composer) {
         composer.dataset.thinking = String(snap.thinking);
       }
+      // Do not fight ConversationManager stop-button visibility during chat pending.
+      if (this._storeChatPending?.()) return;
       const stopBtn = document.getElementById("tdl-v2-stop-generation");
-      if (stopBtn) {
-        stopBtn.hidden = snap.thinking ? "" : true;
+      if (stopBtn && !snap.thinking) {
+        /* leave ConversationManager in control while idle */
       }
     });
+  }
+
+  /** Optional hook — overridden when store is wired via setBrain path. */
+  _storeChatPending() {
+    return false;
   }
 }

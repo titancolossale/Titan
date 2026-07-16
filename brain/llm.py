@@ -18,14 +18,19 @@ from openai import APIConnectionError, APITimeoutError, OpenAI, RateLimitError
 from brain.identity import IDENTITY
 from brain.llm_provider import LLMProvider
 from config.settings import LLM_MODEL, PROMPTS_DIR
+from config.settings import TITAN_LLM_TIMEOUT_SECONDS
 
 logger = logging.getLogger(__name__)
 
 LLM_ERROR_MESSAGE = (
     "Désolé, je n'ai pas pu contacter le modèle. Réessaie dans un instant."
 )
+LLM_TIMEOUT_MESSAGE = (
+    "Titan met trop de temps à répondre. Réessaie."
+)
 MAX_RETRIES = 2
 BACKOFF_SECONDS = (1, 2)
+PROVIDER_TIMEOUT_CODE = "provider_timeout"
 
 
 def load_prompt_file(filename: str, prompts_dir: Path | None = None) -> str:
@@ -57,10 +62,17 @@ class LLM(LLMProvider):
         prompts_dir: Path | None = None,
     ) -> None:
         load_dotenv()
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        timeout_s = float(TITAN_LLM_TIMEOUT_SECONDS)
+        self.client = OpenAI(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            timeout=timeout_s,
+        )
         self.model = model if model is not None else LLM_MODEL
         self._prompts_dir = prompts_dir
         self._system_instructions = build_system_instructions(prompts_dir)
+        self._timeout_seconds = timeout_s
+        # Last safe provider error code for diagnostics (no secrets).
+        self.last_error_code: str | None = None
 
     @property
     def system_instructions(self) -> str:
@@ -84,29 +96,54 @@ class LLM(LLMProvider):
         instructions: str,
         *,
         model: str | None = None,
+        request_id: str | None = None,
     ) -> str:
         """Send a prompt with custom system instructions (agent-scoped calls — P5-030)."""
         model_name = model if model is not None else self.model
+        started = time.perf_counter()
+        self.last_error_code = None
+        if request_id:
+            logger.info(
+                "CHAT_PROVIDER_START request_id=%s model=%s",
+                request_id,
+                model_name,
+            )
         for attempt in range(MAX_RETRIES + 1):
             try:
                 response = self._create_scoped_response(prompt, instructions, model_name)
+                if request_id:
+                    logger.info(
+                        "CHAT_PROVIDER_END request_id=%s status=ok duration_ms=%d",
+                        request_id,
+                        int((time.perf_counter() - started) * 1000),
+                    )
                 return response.output_text
             except Exception as exc:
+                if isinstance(exc, APITimeoutError):
+                    self.last_error_code = PROVIDER_TIMEOUT_CODE
+                    logger.warning(
+                        "CHAT_PROVIDER_END request_id=%s status=timeout duration_ms=%d",
+                        request_id or "-",
+                        int((time.perf_counter() - started) * 1000),
+                    )
+                    return LLM_TIMEOUT_MESSAGE
                 if self._is_transient_error(exc) and attempt < MAX_RETRIES:
                     wait = BACKOFF_SECONDS[attempt]
                     logger.warning(
                         "LLM transient error (attempt %d/%d): %s — retry in %ds",
                         attempt + 1,
                         MAX_RETRIES + 1,
-                        exc,
+                        type(exc).__name__,
                         wait,
                     )
                     time.sleep(wait)
                     continue
 
-                logger.error("LLM scoped request failed: %s", exc)
+                self.last_error_code = "provider_unavailable"
+                logger.error("LLM scoped request failed: %s", type(exc).__name__)
                 return LLM_ERROR_MESSAGE
 
+        self.last_error_code = "provider_unavailable"
         return LLM_ERROR_MESSAGE
 
     def ask_with_model(self, prompt: str, *, model: str | None = None) -> str:

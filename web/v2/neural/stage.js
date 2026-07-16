@@ -84,6 +84,11 @@ export class NeuralStage {
     this._engine?.notifyInteractive?.(durationMs);
   }
 
+  /** @param {boolean} pending */
+  setChatPending(pending) {
+    this._engine?.setChatPending?.(pending);
+  }
+
   getPerformanceSnapshot() {
     return this._engine?.getPerformanceSnapshot?.() ?? null;
   }

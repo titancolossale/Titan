@@ -21,9 +21,13 @@ from api.orchestrator_progress import (
 )
 from api.tool_activity import collect_audit_events_since, format_tool_activity
 from api.titan_service import _audit_start_index, get_titan
-from brain.llm import LLM_ERROR_MESSAGE
+from brain.llm import LLM_ERROR_MESSAGE, LLM_TIMEOUT_MESSAGE
 from brain.natural_language_orchestrator import DetectedIntent, OrchestrationResult
-from config.settings import LLM_MODEL, TITAN_WEB_MAX_MESSAGE_LENGTH
+from config.settings import (
+    LLM_MODEL,
+    TITAN_CHAT_DIAGNOSTICS,
+    TITAN_WEB_MAX_MESSAGE_LENGTH,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +37,14 @@ _brain_lock = threading.Lock()
 _IDEMPOTENCY_MAX = 256
 _idempotency_lock = threading.Lock()
 _idempotency_cache: OrderedDict[str, dict[str, Any]] = OrderedDict()
+
+# Safe last-error for authenticated diagnostics (no message content / secrets).
+_last_diag_lock = threading.Lock()
+_last_diag: dict[str, Any] = {
+    "error_code": None,
+    "request_id": None,
+    "at": None,
+}
 
 _CONVERSATION_INTENTS = frozenset({
     DetectedIntent.CONVERSATION.value,
@@ -62,10 +74,36 @@ PROVIDER_UNAVAILABLE_CODE = "provider_unavailable"
 PROVIDER_UNAVAILABLE_MESSAGE = (
     "Titan ne peut pas joindre son modèle pour le moment."
 )
+PROVIDER_TIMEOUT_CODE = "provider_timeout"
+PROVIDER_TIMEOUT_MESSAGE = (
+    "Titan met trop de temps à répondre. Réessaie."
+)
 BRAIN_FAILURE_CODE = "brain_failure"
 BRAIN_FAILURE_MESSAGE = (
     "Désolé, une erreur interne s'est produite. On peut réessayer."
 )
+DUPLICATE_REQUEST_CODE = "duplicate_request"
+
+
+def _chat_log(event: str, **fields: Any) -> None:
+    """Concise correlation logs — gated; never logs message content."""
+    if not TITAN_CHAT_DIAGNOSTICS:
+        return
+    parts = [f"{key}={value}" for key, value in fields.items() if value is not None]
+    logger.info("%s %s", event, " ".join(parts))
+
+
+def _record_diag_error(code: str | None, request_id: str | None = None) -> None:
+    with _last_diag_lock:
+        _last_diag["error_code"] = code
+        _last_diag["request_id"] = request_id
+        _last_diag["at"] = datetime.now(timezone.utc).isoformat()
+
+
+def get_last_chat_diag() -> dict[str, Any]:
+    """Return last safe chat diagnostic snapshot (no secrets / message bodies)."""
+    with _last_diag_lock:
+        return dict(_last_diag)
 
 
 def _new_request_id(request_id: str | None) -> str:
@@ -250,8 +288,18 @@ def _build_errors(result: OrchestrationResult) -> list[str]:
     return [_sanitize_text(str(error), max_len=200)]
 
 
+def _is_provider_timeout(result: OrchestrationResult) -> bool:
+    artifacts = result.artifacts or {}
+    if artifacts.get("error") == PROVIDER_TIMEOUT_CODE:
+        return True
+    response = (result.final_response or "").strip()
+    return response == LLM_TIMEOUT_MESSAGE.strip()
+
+
 def _is_provider_failure(result: OrchestrationResult) -> bool:
     """Detect LLM provider failure without inventing a successful answer."""
+    if _is_provider_timeout(result):
+        return True
     artifacts = result.artifacts or {}
     if artifacts.get("error") in {PROVIDER_UNAVAILABLE_CODE, "llm_unavailable"}:
         return True
@@ -372,6 +420,7 @@ def build_chat_response(
     """Serialize orchestration result into a user-safe API payload."""
     approval = _extract_approval(result)
     think_ctx = titan.brain.last_think_context
+    timed_out = _is_provider_timeout(result)
     provider_failure = _is_provider_failure(result)
     if provider_failure:
         approval["execution_status"] = "error"
@@ -381,7 +430,9 @@ def build_chat_response(
         brain_state = "error"
 
     artifacts = dict(result.artifacts or {})
-    if provider_failure:
+    if timed_out:
+        artifacts.setdefault("error", PROVIDER_TIMEOUT_CODE)
+    elif provider_failure:
         artifacts.setdefault("error", PROVIDER_UNAVAILABLE_CODE)
 
     pipeline_summary = {
@@ -391,8 +442,17 @@ def build_chat_response(
     }
 
     errors = _build_errors(result)
-    if provider_failure and PROVIDER_UNAVAILABLE_CODE not in errors:
-        errors.append(PROVIDER_UNAVAILABLE_CODE)
+    error_code = None
+    if timed_out:
+        error_code = PROVIDER_TIMEOUT_CODE
+        if PROVIDER_TIMEOUT_CODE not in errors:
+            errors.append(PROVIDER_TIMEOUT_CODE)
+    elif provider_failure:
+        error_code = PROVIDER_UNAVAILABLE_CODE
+        if PROVIDER_UNAVAILABLE_CODE not in errors:
+            errors.append(PROVIDER_UNAVAILABLE_CODE)
+    elif BRAIN_FAILURE_CODE in errors:
+        error_code = BRAIN_FAILURE_CODE
 
     ok = not provider_failure and approval["execution_status"] != "error"
     runtime = build_runtime_summary(
@@ -405,7 +465,9 @@ def build_chat_response(
     )
 
     response_text = result.final_response
-    if provider_failure:
+    if timed_out:
+        response_text = PROVIDER_TIMEOUT_MESSAGE
+    elif provider_failure:
         response_text = PROVIDER_UNAVAILABLE_MESSAGE
 
     return {
@@ -433,8 +495,8 @@ def build_chat_response(
         "duration_seconds": round(result.duration_seconds, 4),
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "runtime": runtime,
-        "error_code": PROVIDER_UNAVAILABLE_CODE if provider_failure else None,
-        "retryable": provider_failure,
+        "error_code": error_code,
+        "retryable": bool(error_code),
     }
 
 
@@ -463,12 +525,27 @@ def process_chat_message(
 
     client_provided_id = bool((request_id or "").strip())
     req_id = _new_request_id(request_id)
+    started = datetime.now(timezone.utc)
 
     if client_provided_id:
         cached = _cache_get(req_id)
         if cached is not None:
-            logger.info("Idempotent chat replay request_id=%s", req_id)
+            _chat_log(
+                "CHAT_API_RECEIVED",
+                request_id=req_id,
+                code=DUPLICATE_REQUEST_CODE,
+                message_length=len(text),
+            )
+            cached = copy.deepcopy(cached)
+            cached["duplicate"] = True
             return cached
+
+    _chat_log(
+        "CHAT_API_RECEIVED",
+        request_id=req_id,
+        message_length=len(text),
+        conversation_id=(conversation_id or "")[:32] or None,
+    )
 
     if client_metadata:
         logger.debug(
@@ -490,7 +567,10 @@ def process_chat_message(
 
         audit_start = _audit_start_index(titan)
 
+        _chat_log("CHAT_BRAIN_START", request_id=req_id, conversation_id=conv_id)
         try:
+            # Provider timeout is enforced by OpenAI client (TITAN_LLM_TIMEOUT_SECONDS).
+            # This call is sync and must run off the FastAPI event loop (threadpool / to_thread).
             result = titan.brain.process_request(text, stream=stream)
         except Exception:
             logger.exception("Brain.process_request failure during web chat")
@@ -513,10 +593,15 @@ def process_chat_message(
                 artifacts={"error": BRAIN_FAILURE_CODE},
                 duration_seconds=0.0,
             )
+            _record_diag_error(BRAIN_FAILURE_CODE, req_id)
 
         response_text = result.final_response
-        if _is_provider_failure(result):
+        if _is_provider_timeout(result):
+            response_text = PROVIDER_TIMEOUT_MESSAGE
+            _record_diag_error(PROVIDER_TIMEOUT_CODE, req_id)
+        elif _is_provider_failure(result):
             response_text = PROVIDER_UNAVAILABLE_MESSAGE
+            _record_diag_error(PROVIDER_UNAVAILABLE_CODE, req_id)
         titan.conversation.add_message("Titan", response_text)
 
         tool_activity, memory_activity, orchestrator_progress = _collect_activity(
@@ -533,6 +618,17 @@ def process_chat_message(
         memory_activity=memory_activity,
         orchestrator_progress=orchestrator_progress,
         message_id=message_id,
+    )
+
+    duration_ms = int(
+        (datetime.now(timezone.utc) - started).total_seconds() * 1000,
+    )
+    _chat_log(
+        "CHAT_API_RESPONSE",
+        request_id=req_id,
+        status="ok" if payload.get("ok") else "error",
+        code=payload.get("error_code"),
+        duration_ms=duration_ms,
     )
 
     if client_provided_id:

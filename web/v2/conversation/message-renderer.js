@@ -2,6 +2,9 @@
 
 /**
  * Renders user and Titan messages into the chat panel.
+ *
+ * Container is resolved lazily — the chat panel mounts after ConversationManager
+ * bindDom during boot, so a stale null reference must never block submit.
  */
 export class MessageRenderer {
   /**
@@ -9,9 +12,7 @@ export class MessageRenderer {
    */
   constructor(options = {}) {
     /** @type {HTMLElement | null} */
-    this._container =
-      options.container ??
-      /** @type {HTMLElement | null} */ (document.getElementById("tdl-v2-chat-messages"));
+    this._container = options.container ?? null;
     /** @type {import("../core/state-store.js").StateStore | null} */
     this._store = options.store ?? null;
   }
@@ -21,9 +22,27 @@ export class MessageRenderer {
     this._container = container;
   }
 
+  /**
+   * Resolve (or re-resolve) the messages container from the live DOM.
+   * @returns {HTMLElement}
+   */
+  ensureContainer() {
+    if (this._container?.isConnected) {
+      return this._container;
+    }
+    const live = /** @type {HTMLElement | null} */ (
+      document.getElementById("tdl-v2-chat-messages")
+    );
+    if (!live) {
+      throw new Error("MessageRenderer: chat panel not mounted");
+    }
+    this._container = live;
+    return live;
+  }
+
   /** Hide welcome block after first message. */
   _hideWelcome() {
-    const welcome = this._container?.querySelector(".tdl-v2-conversation__welcome");
+    const welcome = this.ensureContainer().querySelector(".tdl-v2-conversation__welcome");
     if (welcome) {
       welcome.remove();
     }
@@ -31,26 +50,49 @@ export class MessageRenderer {
 
   /**
    * @param {string} text
-   * @param {"user"|"titan"|"system"} role
+   * @param {"user"|"titan"|"system"|"error"} role
    * @returns {HTMLElement}
    */
   appendMessage(text, role) {
-    if (!this._container) {
-      throw new Error("MessageRenderer: container not mounted");
-    }
-
+    const container = this.ensureContainer();
     this._hideWelcome();
 
     const row = document.createElement("div");
-    row.className = `tdl-v2-conversation__message tdl-v2-conversation__message--${role}`;
-    row.dataset.role = role;
+    const normalized = role === "error" ? "error" : role;
+    row.className = `tdl-v2-conversation__message tdl-v2-conversation__message--${normalized}`;
+    row.dataset.role = normalized;
 
     const bubble = document.createElement("div");
     bubble.className = "tdl-v2-conversation__bubble";
     bubble.textContent = text;
 
     row.appendChild(bubble);
-    this._container.appendChild(row);
+    container.appendChild(row);
+    this.scrollToBottom(true);
+    return row;
+  }
+
+  /**
+   * Compact inline error card (retryable failures).
+   * @param {string} message
+   * @param {{ code?: string, requestId?: string | null }} [meta]
+   * @returns {HTMLElement}
+   */
+  appendErrorCard(message, meta = {}) {
+    const container = this.ensureContainer();
+    this._hideWelcome();
+
+    const row = document.createElement("div");
+    row.className = "tdl-v2-conversation__message tdl-v2-conversation__message--error";
+    row.dataset.role = "error";
+    if (meta.code) row.dataset.errorCode = meta.code;
+    if (meta.requestId) row.dataset.requestId = meta.requestId;
+
+    const bubble = document.createElement("div");
+    bubble.className = "tdl-v2-conversation__bubble tdl-v2-conversation__bubble--error";
+    bubble.textContent = message;
+    row.appendChild(bubble);
+    container.appendChild(row);
     this.scrollToBottom(true);
     return row;
   }
@@ -60,10 +102,7 @@ export class MessageRenderer {
    * @returns {{ row: HTMLElement, bubble: HTMLElement }}
    */
   beginTitanMessage() {
-    if (!this._container) {
-      throw new Error("MessageRenderer: container not mounted");
-    }
-
+    const container = this.ensureContainer();
     this._hideWelcome();
 
     const row = document.createElement("div");
@@ -76,7 +115,7 @@ export class MessageRenderer {
     bubble.textContent = "";
 
     row.appendChild(bubble);
-    this._container.appendChild(row);
+    container.appendChild(row);
     this.scrollToBottom(true);
     return { row, bubble };
   }
@@ -104,8 +143,12 @@ export class MessageRenderer {
    * @param {object} [data]
    */
   showApprovalBanner(summary, data = {}) {
-    if (!this._container) return;
-    const existing = this._container.parentElement?.querySelector(
+    try {
+      this.ensureContainer();
+    } catch {
+      return;
+    }
+    const existing = this._container?.parentElement?.querySelector(
       ".tdl-v2-conversation__approval",
     );
     existing?.remove();
@@ -121,7 +164,7 @@ export class MessageRenderer {
     banner.appendChild(title);
     banner.appendChild(body);
 
-    this._container.parentElement?.insertBefore(banner, this._container);
+    this._container?.parentElement?.insertBefore(banner, this._container);
     this._store?.setState({
       approvalRequired: true,
       approvalId: data.approval_id ?? null,
@@ -176,6 +219,11 @@ export class MessageRenderer {
 
   /** @param {boolean} [smooth] */
   scrollToBottom(smooth = false) {
+    try {
+      this.ensureContainer();
+    } catch {
+      return;
+    }
     const scroll = this._container?.closest(".tdl-v2-conversation__scroll");
     if (!scroll) return;
     scroll.scrollTo({

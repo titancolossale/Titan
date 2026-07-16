@@ -1,4 +1,4 @@
-/** Titan Frontend V2 — Backend Bridge (Phase E8 + Web Runtime V1). */
+/** Titan Frontend V2 — Backend Bridge (Phase E8 + Web Runtime V1 + 11.1B). */
 
 import { routeBackendEvent } from "./event-router.js";
 import { COGNITIVE_STREAM_EVENTS } from "./cognitive-pipeline-store.js";
@@ -9,10 +9,14 @@ import {
   saveConversationId,
   saveRequestId,
 } from "./conversation-session.js";
+import { chatDiag } from "./chat-diagnostics.js";
+
 const RECONNECT_BASE_MS = 1500;
 const RECONNECT_MAX_MS = 30000;
-const RECONNECT_AUTH_FAIL_MAX = 3;
+const RECONNECT_AUTH_FAIL_MAX = 2;
 const RECONNECT_HARD_MAX = 12;
+/** Client-side chat deadline — must stay below typical proxy idle limits. */
+export const CHAT_CLIENT_TIMEOUT_MS = 55000;
 
 /** Thrown when the session cookie/token is no longer valid. */
 export class SessionExpiredError extends Error {
@@ -28,7 +32,7 @@ export class SessionExpiredError extends Error {
 export class ChatRequestError extends Error {
   /**
    * @param {string} message
-   * @param {{ code?: string, retryable?: boolean, status?: number }} [options]
+   * @param {{ code?: string, retryable?: boolean, status?: number, requestId?: string | null }} [options]
    */
   constructor(message, options = {}) {
     super(message);
@@ -36,6 +40,7 @@ export class ChatRequestError extends Error {
     this.code = options.code ?? "request_failed";
     this.retryable = Boolean(options.retryable);
     this.status = options.status ?? 0;
+    this.requestId = options.requestId ?? null;
   }
 }
 
@@ -111,6 +116,8 @@ export class BackendBridge {
     this._missedQueue = [];
     /** @type {boolean} */
     this._submitting = false;
+    /** @type {boolean} */
+    this._connecting = false;
     this._boundVisibility = () => this._onVisibilityChange();
     document.addEventListener("visibilitychange", this._boundVisibility);
 
@@ -135,22 +142,29 @@ export class BackendBridge {
   /** Establish persistent SSE connection to /events/stream. */
   async connect() {
     if (this._eventSource) return;
+    if (this._connecting) return;
 
-    // Explicit connect clears prior unauthorized lock (e.g. after login).
-    this._authBlocked = false;
-    this._authFailStreak = 0;
-    this._shouldReconnect = true;
-    this._reconnectAttempts = 0;
+    this._connecting = true;
+    try {
+      // Explicit connect clears prior unauthorized lock (e.g. after login).
+      this._authBlocked = false;
+      this._authFailStreak = 0;
+      this._shouldReconnect = true;
+      this._reconnectAttempts = 0;
 
-    const allowed = await this._ensureAuthorizedToStream();
-    if (!allowed) {
-      this._authBlocked = true;
-      this._shouldReconnect = false;
-      return;
+      const allowed = await this._ensureAuthorizedToStream();
+      if (!allowed) {
+        this._authBlocked = true;
+        this._shouldReconnect = false;
+        chatDiag("CHAT_ERROR", { code: "sse_auth_blocked", status: "not_authenticated" });
+        return;
+      }
+
+      this._openEventSource();
+      this._flushMissedQueue();
+    } finally {
+      this._connecting = false;
     }
-
-    this._openEventSource();
-    this._flushMissedQueue();
   }
 
   /** Close SSE connection and cancel in-flight chat stream. */
@@ -256,20 +270,36 @@ export class BackendBridge {
     const text = (message ?? "").trim();
     if (!text) return { response: "" };
     if (this._submitting) {
+      chatDiag("CHAT_ERROR", { code: "duplicate_request", status: "skipped" });
       return { response: "", skipped: true };
     }
 
     this._submitting = true;
     this._chatAbort?.abort();
     this._chatAbort = new AbortController();
+    const requestId = options.request_id ?? options.client_request_id ?? createClientRequestId();
+    const conversationId = options.conversation_id ?? getStoredConversationId();
+    const startedAt = performance.now();
+
+    /** @type {ReturnType<typeof setTimeout> | null} */
+    let timeoutId = window.setTimeout(() => {
+      const err = new DOMException("Chat request timed out", "AbortError");
+      // Tag so ConversationManager can show provider_timeout, not silent abort.
+      /** @type {any} */
+      (err).code = "provider_timeout";
+      this._chatAbort?.abort(err);
+    }, CHAT_CLIENT_TIMEOUT_MS);
+
     this.connection.streaming = true;
     this.connection.mode = "streaming";
     if (this._store) {
-      this._store.setState({ lastError: null, connectionState: "streaming" });
+      this._store.setState({
+        lastError: null,
+        connectionState: "streaming",
+        lastRequestId: requestId,
+        chatPending: true,
+      });
     }
-
-    const requestId = options.request_id ?? createClientRequestId();
-    const conversationId = options.conversation_id ?? getStoredConversationId();
 
     let responseText = "";
     let orchestrationPayload = null;
@@ -277,6 +307,12 @@ export class BackendBridge {
     let streamError = null;
 
     try {
+      chatDiag("CHAT_HTTP_SENT", {
+        request_id: requestId,
+        message_length: text.length,
+        conversation_id: conversationId,
+      });
+
       const httpResponse = await fetch("/chat/stream", {
         method: "POST",
         signal: this._chatAbort.signal,
@@ -290,17 +326,24 @@ export class BackendBridge {
           user: options.user ?? null,
           conversation_id: conversationId,
           request_id: requestId,
+          client_request_id: requestId,
           client_metadata: options.client_metadata ?? null,
         }),
       });
 
       if (!httpResponse.ok) {
         if (httpResponse.status === 401) {
+          chatDiag("CHAT_API_RESPONSE", {
+            request_id: requestId,
+            status: 401,
+            code: "unauthenticated",
+            duration_ms: Math.round(performance.now() - startedAt),
+          });
           redirectToLogin();
           throw new SessionExpiredError();
         }
         let detail = "";
-        let code = "request_failed";
+        let code = httpResponse.status === 403 ? "unauthenticated" : "request_failed";
         let retryable = httpResponse.status >= 500;
         try {
           const raw = await httpResponse.text();
@@ -315,6 +358,11 @@ export class BackendBridge {
               detail = typeof parsed.detail === "string"
                 ? parsed.detail
                 : JSON.stringify(parsed.detail);
+              if (httpResponse.status === 403) {
+                code = "invalid_request";
+                detail = "Requête refusée (session/CSRF). Recharge la page ou reconnecte-toi.";
+                retryable = true;
+              }
             } else if (parsed?.error && typeof parsed.error === "string") {
               detail = parsed.error;
               code = parsed.code ?? code;
@@ -325,16 +373,26 @@ export class BackendBridge {
         } catch {
           detail = httpResponse.statusText;
         }
+        if (httpResponse.status === 403 && /csrf|forbidden/i.test(String(detail))) {
+          code = "invalid_request";
+          detail = "Requête refusée (session/CSRF). Recharge la page ou reconnecte-toi.";
+          retryable = true;
+        }
         throw new ChatRequestError(detail || httpResponse.statusText, {
           code,
           retryable,
           status: httpResponse.status,
+          requestId,
         });
       }
 
       const reader = httpResponse.body?.getReader();
       if (!reader) {
-        throw new Error("Flux SSE indisponible.");
+        throw new ChatRequestError("Flux SSE indisponible.", {
+          code: "response_parse_error",
+          retryable: true,
+          requestId,
+        });
       }
 
       const decoder = new TextDecoder();
@@ -367,6 +425,7 @@ export class BackendBridge {
                 {
                   code: frame.data.error_code ?? "brain_failure",
                   retryable: frame.data.retryable !== false,
+                  requestId: frame.data.request_id ?? requestId,
                 },
               );
             }
@@ -375,14 +434,23 @@ export class BackendBridge {
             streamError = new ChatRequestError(
               frame.data.message ?? "Erreur pendant le traitement Titan.",
               {
-                code: frame.data.code ?? "stream_error",
+                code: frame.data.code ?? "unexpected_error",
                 retryable: true,
+                requestId: frame.data.request_id ?? requestId,
               },
             );
           }
           this._handleBackendEvent(frame.event, frame.data, frame.id);
         }
       }
+
+      chatDiag("CHAT_API_RESPONSE", {
+        request_id: requestId,
+        status: httpResponse.status,
+        ok: !streamError || Boolean(responseText),
+        response_length: responseText.length,
+        duration_ms: Math.round(performance.now() - startedAt),
+      });
 
       if (streamError && !responseText) {
         throw streamError;
@@ -393,9 +461,63 @@ export class BackendBridge {
         orchestration: orchestrationPayload,
         conversation_id: conversationId,
         request_id: requestId,
+        client_request_id: requestId,
         ...options,
       };
+    } catch (error) {
+      const isTimeout =
+        error?.code === "provider_timeout" ||
+        (error?.name === "AbortError" &&
+          (String(error?.message || "").includes("timed out") ||
+            performance.now() - startedAt >= CHAT_CLIENT_TIMEOUT_MS - 50));
+
+      if (isTimeout) {
+        chatDiag("CHAT_ERROR", {
+          request_id: requestId,
+          code: "provider_timeout",
+          duration_ms: Math.round(performance.now() - startedAt),
+        });
+        throw new ChatRequestError(
+          "Titan met trop de temps à répondre. Réessaie.",
+          {
+            code: "provider_timeout",
+            retryable: true,
+            requestId,
+          },
+        );
+      }
+
+      if (error?.name === "AbortError") {
+        chatDiag("CHAT_ERROR", {
+          request_id: requestId,
+          code: "aborted",
+          duration_ms: Math.round(performance.now() - startedAt),
+        });
+        throw error;
+      }
+
+      if (error instanceof SessionExpiredError || error instanceof ChatRequestError) {
+        throw error;
+      }
+
+      chatDiag("CHAT_ERROR", {
+        request_id: requestId,
+        code: "network_error",
+        duration_ms: Math.round(performance.now() - startedAt),
+      });
+      throw new ChatRequestError(
+        error instanceof Error ? error.message : "Erreur réseau.",
+        {
+          code: "network_error",
+          retryable: true,
+          requestId,
+        },
+      );
     } finally {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+        timeoutId = null;
+      }
       this._submitting = false;
       this.connection.streaming = false;
       this.connection.mode = this.connection.connected ? "idle" : "disconnected";
@@ -514,11 +636,16 @@ export class BackendBridge {
     if (document.hidden) return;
 
     this._authFailStreak += 1;
+    // Probe auth early — EventSource cannot expose 401 status.
     if (this._authFailStreak >= RECONNECT_AUTH_FAIL_MAX) {
       const allowed = await this._ensureAuthorizedToStream();
       if (!allowed) {
         this._authBlocked = true;
         this._shouldReconnect = false;
+        chatDiag("CHAT_ERROR", {
+          code: "sse_unauthorized",
+          retries: this._authFailStreak,
+        });
         this._dispatch("connection", { state: "unauthorized" });
         return;
       }
@@ -633,11 +760,16 @@ export class BackendBridge {
 
 /**
  * Attach BackendBridge API to a CognitiveStateEngine instance.
+ * Idempotent — reuses an existing bridge when already attached.
  * @param {import("./cognitive-state-engine.js").CognitiveStateEngine} brain
  * @param {import("./state-store.js").StateStore | null} store
  * @returns {BackendBridge}
  */
 export function attachBackendBridge(brain, store = null) {
+  if (brain._backendBridge instanceof BackendBridge) {
+    return brain._backendBridge;
+  }
+
   const bridge = new BackendBridge(brain, store);
 
   brain.connect = () => bridge.connect();

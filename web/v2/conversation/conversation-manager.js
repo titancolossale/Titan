@@ -1,23 +1,39 @@
-/** Titan Frontend V2 — Conversation Manager (Phase E7 + E8 + Web Runtime V1). */
+/** Titan Frontend V2 — Conversation Manager (Phase E7 + E8 + Web Runtime V1 + 11.1B). */
 
 import { MessageRenderer } from "./message-renderer.js";
 import { CONVERSATION_ACTIVITY_EVENTS } from "./conversation-activity-engine.js";
 import { getStoredConversationId } from "../core/conversation-session.js";
-import { SessionExpiredError } from "../core/backend-bridge.js";
+import { SessionExpiredError, ChatRequestError } from "../core/backend-bridge.js";
+import { chatDiag } from "../core/chat-diagnostics.js";
+
+/**
+ * Yield to the browser so optimistic DOM updates paint before network work.
+ * @returns {Promise<void>}
+ */
+function yieldForPaint() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+}
 
 /**
  * Orchestrates composer UX, message rendering, and backend chat stream.
  */
 export class ConversationManager {
   /**
-   * @param {{ brain: import("../core/cognitive-state-engine.js").CognitiveStateEngine, store?: import("../core/state-store.js").StateStore }} deps
+   * @param {{ brain: import("../core/cognitive-state-engine.js").CognitiveStateEngine, store?: import("../core/state-store.js").StateStore, neural?: { notifyInteractive?: Function } | null }} deps
    */
   constructor(deps) {
     this._brain = deps.brain;
     this._store = deps.store ?? null;
+    this._neural = deps.neural ?? null;
     this._renderer = new MessageRenderer({ store: deps.store ?? null });
     /** @type {boolean} */
     this._busy = false;
+    /** @type {boolean} */
+    this._domBound = false;
     /** @type {ReturnType<typeof setInterval> | null} */
     this._streamTimer = null;
     /** @type {HTMLElement | null} */
@@ -32,8 +48,30 @@ export class ConversationManager {
     this._lastFailedMessage = null;
     /** @type {HTMLElement | null} */
     this._retryBtn = null;
+    /** @type {string | null} */
+    this._activeRequestId = null;
+    /** @type {(event: Event) => void} */
+    this._onSendClick = () => {
+      void this.send();
+    };
+    /** @type {(event: Event) => void} */
+    this._onStopClick = () => this.interrupt();
+    /** @type {(event: Event) => void} */
+    this._onRetryClick = () => {
+      void this.retryLast();
+    };
+    /** @type {(event: KeyboardEvent) => void} */
+    this._onInputKeydown = (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        void this.send();
+      }
+    };
   }
 
+  /**
+   * Wire composer + chat panel listeners. Idempotent — safe to call after panel mount.
+   */
   bindDom() {
     this._input = /** @type {HTMLTextAreaElement | null} */ (
       document.getElementById("tdl-v2-chat-input")
@@ -47,28 +85,28 @@ export class ConversationManager {
     this._thinkingEl = document.getElementById("tdl-v2-thinking-indicator");
     this._retryBtn = document.getElementById("tdl-v2-chat-retry");
 
-    const messages = document.getElementById("tdl-v2-chat-messages");
-    if (messages) {
-      this._renderer.setContainer(messages);
+    try {
+      this._renderer.ensureContainer();
+    } catch {
+      /* panel may mount shortly after boot — send() re-resolves */
     }
 
-    this._sendBtn?.addEventListener("click", () => this.send());
-    this._stopBtn?.addEventListener("click", () => this.interrupt());
-    this._retryBtn?.addEventListener("click", () => this.retryLast());
+    if (this._domBound) {
+      return;
+    }
+    this._domBound = true;
 
-    this._input?.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-        this.send();
-      }
-    });
+    this._sendBtn?.addEventListener("click", this._onSendClick);
+    this._stopBtn?.addEventListener("click", this._onStopClick);
+    this._retryBtn?.addEventListener("click", this._onRetryClick);
+    this._input?.addEventListener("keydown", this._onInputKeydown);
 
     this._brain.conversation.onActivity((event) => {
       this._onConversationActivity(event);
     });
 
     this._brain.on?.("response", (data) => {
-      if (data.text) {
+      if (data.text && !this._streamTimer) {
         this._streamResponse(data.text, data.metadata ?? null);
       }
     });
@@ -85,8 +123,29 @@ export class ConversationManager {
     }
   }
 
+  /** Re-resolve DOM nodes after delayed panel mount (boot race). */
+  refreshDom() {
+    this._input = /** @type {HTMLTextAreaElement | null} */ (
+      document.getElementById("tdl-v2-chat-input")
+    );
+    this._sendBtn = /** @type {HTMLButtonElement | null} */ (
+      document.getElementById("tdl-v2-send-chat")
+    );
+    this._stopBtn = /** @type {HTMLButtonElement | null} */ (
+      document.getElementById("tdl-v2-stop-generation")
+    );
+    this._thinkingEl = document.getElementById("tdl-v2-thinking-indicator");
+    this._retryBtn = document.getElementById("tdl-v2-chat-retry");
+    try {
+      this._renderer.ensureContainer();
+    } catch {
+      /* still mounting */
+    }
+  }
+
   /** Send current composer text through the backend SSE chat stream. */
   async send(messageOverride = null) {
+    this.refreshDom();
     const text = (messageOverride ?? this._input?.value.trim() ?? "").trim();
     if (!text || this._busy) return;
 
@@ -94,30 +153,56 @@ export class ConversationManager {
     this._lastFailedMessage = null;
     this._hideRetry();
     this._setComposerBusy(true);
-    this._renderer.appendMessage(text, "user");
+    this._setChatPending(true);
+    this._neural?.notifyInteractive?.(4000);
 
-    if (!messageOverride && this._input) {
-      this._input.value = "";
-    }
-
-    this._showThinking(true);
+    const startedAt = performance.now();
+    let requestId = null;
 
     try {
+      // Optimistic UI BEFORE any network await — must paint first.
+      this._renderer.appendMessage(text, "user");
+
+      if (!messageOverride && this._input) {
+        this._input.value = "";
+      }
+
+      this._showThinking(true);
+      await yieldForPaint();
+
+      chatDiag("CHAT_SUBMIT_START", {
+        message_length: text.length,
+        conversation_id: this._store?.getState().conversationId ?? getStoredConversationId(),
+      });
+
       const result = await this._brain.emit?.("send_message", {
         message: text,
         conversation_id: this._store?.getState().conversationId ?? getStoredConversationId(),
       });
 
+      requestId = result?.request_id ?? null;
+      this._activeRequestId = requestId;
+
       if (result?.skipped) {
-        this._showThinking(false);
-        this._setComposerBusy(false);
-        this._busy = false;
+        chatDiag("CHAT_ERROR", {
+          request_id: requestId,
+          code: "duplicate_request",
+          status: "skipped",
+        });
         return;
       }
 
       const response = result?.response ?? "";
       if (response && !this._streamTimer) {
         this._streamResponse(response, result?.orchestration ?? null);
+        chatDiag("CHAT_UI_RENDERED", {
+          request_id: requestId,
+          response_length: response.length,
+          duration_ms: Math.round(performance.now() - startedAt),
+        });
+      } else if (!response && !this._streamTimer) {
+        // Empty success — clear pending without inventing content.
+        this._clearBusyState();
       }
 
       if (result?.orchestration?.approval_required || result?.approval_required) {
@@ -128,29 +213,76 @@ export class ConversationManager {
       }
     } catch (error) {
       if (error instanceof SessionExpiredError || error?.name === "SessionExpiredError") {
-        this._showThinking(false);
-        this._setComposerBusy(false);
-        this._busy = false;
-        this._renderer.appendMessage(
-          "Session expirée. Redirection vers la connexion…",
-          "system",
-        );
+        chatDiag("CHAT_ERROR", {
+          request_id: requestId ?? error?.requestId ?? null,
+          code: "unauthenticated",
+        });
+        this._clearBusyState();
+        try {
+          this._renderer.appendErrorCard(
+            "Session expirée. Redirection vers la connexion…",
+            { code: "unauthenticated", requestId },
+          );
+        } catch {
+          /* container race during redirect */
+        }
         return;
       }
+
+      const aborted =
+        error?.name === "AbortError" ||
+        error?.code === "provider_timeout" ||
+        (typeof error?.message === "string" && /aborted|timeout/i.test(error.message));
+
+      // User-initiated stop — not a hard failure.
+      if (error?.name === "AbortError" && error?.code !== "provider_timeout") {
+        chatDiag("CHAT_ERROR", {
+          request_id: requestId,
+          code: "aborted",
+        });
+        this._clearBusyState();
+        this._input?.focus();
+        return;
+      }
+
       this._lastFailedMessage = text;
       const retryable = error?.retryable !== false;
+      const code =
+        error?.code ??
+        (aborted ? "provider_timeout" : "network_error");
+      const message =
+        error instanceof ChatRequestError || error instanceof Error
+          ? error.message
+          : "Erreur de connexion au backend Titan.";
+
+      chatDiag("CHAT_ERROR", {
+        request_id: requestId ?? error?.requestId ?? null,
+        code,
+        retryable,
+        duration_ms: Math.round(performance.now() - startedAt),
+      });
+
       if (retryable) {
         this._showRetry();
       } else {
         this._hideRetry();
       }
-      this._showThinking(false);
-      this._setComposerBusy(false);
-      this._busy = false;
-      const message =
-        error instanceof Error ? error.message : "Erreur de connexion au backend Titan.";
-      this._renderer.appendMessage(message, "system");
+      this._clearBusyState();
+      try {
+        this._renderer.appendErrorCard(message, {
+          code,
+          requestId: requestId ?? error?.requestId ?? null,
+        });
+      } catch {
+        this._store?.setState({ lastError: message });
+      }
       this._store?.setState({ lastError: message });
+      this._input?.focus();
+    } finally {
+      // If typewriter owns busy, leave it; otherwise ensure pending cleared.
+      if (!this._streamTimer && this._busy === false) {
+        this._setChatPending(false);
+      }
     }
   }
 
@@ -168,9 +300,8 @@ export class ConversationManager {
     }
     this._brain._backendBridge?._chatAbort?.abort();
     this._brain.conversation.cancel?.();
-    this._showThinking(false);
-    this._setComposerBusy(false);
-    this._busy = false;
+    this._clearBusyState();
+    this._input?.focus();
   }
 
   /**
@@ -192,11 +323,10 @@ export class ConversationManager {
       if (metadata) {
         this._renderer.attachDevMetadata(row, metadata);
       }
-      this._showThinking(false);
-      this._setComposerBusy(false);
-      this._busy = false;
+      this._clearBusyState();
       this._lastFailedMessage = null;
       this._hideRetry();
+      this._input?.focus();
     };
 
     if (reduced || fullText.length <= chunkSize) {
@@ -204,6 +334,10 @@ export class ConversationManager {
       finish();
       return;
     }
+
+    // Keep busy true during typewriter so double-submit cannot race.
+    this._busy = true;
+    this._setComposerBusy(true);
 
     this._streamTimer = window.setInterval(() => {
       index = Math.min(fullText.length, index + chunkSize);
@@ -221,16 +355,35 @@ export class ConversationManager {
   /** @param {object} event */
   _onConversationActivity(event) {
     if (event.type === CONVERSATION_ACTIVITY_EVENTS.FINISHED) {
-      if (!this._streamTimer) {
-        this._showThinking(false);
-        this._setComposerBusy(false);
-        this._busy = false;
+      // Do not clear busy while typewriter is still running, or while
+      // send() is still awaiting the HTTP result (response dispatch follows).
+      if (!this._streamTimer && !this._brain?._backendBridge?._submitting) {
+        this._clearBusyState();
       }
+    }
+  }
+
+  _clearBusyState() {
+    this._showThinking(false);
+    this._setComposerBusy(false);
+    this._busy = false;
+    this._setChatPending(false);
+  }
+
+  /** @param {boolean} pending */
+  _setChatPending(pending) {
+    this._store?.setState({ chatPending: pending });
+    this._neural?.setChatPending?.(pending);
+    if (pending) {
+      this._neural?.notifyInteractive?.(8000);
     }
   }
 
   /** @param {boolean} visible */
   _showThinking(visible) {
+    if (!this._thinkingEl) {
+      this._thinkingEl = document.getElementById("tdl-v2-thinking-indicator");
+    }
     if (!this._thinkingEl) return;
     this._thinkingEl.dataset.visible = String(visible);
     this._thinkingEl.hidden = !visible;
@@ -244,25 +397,42 @@ export class ConversationManager {
     if (this._stopBtn) {
       if (busy) {
         this._stopBtn.removeAttribute("hidden");
+        this._stopBtn.hidden = false;
       } else {
         this._stopBtn.setAttribute("hidden", "");
+        this._stopBtn.hidden = true;
       }
     }
   }
 
   _showRetry() {
+    if (!this._retryBtn) {
+      this._retryBtn = document.getElementById("tdl-v2-chat-retry");
+    }
     if (this._retryBtn) {
       this._retryBtn.removeAttribute("hidden");
+      this._retryBtn.hidden = false;
     }
   }
 
   _hideRetry() {
+    if (!this._retryBtn) {
+      this._retryBtn = document.getElementById("tdl-v2-chat-retry");
+    }
     if (this._retryBtn) {
       this._retryBtn.setAttribute("hidden", "");
+      this._retryBtn.hidden = true;
     }
   }
 
   destroy() {
     this.interrupt();
+    if (this._domBound) {
+      this._sendBtn?.removeEventListener("click", this._onSendClick);
+      this._stopBtn?.removeEventListener("click", this._onStopClick);
+      this._retryBtn?.removeEventListener("click", this._onRetryClick);
+      this._input?.removeEventListener("keydown", this._onInputKeydown);
+      this._domBound = false;
+    }
   }
 }

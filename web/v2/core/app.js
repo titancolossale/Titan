@@ -65,9 +65,18 @@ export class TitanAppV2 {
     this.conversation = null;
     /** @type {ExtensionRegistry} */
     this.extensions = this._extensions;
+    /** @type {boolean} */
+    this._started = false;
   }
 
   async start() {
+    // Idempotent boot — never double-bind chat listeners or EventSource.
+    if (this._started) {
+      this.conversation?.refreshDom?.();
+      return;
+    }
+    this._started = true;
+
     registerPanelLayouts(this._panelRegistry);
 
     this._shell.mount(document.getElementById("titan-v2-root"));
@@ -101,15 +110,16 @@ export class TitanAppV2 {
     this.conversation = new ConversationManager({
       brain: this.brain,
       store: this._store,
+      neural: this._regions.neural,
     });
-    this.conversation.bindDom();
 
     const reduced = this._store.getState().reducedMotion;
     this.brain.getConversationEngine()?.setReducedMotion(reduced);
 
+    // Subscribe before first navigate so the chat panel mounts.
     this._responsive.start();
-    this._router.start();
     this._renderPipeline.start();
+    this._router.start();
 
     this._syncReducedMotionPref();
     this._reducedMotionMedia = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -121,11 +131,23 @@ export class TitanAppV2 {
       this._regions.neural.setMasterState("AWAKE");
       setTimeout(() => {
         this.brain?.setState("idle", { source: "boot", force: true });
+        // SSE only after auth-gated boot (ensureAuthenticated already ran).
         this.brain?.connect?.();
       }, 400);
     }, NEURAL_BOOT_MS);
 
     this._router.navigate("chat", { replace: true });
+    // Bind chat after navigate so #tdl-v2-chat-messages exists (or remounts soon).
+    this.conversation.bindDom();
+    // Expose for logout SSE teardown (no secrets).
+    /** @type {any} */
+    (window).__titanAppV2 = this;
+    // Panel transition may be async — re-resolve container after paint.
+    requestAnimationFrame(() => {
+      this.conversation?.refreshDom?.();
+      setTimeout(() => this.conversation?.refreshDom?.(), 400);
+    });
+
     await this._renderPipeline.boot();
 
     for (const slot of ["voice", "trading", "browser", "obsidian", "calendar", "projects", "agents"]) {
@@ -168,5 +190,6 @@ export class TitanAppV2 {
     this._regions.neural.destroy?.();
     this._shell.unmount();
     this.brain = null;
+    this._started = false;
   }
 }

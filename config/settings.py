@@ -409,6 +409,12 @@ TITAN_WEB_DEV_SECRET = "titan-local-dev-only"
 TITAN_WEB_MAX_MESSAGE_LENGTH = int(
     os.getenv("TITAN_WEB_MAX_MESSAGE_LENGTH", "16000"),
 )
+# Phase 11.1B — bounded chat/provider deadlines (seconds).
+TITAN_CHAT_TIMEOUT_SECONDS = float(os.getenv("TITAN_CHAT_TIMEOUT_SECONDS", "50"))
+TITAN_LLM_TIMEOUT_SECONDS = float(os.getenv("TITAN_LLM_TIMEOUT_SECONDS", "45"))
+TITAN_CHAT_DIAGNOSTICS = (
+    os.getenv("TITAN_CHAT_DIAGNOSTICS", "true").lower() == "true"
+)
 
 
 def reload_env() -> Path:

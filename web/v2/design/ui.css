@@ -669,6 +669,19 @@
   opacity: 1;
 }
 
+.tdl-v2-conversation__message--error {
+  align-self: stretch;
+  max-width: 100%;
+  justify-content: flex-start;
+}
+
+.tdl-v2-conversation__bubble--error {
+  border: 1px solid color-mix(in srgb, var(--tdl-red-glow) 45%, transparent);
+  background: color-mix(in srgb, var(--tdl-red-glow) 8%, transparent);
+  color: var(--tdl-text-secondary, #c8c2bc);
+  font-style: normal;
+}
+
 .tdl-v2-conversation__message {
   display: flex;
   max-width: 88%;

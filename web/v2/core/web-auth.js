@@ -383,6 +383,13 @@ export function wireSettingsAuthControls() {
   }
 
   logoutBtn.addEventListener("click", async () => {
+    try {
+      // Close EventSource before clearing the session cookie.
+      const brain = /** @type {any} */ (window).__titanAppV2?.brain;
+      brain?.disconnect?.();
+    } catch {
+      /* ignore */
+    }
     await logoutSession();
     if (input) input.value = "";
     if (statusEl) statusEl.textContent = "Déconnecté.";
