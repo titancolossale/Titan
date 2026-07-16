@@ -24,6 +24,7 @@ export class NeuralNodes {
     this.edges = [];
     this.lastNewConnection = 0;
     this.density = NEURAL_CONFIG.nodes.densityDefault;
+    this.maxNodeCount = NEURAL_CONFIG.nodes.maxCount;
     this.core = new NeuralCore();
     /** @type {Map<number, number[]>} */
     this._spatialGrid = new Map();
@@ -34,6 +35,9 @@ export class NeuralNodes {
     this._microSeeds = [];
     /** @type {Array<{ x: number, y: number, r: number }>} */
     this._voidZones = [];
+    /** Cached per-layer node lists — rebuilt only with geometry. */
+    /** @type {Array<object[]> | null} */
+    this._nodesByLayer = null;
   }
 
   /** @param {number} density */
@@ -41,10 +45,16 @@ export class NeuralNodes {
     this.density = density || NEURAL_CONFIG.nodes.densityDefault;
   }
 
+  /** @param {number} maxCount */
+  setMaxNodeCount(maxCount) {
+    this.maxNodeCount = Math.max(400, maxCount || NEURAL_CONFIG.nodes.maxCount);
+  }
+
   /** @param {number} viewportWidth @param {number} viewportHeight @param {number} [densityScale] */
   build(viewportWidth, viewportHeight, densityScale = 1) {
     const count = Math.floor(
-      computeNodeCount(viewportWidth, viewportHeight, this.density) * densityScale,
+      computeNodeCount(viewportWidth, viewportHeight, this.density, this.maxNodeCount) *
+        densityScale,
     );
     const bounds = this.camera.getWorldBounds();
     const layers = NEURAL_CONFIG.layers;
@@ -106,6 +116,28 @@ export class NeuralNodes {
     this.core.build(this, bounds.width, bounds.height);
     this._rebuildSpatialGrid(viewportWidth, viewportHeight);
     this._buildEdges(viewportWidth, viewportHeight, 1);
+    this._cacheNodesByLayer();
+  }
+
+  _cacheNodesByLayer() {
+    const layerCount = NEURAL_CONFIG.layers.length;
+    /** @type {Array<object[]>} */
+    const byLayer = Array.from({ length: layerCount }, () => []);
+    for (const n of this.nodes) {
+      if (n.isCenter) continue;
+      const layer = Math.max(0, Math.min(layerCount - 1, n.layer | 0));
+      byLayer[layer].push(n);
+    }
+    for (const list of byLayer) {
+      list.sort((a, b) => a.z - b.z);
+    }
+    this._nodesByLayer = byLayer;
+  }
+
+  /** @param {number} layer */
+  getNodesForLayer(layer) {
+    if (!this._nodesByLayer) this._cacheNodesByLayer();
+    return this._nodesByLayer?.[layer] ?? [];
   }
 
   /**

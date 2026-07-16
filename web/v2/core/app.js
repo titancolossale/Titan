@@ -24,6 +24,7 @@ import { CardsLayer } from "../cards/cards-layer.js";
 import { NeuralStage } from "../neural/stage.js";
 import { ConversationManager } from "../conversation/conversation-manager.js";
 import { attachBackendBridge } from "./backend-bridge.js";
+import { wireVisualQualitySettings } from "./settings-performance.js";
 import { wireSettingsAuthControls } from "./web-auth.js";
 
 const NEURAL_BOOT_MS = 1000;
@@ -77,6 +78,11 @@ export class TitanAppV2 {
       region.mount();
     }
 
+    this._unwireQuality = wireVisualQualitySettings({
+      store: this._store,
+      neuralStage: this._regions.neural,
+    });
+
     this.brain = new CognitiveStateEngine({
       neuralStage: this._regions.neural,
       store: this._store,
@@ -86,6 +92,7 @@ export class TitanAppV2 {
 
     this._regions.sidebar.setBrain(this.brain);
     this._regions.composer.setBrain(this.brain);
+    this._regions.composer.setNeuralStage?.(this._regions.neural);
     this._regions.center.setBrain(this.brain);
     this._regions.status.setBrain(this.brain);
     this._regions.orchestrator.setBrain(this.brain);
@@ -142,9 +149,11 @@ export class TitanAppV2 {
 
   destroy() {
     this._reducedMotionMedia?.removeEventListener("change", this._onReducedMotionChange);
+    this._unwireQuality?.();
     this.conversation?.destroy();
     this.conversation = null;
     this.brain?.disconnect?.();
+    this.brain?.destroyBridge?.();
     this.brain?.getToolEngine()?.destroy?.();
     this.brain?.getMemoryEngine()?.destroy?.();
     this.brain?.getConversationEngine()?.destroy?.();

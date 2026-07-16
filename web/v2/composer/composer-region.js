@@ -11,6 +11,8 @@ export class ComposerRegion {
     this._shell = shell;
     /** @type {import("../core/cognitive-state-engine.js").CognitiveStateEngine | null} */
     this._brain = null;
+    /** @type {import("../neural/stage.js").NeuralStage | null} */
+    this._neural = null;
     /** @type {HTMLTextAreaElement | null} */
     this._input = null;
     this._focusState = false;
@@ -22,6 +24,13 @@ export class ComposerRegion {
   setBrain(brain) {
     this._brain = brain;
     this._bindCognitiveFocus();
+  }
+
+  /**
+   * @param {import("../neural/stage.js").NeuralStage} neural
+   */
+  setNeuralStage(neural) {
+    this._neural = neural;
   }
 
   mount() {
@@ -109,6 +118,7 @@ export class ComposerRegion {
 
     input.addEventListener("focus", () => {
       this._focusState = true;
+      this._neural?.notifyInteractive?.(320);
       this._brain?.setState("listening", { source: "composer" });
     });
 
@@ -118,6 +128,20 @@ export class ComposerRegion {
       if (current === "listening" && !this._brain?.thinking) {
         this._brain?.setState("idle", { source: "composer" });
       }
+    });
+
+    input.addEventListener("input", () => {
+      this._neural?.notifyInteractive?.(280);
+    });
+
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        this._neural?.notifyInteractive?.(600);
+      }
+    });
+
+    document.getElementById("tdl-v2-send-chat")?.addEventListener("click", () => {
+      this._neural?.notifyInteractive?.(800);
     });
 
     this._brain.getPipelineStore().subscribe((snap) => {

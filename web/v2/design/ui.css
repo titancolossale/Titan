@@ -1329,6 +1329,49 @@
   color: var(--tdl-text-secondary);
 }
 
+.tdl-v2-settings-section {
+  display: grid;
+  gap: 0.55rem;
+  margin-bottom: 1.15rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.tdl-v2-settings-hint {
+  margin: 0;
+  font-size: var(--tdl-text-xs);
+  color: var(--tdl-text-muted);
+  line-height: 1.4;
+}
+
+.tdl-v2-settings-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--tdl-text-sm);
+  color: var(--tdl-text-secondary);
+  cursor: pointer;
+}
+
+.tdl-v2-settings-check input {
+  accent-color: #b91c1c;
+}
+
+.tdl-v2-fps-overlay {
+  position: fixed;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 9000;
+  padding: 0.35rem 0.55rem;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 220, 210, 0.9);
+  font: 11px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  pointer-events: none;
+  white-space: pre;
+}
+
 .tdl-v2-settings-auth {
   display: grid;
   gap: 0.65rem;

@@ -960,9 +960,18 @@ export class OrchestratorRegion {
 
   _startWaveform() {
     if (this._waveRaf != null) return;
-    const tick = () => {
-      this._wavePhase += 0.028;
-      this._paintWaveform();
+    let lastPaint = 0;
+    const tick = (now) => {
+      if (document.hidden) {
+        this._waveRaf = window.requestAnimationFrame(tick);
+        return;
+      }
+      // Throttle sparkline to ~12 FPS — decorative, must not compete with neural RAF.
+      if (now - lastPaint >= 80) {
+        lastPaint = now;
+        this._wavePhase += 0.028;
+        this._paintWaveform();
+      }
       this._waveRaf = window.requestAnimationFrame(tick);
     };
     this._waveRaf = window.requestAnimationFrame(tick);

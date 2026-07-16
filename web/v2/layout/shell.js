@@ -374,6 +374,23 @@ export class Shell {
       <div class="tdl-v2-settings-card" role="dialog" aria-labelledby="tdl-v2-settings-title">
         <h2 class="tdl-v2-settings-card__title" id="tdl-v2-settings-title">Paramètres</h2>
         <p class="tdl-v2-settings-card__subtitle">Configuration Titan — interface V2.</p>
+        <div class="tdl-v2-settings-section">
+          <label class="tdl-v2-settings-auth__label" for="tdl-v2-visual-quality">Qualité visuelle</label>
+          <select class="tdl-v2-settings-auth__input" id="tdl-v2-visual-quality" aria-label="Qualité visuelle">
+            <option value="performance">Performance</option>
+            <option value="balanced" selected>Balanced</option>
+            <option value="cinematic">Cinematic</option>
+          </select>
+          <p class="tdl-v2-settings-hint">Balanced est le défaut — fluidité prioritaire sans redessiner l’identité Titan.</p>
+          <label class="tdl-v2-settings-check">
+            <input type="checkbox" id="tdl-v2-reduce-motion-pref" />
+            Réduire les animations
+          </label>
+          <label class="tdl-v2-settings-check tdl-v2-settings-check--debug" id="tdl-v2-fps-toggle-wrap" hidden>
+            <input type="checkbox" id="tdl-v2-show-fps" />
+            Afficher FPS (debug)
+          </label>
+        </div>
         <div class="tdl-v2-settings-auth">
           <label class="tdl-v2-settings-auth__label" for="tdl-v2-secret-key">Clé secrète</label>
           <input

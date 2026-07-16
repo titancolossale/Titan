@@ -282,7 +282,8 @@ export const NEURAL_CONFIG = {
   },
 
   render: {
-    maxDpr: 2,
+    // Hard ceiling — QualityController caps further per mode (Balanced ≤ 1.25).
+    maxDpr: 1.75,
     edgeFadeStrength: 0.72,
     thinkingBrightness: 1.24,
     hazeStrength: 0.028,
@@ -301,13 +302,16 @@ export const NEURAL_CONFIG = {
   performance: {
     targetFps: 60,
     hiddenTabPause: true,
-    adaptiveNodeCount: true,
+    // Geometry density is mode-driven via QualityController (no per-frame rebuild).
+    adaptiveNodeCount: false,
     frameBudgetMs: 16.8,
     sampleWindow: 45,
     densityFloor: 0.5,
     densityRecoverMs: 6000,
+    // Cinematic ceilings — Balanced/Performance scale these at runtime.
     maxEdgesDrawn: 26000,
     maxTissueDrawn: 3400,
+    defaultQualityMode: "balanced",
   },
 
   boot: {

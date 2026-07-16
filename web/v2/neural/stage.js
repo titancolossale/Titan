@@ -35,6 +35,7 @@ export class NeuralStage {
     this._cognitiveTag = "idle";
     this._pointerRaf = 0;
     this._boundPointer = (event) => this._onPointerMove(event);
+    this._boundInteractive = () => this.notifyInteractive(180);
   }
 
   mount() {
@@ -48,8 +49,16 @@ export class NeuralStage {
       return;
     }
 
-    this._engine = new NeuralEngine(this._canvas, { cameraEl: this._cameraEl });
-    this._engine.init();
+    // Idempotent — never start a second neural RAF loop.
+    if (!this._engine) {
+      this._engine = new NeuralEngine(this._canvas, { cameraEl: this._cameraEl });
+      this._engine.init();
+      window.addEventListener("pointermove", this._boundPointer, { passive: true });
+      window.addEventListener("wheel", this._boundInteractive, { passive: true });
+      window.addEventListener("scroll", this._boundInteractive, { passive: true, capture: true });
+    } else {
+      this._engine.init();
+    }
 
     this._host.dataset.masterState = this._masterState;
     this._host.dataset.cognitiveTag = this._cognitiveTag;
@@ -58,8 +67,25 @@ export class NeuralStage {
 
     this._activateDepthBands();
     this.setMasterState("BOOTING");
+  }
 
-    window.addEventListener("pointermove", this._boundPointer, { passive: true });
+  /**
+   * @param {"performance"|"balanced"|"cinematic"} mode
+   */
+  setQualityMode(mode) {
+    return this._engine?.setQualityMode(mode) ?? null;
+  }
+
+  getQualityMode() {
+    return this._engine?.getQualityMode?.() ?? "balanced";
+  }
+
+  notifyInteractive(durationMs = 220) {
+    this._engine?.notifyInteractive?.(durationMs);
+  }
+
+  getPerformanceSnapshot() {
+    return this._engine?.getPerformanceSnapshot?.() ?? null;
   }
 
   /** @param {PointerEvent} event */
@@ -138,6 +164,8 @@ export class NeuralStage {
 
   destroy() {
     window.removeEventListener("pointermove", this._boundPointer);
+    window.removeEventListener("wheel", this._boundInteractive);
+    window.removeEventListener("scroll", this._boundInteractive, true);
     if (this._pointerRaf) {
       cancelAnimationFrame(this._pointerRaf);
       this._pointerRaf = 0;

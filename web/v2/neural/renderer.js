@@ -22,27 +22,40 @@ export class NeuralRenderer {
     this._bokeh = [];
     /** Shared tissue stroke budget for the current frame. */
     this._tissueBudget = 0;
+    /** @type {ReturnType<import("./quality-controller.js").QualityController["getBudgets"]> | null} */
+    this._budgets = null;
+    /** Reused per-frame band lists to avoid GC. */
+    this._highwayFirst = [];
+    this._bandStrands = [];
+    this._maxEdgesDrawn = NEURAL_CONFIG.performance.maxEdgesDrawn;
   }
 
-  /** @param {number} width @param {number} height */
-  resize(width, height) {
+  /**
+   * @param {number} width
+   * @param {number} height
+   * @param {ReturnType<import("./quality-controller.js").QualityController["getBudgets"]> | null} [budgets]
+   */
+  resize(width, height, budgets = null) {
     this.width = width;
     this.height = height;
-    this.dpr = Math.min(window.devicePixelRatio || 1, NEURAL_CONFIG.render.maxDpr);
+    this._budgets = budgets;
+    const maxDpr = budgets?.maxDpr ?? NEURAL_CONFIG.render.maxDpr;
+    this.dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
     this.canvas.width = Math.floor(width * this.dpr);
     this.canvas.height = Math.floor(height * this.dpr);
     this.canvas.style.width = `${width}px`;
     this.canvas.style.height = `${height}px`;
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this._rebuildDust();
-    this._rebuildBokeh();
+    this._rebuildDust(budgets?.dustCount);
+    this._rebuildBokeh(budgets?.bokehCount);
   }
 
-  _rebuildDust() {
+  /** @param {number} [count] */
+  _rebuildDust(count) {
     const atm = NEURAL_CONFIG.atmosphere || {};
-    const count = atm.dustCount ?? 96;
+    const n = count ?? atm.dustCount ?? 96;
     this._dust = [];
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < n; i++) {
       this._dust.push({
         x: Math.random() * this.width,
         y: Math.random() * this.height,
@@ -54,11 +67,12 @@ export class NeuralRenderer {
     }
   }
 
-  _rebuildBokeh() {
+  /** @param {number} [count] */
+  _rebuildBokeh(count) {
     const atm = NEURAL_CONFIG.atmosphere || {};
-    const count = atm.foregroundBokehCount ?? 36;
+    const n = count ?? atm.foregroundBokehCount ?? 36;
     this._bokeh = [];
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < n; i++) {
       this._bokeh.push({
         x: Math.random() * this.width,
         y: Math.random() * this.height,
@@ -72,6 +86,24 @@ export class NeuralRenderer {
   }
 
   /**
+   * Minimal frame used when chat input needs main-thread priority.
+   * @param {import("./camera.js").NeuralCamera} camera
+   * @param {import("./nodes.js").NeuralNodes} nodes
+   * @param {import("./state.js").NeuralState} state
+   */
+  renderLight(camera, nodes, state) {
+    const ctx = this.ctx;
+    const w = this.width;
+    const h = this.height;
+    const COLORS = NEURAL_CONFIG.colors;
+    ctx.fillStyle = NEURAL_CONFIG.render.voidColor;
+    ctx.fillRect(0, 0, w, h);
+    this._drawAmbientGlow(ctx, w, h, state.getIntensity(), false, state.getVitality(), COLORS, 2);
+    this._drawNeuralCore(ctx, camera, nodes, state.getIntensity(), false, state.getVitality(), COLORS);
+    this._drawVignette(ctx, w, h, COLORS);
+  }
+
+  /**
    * @param {import("./camera.js").NeuralCamera} camera
    * @param {import("./nodes.js").NeuralNodes} nodes
    * @param {import("./signals.js").NeuralSignals} signals
@@ -79,8 +111,9 @@ export class NeuralRenderer {
    * @param {import("./depth.js").DepthField | null} depthField
    * @param {import("./cognitive.js").CognitiveOverlay | null} cognitiveOverlay
    * @param {import("./ghosts.js").GhostLayer | null} ghostLayer
+   * @param {ReturnType<import("./quality-controller.js").QualityController["getBudgets"]> | null} [budgets]
    */
-  render(camera, nodes, signals, state, depthField, cognitiveOverlay, ghostLayer) {
+  render(camera, nodes, signals, state, depthField, cognitiveOverlay, ghostLayer, budgets = null) {
     const ctx = this.ctx;
     const w = this.width;
     const h = this.height;
@@ -90,14 +123,26 @@ export class NeuralRenderer {
     const brightness = thinking ? NEURAL_CONFIG.render.thinkingBrightness : 1;
     const COLORS = NEURAL_CONFIG.colors;
     const recallDive = depthField?.getRecallDive?.() ?? 0;
+    const q = budgets ?? this._budgets;
+    this._budgets = q;
+    this._maxEdgesDrawn = q?.maxEdgesDrawn ?? NEURAL_CONFIG.performance.maxEdgesDrawn;
 
     this._time += 0.016;
-    this._tissueBudget = NEURAL_CONFIG.performance.maxTissueDrawn ?? 1600;
+    this._tissueBudget = q?.maxTissueDrawn ?? NEURAL_CONFIG.performance.maxTissueDrawn ?? 1600;
 
     ctx.fillStyle = NEURAL_CONFIG.render.voidColor;
     ctx.fillRect(0, 0, w, h);
 
-    this._drawAmbientGlow(ctx, w, h, intensity, thinking, vitality, COLORS);
+    this._drawAmbientGlow(
+      ctx,
+      w,
+      h,
+      intensity,
+      thinking,
+      vitality,
+      COLORS,
+      q?.ambientPatchCount ?? 6,
+    );
 
     // Large-scale depth: very far → far → mid → near → foreground.
     this._drawFieldTissue(ctx, camera, nodes, "veryFar", thinking, vitality, COLORS, brightness);
@@ -105,7 +150,8 @@ export class NeuralRenderer {
     this._drawFieldTissue(ctx, camera, nodes, "mid", thinking, vitality, COLORS, brightness);
 
     const layerCount = NEURAL_CONFIG.layers.length;
-    for (let layer = 0; layer < layerCount; layer++) {
+    const startLayer = q?.softHaloFarLayers === false ? 1 : 0;
+    for (let layer = startLayer; layer < layerCount; layer++) {
       this._drawLayerEdges(ctx, camera, nodes, layer, thinking, COLORS, brightness);
     }
 
@@ -113,7 +159,7 @@ export class NeuralRenderer {
     this._drawFieldTissue(ctx, camera, nodes, "near", thinking, vitality, COLORS, brightness);
     this._drawFieldTissue(ctx, camera, nodes, "foreground", thinking, vitality, COLORS, brightness);
 
-    for (let layer = 0; layer < layerCount; layer++) {
+    for (let layer = startLayer; layer < layerCount; layer++) {
       this._drawLayerNodes(ctx, camera, nodes, layer, thinking, COLORS, brightness);
     }
 
@@ -136,14 +182,28 @@ export class NeuralRenderer {
     // Near-foreground Core filaments — canvas depth in front of mid tissue,
     // still behind the DOM label overlay filaments.
     this._drawCoreFrontTissue(ctx, camera, nodes, intensity, thinking, vitality, COLORS);
-    this._drawForegroundBokeh(ctx, thinking, vitality, COLORS);
-    this._drawVolumetricHaze(ctx, w, h, intensity, thinking, COLORS);
-    this._drawAtmosphericFog(ctx, w, h, intensity, thinking, COLORS);
-    this._drawLightShafts(ctx, w, h, intensity, thinking, vitality, COLORS);
+    if (q?.enableBokeh !== false) {
+      this._drawForegroundBokeh(ctx, thinking, vitality, COLORS);
+    }
+    if (q?.enableVolumetricHaze !== false) {
+      this._drawVolumetricHaze(ctx, w, h, intensity, thinking, COLORS, q?.hazePatchCount);
+    }
+    if (q?.enableAtmosphericFog) {
+      this._drawAtmosphericFog(ctx, w, h, intensity, thinking, COLORS, q?.fogPatchCount);
+    }
+    if (q?.enableLightShafts) {
+      this._drawLightShafts(ctx, w, h, intensity, thinking, vitality, COLORS);
+    }
     this._drawDepthFog(ctx, w, h, intensity, recallDive);
-    this._drawForegroundFog(ctx, camera, nodes, w, h);
-    this._drawRestrainedBloom(ctx, camera, nodes, thinking, COLORS);
-    this._drawLensDiffusion(ctx, w, h, intensity, COLORS);
+    if (q?.enableForegroundFog) {
+      this._drawForegroundFog(ctx, camera, nodes, w, h);
+    }
+    if (q?.enableBloom !== false) {
+      this._drawRestrainedBloom(ctx, camera, nodes, thinking, COLORS, q?.bloomSpotCount);
+    }
+    if (q?.enableLensDiffusion) {
+      this._drawLensDiffusion(ctx, w, h, intensity, COLORS);
+    }
     this._drawVignette(ctx, w, h, COLORS);
   }
 
@@ -187,7 +247,7 @@ export class NeuralRenderer {
     return `${COLORS.redDeep}${Math.min(a * 0.72, 0.55)})`;
   }
 
-  _drawAmbientGlow(ctx, w, h, intensity, thinking, vitality, COLORS) {
+  _drawAmbientGlow(ctx, w, h, intensity, thinking, vitality, COLORS, patchLimit = 6) {
     // Multiple uneven haze patches — never a single circular spotlight / brain object.
     const strength =
       (NEURAL_CONFIG.atmosphere?.ambientGlowStrength ?? 0.028) *
@@ -201,7 +261,9 @@ export class NeuralRenderer {
       { x: 0.84, y: 0.26, r: 0.32, a: 0.13 },
       { x: 0.58, y: 0.22, r: 0.28, a: 0.1 },
     ];
-    for (const p of patches) {
+    const limit = Math.max(1, Math.min(patches.length, patchLimit));
+    for (let i = 0; i < limit; i++) {
+      const p = patches[i];
       const cx = w * p.x;
       const cy = h * p.y;
       const r = Math.min(w, h) * p.r * (thinking ? 1.08 : 1);
@@ -219,7 +281,8 @@ export class NeuralRenderer {
     const padY = NEURAL_CONFIG.world.padding * camera.height;
     const layerCfg = this._layerCfg(layer);
     const depthFade = layerCfg.fogDim ?? 0.5;
-    const maxDraw = NEURAL_CONFIG.performance.maxEdgesDrawn;
+    const maxDraw = this._maxEdgesDrawn;
+    const markIntersections = this._budgets?.intersectionMarks !== false;
     let drawn = 0;
 
     ctx.save();
@@ -235,8 +298,17 @@ export class NeuralRenderer {
       const nb = nodes.nodes[e.b];
       if (!na || !nb) continue;
 
+      // Skip edges fully outside the viewport (cheap AABB).
       const pa = this._screenPoint(camera, na, padX, padY);
       const pb = this._screenPoint(camera, nb, padX, padY);
+      if (
+        (pa.x < -40 && pb.x < -40) ||
+        (pa.x > this.width + 40 && pb.x > this.width + 40) ||
+        (pa.y < -40 && pb.y < -40) ||
+        (pa.y > this.height + 40 && pb.y > this.height + 40)
+      ) {
+        continue;
+      }
 
       let alpha = (e.opacity * (e.edgeOpacity ?? 0.7) + e.glow * 0.42) * depthFade * brightness;
       if (e.signalProgress >= 0) {
@@ -260,7 +332,7 @@ export class NeuralRenderer {
 
       // Brighter synapses at active / near-node intersections.
       const intersectBoost = NEURAL_CONFIG.render.intersectionBoost ?? 0.5;
-      if ((e.glow > 0.18 || e.signalProgress >= 0) && !e.isDendrite) {
+      if (markIntersections && (e.glow > 0.18 || e.signalProgress >= 0) && !e.isDendrite) {
         ctx.beginPath();
         ctx.arc(pa.x, pa.y, 1.1 + e.glow * 1.6, 0, Math.PI * 2);
         ctx.fillStyle = `${COLORS.redHot}${Math.min(alpha * intersectBoost * 0.55, 0.45)})`;
@@ -289,13 +361,24 @@ export class NeuralRenderer {
     const layerCfg = this._layerCfg(layer);
     const depthFade = layerCfg.fogDim ?? 0.5;
     const isForeground = layer >= NEURAL_CONFIG.layers.length - 1;
-    const softHalo = layer <= 2;
+    const softHalo =
+      (this._budgets?.softHaloFarLayers !== false && layer <= 2) ||
+      (this._budgets?.nodeHaloEnabled !== false && layer >= 2);
+    const halosEnabled = this._budgets?.nodeHaloEnabled !== false;
 
-    const layerNodes = nodes.nodes.filter((n) => n.layer === layer && !n.isCenter);
-    layerNodes.sort((a, b) => a.z - b.z);
+    const layerNodes = nodes.getNodesForLayer?.(layer) ??
+      nodes.nodes.filter((n) => n.layer === layer && !n.isCenter);
 
     for (const n of layerNodes) {
       const screen = this._screenPoint(camera, n, padX, padY);
+      if (
+        screen.x < -20 ||
+        screen.y < -20 ||
+        screen.x > this.width + 20 ||
+        screen.y > this.height + 20
+      ) {
+        continue;
+      }
       const classBoost =
         n.nodeClass === NODE_CLASSES.CORE ? 1.4 : n.nodeClass === NODE_CLASSES.MEMORY ? 1.15 : n.isHub ? 1.28 : 1;
       const glow =
@@ -304,7 +387,7 @@ export class NeuralRenderer {
         brightness *
         (n.brightness ?? 1);
 
-      if (glow > 0.12 && (layer >= 2 || softHalo)) {
+      if (halosEnabled && glow > 0.12 && (layer >= 2 || softHalo)) {
         const haloR = n.radius * (softHalo ? 5.5 : n.isHub ? 4.4 : 2.9) * depthFade;
         ctx.beginPath();
         ctx.arc(screen.x, screen.y, haloR, 0, Math.PI * 2);
@@ -686,98 +769,110 @@ export class NeuralRenderer {
     else if (band === "near") ctx.globalAlpha = 1;
 
     // Architecture priority: highways first so budget never erases civilization map.
-    const bandStrands = [];
-    const highwayFirst = [];
+    // Reuse arrays — avoid per-band allocations every frame.
+    const highwayFirst = this._highwayFirst;
+    const bandStrands = this._bandStrands;
+    highwayFirst.length = 0;
+    bandStrands.length = 0;
     for (const strand of tissue) {
       if (strand.band !== band) continue;
       if (strand.kind === "pathway") highwayFirst.push(strand);
       else bandStrands.push(strand);
     }
-    const drawList = highwayFirst.concat(bandStrands);
 
-    for (const strand of drawList) {
-      if (this._tissueBudget <= 0) break;
-      const parallax =
-        strand.parallax ??
-        (band === "veryFar"
-          ? 0.05
-          : band === "far"
-            ? 0.14
-            : band === "mid"
-              ? 0.46
-              : band === "bridge"
-                ? 0.5
-                : band === "foreground"
-                  ? 1.12
-                  : 0.9);
-      const pts = this._projectStrand(camera, strand.pts, parallax, padX, padY);
-      if (pts.length < 2) continue;
+    for (let pass = 0; pass < 2; pass++) {
+      const list = pass === 0 ? highwayFirst : bandStrands;
+      for (const strand of list) {
+        if (this._tissueBudget <= 0) break;
+        const parallax =
+          strand.parallax ??
+          (band === "veryFar"
+            ? 0.05
+            : band === "far"
+              ? 0.14
+              : band === "mid"
+                ? 0.46
+                : band === "bridge"
+                  ? 0.5
+                  : band === "foreground"
+                    ? 1.12
+                    : 0.9);
+        const pts = this._projectStrand(camera, strand.pts, parallax, padX, padY);
+        if (pts.length < 2) continue;
 
-      const wave = 0.88 + Math.sin(strand.phase) * 0.12;
-      const kindBoost =
-        strand.kind === "pathway"
-          ? strand.artery
-            ? 1.55
-            : 1.38
-          : strand.kind === "colony"
-            ? 1.18
-            : strand.kind === "secondary"
-              ? 1.1
-              : strand.kind === "tertiary"
-                ? 0.88
-                : strand.kind === "bridge"
-                  ? 1.05
-                  : 1;
-      // Gravitational pull: highways brighten as they converge on the Core.
-      let gravityBoost = 1;
-      if (strand.kind === "pathway" && strand.pts?.length) {
-        const mid = strand.pts[Math.floor(strand.pts.length / 2)];
-        const dx = mid.x - coreCx;
-        const dy = mid.y - coreCy;
-        const prox = 1 - Math.min(1, Math.sqrt(dx * dx + dy * dy) / (densScale * 2.8));
-        gravityBoost = 1 + prox * highwayGravity * (strand.artery ? 1.25 : 1);
-      }
-      const alpha = Math.min(
-        strand.opacity * bandFade * life * brightness * wave * kindBoost * gravityBoost,
-        0.78,
-      );
-      if (alpha < 0.008) continue;
+        const wave = 0.88 + Math.sin(strand.phase) * 0.12;
+        const kindBoost =
+          strand.kind === "pathway"
+            ? strand.artery
+              ? 1.55
+              : 1.38
+            : strand.kind === "colony"
+              ? 1.18
+              : strand.kind === "secondary"
+                ? 1.1
+                : strand.kind === "tertiary"
+                  ? 0.88
+                  : strand.kind === "bridge"
+                    ? 1.05
+                    : 1;
+        // Gravitational pull: highways brighten as they converge on the Core.
+        let gravityBoost = 1;
+        if (strand.kind === "pathway" && strand.pts?.length) {
+          const mid = strand.pts[Math.floor(strand.pts.length / 2)];
+          const dx = mid.x - coreCx;
+          const dy = mid.y - coreCy;
+          const prox = 1 - Math.min(1, Math.sqrt(dx * dx + dy * dy) / (densScale * 2.8));
+          gravityBoost = 1 + prox * highwayGravity * (strand.artery ? 1.25 : 1);
+        }
+        const alpha = Math.min(
+          strand.opacity * bandFade * life * brightness * wave * kindBoost * gravityBoost,
+          0.78,
+        );
+        if (alpha < 0.008) continue;
 
-      const color =
-        strand.hue > 0.78
-          ? COLORS.redHot
-          : strand.hue > 0.55
-            ? COLORS.redGlow
-            : COLORS.redDeep;
-      ctx.beginPath();
-      traceStrand(ctx, pts, strand.phase);
-      ctx.strokeStyle = `${color}${alpha})`;
-      const bandWidth =
-        band === "veryFar"
-          ? 0.48
-          : band === "far"
-            ? 0.66
-            : band === "near"
-              ? 1.22
-              : band === "foreground"
-                ? 1.38
-                : 1;
-      ctx.lineWidth =
-        strand.width *
-        bandWidth *
-        wave *
-        (strand.kind === "pathway" ? (strand.artery ? 1.42 : 1.28) : strand.kind === "tertiary" ? 0.82 : 1);
-      ctx.stroke();
-
-      // Major highways carry a luminous organic sheath.
-      if (strand.kind === "pathway" && alpha > 0.1) {
+        const color =
+          strand.hue > 0.78
+            ? COLORS.redHot
+            : strand.hue > 0.55
+              ? COLORS.redGlow
+              : COLORS.redDeep;
         ctx.beginPath();
-        traceStrand(ctx, pts, strand.phase + 0.2);
-        ctx.strokeStyle = `${COLORS.whiteDim}${alpha * highwaySheath})`;
-        ctx.lineWidth = strand.width * (strand.artery ? 0.48 : 0.32) * wave;
+        traceStrand(ctx, pts, strand.phase);
+        ctx.strokeStyle = `${color}${alpha})`;
+        const bandWidth =
+          band === "veryFar"
+            ? 0.48
+            : band === "far"
+              ? 0.66
+              : band === "near"
+                ? 1.22
+                : band === "foreground"
+                  ? 1.38
+                  : 1;
+        ctx.lineWidth =
+          strand.width *
+          bandWidth *
+          wave *
+          (strand.kind === "pathway"
+            ? strand.artery
+              ? 1.42
+              : 1.28
+            : strand.kind === "tertiary"
+              ? 0.82
+              : 1);
         ctx.stroke();
+
+        // Major highways carry a luminous organic sheath.
+        if (strand.kind === "pathway" && alpha > 0.1) {
+          ctx.beginPath();
+          traceStrand(ctx, pts, strand.phase + 0.2);
+          ctx.strokeStyle = `${COLORS.whiteDim}${alpha * highwaySheath})`;
+          ctx.lineWidth = strand.width * (strand.artery ? 0.48 : 0.32) * wave;
+          ctx.stroke();
+        }
+        this._tissueBudget--;
       }
-      this._tissueBudget--;
+      if (this._tissueBudget <= 0) break;
     }
 
     ctx.restore();
@@ -794,8 +889,11 @@ export class NeuralRenderer {
 
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
+    const scale = this._budgets?.filamentDrawScale ?? 1;
+    const stride = scale >= 0.95 ? 1 : Math.max(1, Math.round(1 / Math.max(0.2, scale)));
 
-    for (const f of list) {
+    for (let i = 0; i < list.length; i += stride) {
+      const f = list[i];
       const tier = f.depthTier || "mid";
       const parallax = f.parallax ?? (tier === "front" ? 1.14 : tier === "deep" ? 0.72 : 1);
       const pts = this._projectStrand(camera, f.pts, parallax, padX, padY);
@@ -917,8 +1015,11 @@ export class NeuralRenderer {
     if (!micros?.length) return;
     const densScale =
       Math.min(camera.width, camera.height) * (NEURAL_CONFIG.core?.clusterRadiusRatio ?? 0.3);
+    const scale = this._budgets?.microNeuronDrawScale ?? 1;
+    const stride = scale >= 0.95 ? 1 : Math.max(1, Math.round(1 / Math.max(0.2, scale)));
 
-    for (const m of micros) {
+    for (let i = 0; i < micros.length; i += stride) {
+      const m = micros[i];
       const screen = camera.worldToScreen(m.x, m.y, 1);
       screen.x -= padX;
       screen.y -= padY;
@@ -1090,7 +1191,7 @@ export class NeuralRenderer {
     ctx.restore();
   }
 
-  _drawVolumetricHaze(ctx, w, h, intensity, thinking, COLORS) {
+  _drawVolumetricHaze(ctx, w, h, intensity, thinking, COLORS, patchLimit = 3) {
     const strength =
       (NEURAL_CONFIG.atmosphere?.hazeStrength ?? NEURAL_CONFIG.render.hazeStrength ?? 0.045) *
       (0.55 + intensity * 0.25 + (thinking ? 0.08 : 0));
@@ -1101,7 +1202,9 @@ export class NeuralRenderer {
       { x: 0.22, y: 0.4, r: 0.5, a: 0.18 },
       { x: 0.78, y: 0.55, r: 0.48, a: 0.16 },
     ];
-    for (const p of patches) {
+    const limit = Math.max(0, Math.min(patches.length, patchLimit ?? patches.length));
+    for (let i = 0; i < limit; i++) {
+      const p = patches[i];
       const cx = w * p.x;
       const cy = h * p.y;
       const grad = ctx.createRadialGradient(cx, cy, w * 0.08, cx, cy, w * p.r);
@@ -1113,10 +1216,10 @@ export class NeuralRenderer {
     }
   }
 
-  _drawRestrainedBloom(ctx, camera, nodes, thinking, COLORS) {
+  _drawRestrainedBloom(ctx, camera, nodes, thinking, COLORS, spotLimit = 5) {
     // Soft volumetric bloom from Core — micro bloom, never blown out.
     const bloom = NEURAL_CONFIG.atmosphere?.bloomStrength ?? 0.032;
-    if (bloom <= 0.008) return;
+    if (bloom <= 0.008 || spotLimit <= 0) return;
     const padX = NEURAL_CONFIG.world.padding * camera.width;
     const padY = NEURAL_CONFIG.world.padding * camera.height;
     const core = nodes.core;
@@ -1130,9 +1233,11 @@ export class NeuralRenderer {
       { ox: 0.1, oy: 0.04, scale: 0.07, a: 0.2, white: false },
       { ox: -0.09, oy: -0.06, scale: 0.06, a: 0.15, white: false },
     ];
+    const limit = Math.max(0, Math.min(spots.length, spotLimit));
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    for (const s of spots) {
+    for (let i = 0; i < limit; i++) {
+      const s = spots[i];
       const wx = core.cx + s.ox * Math.min(camera.width, camera.height) * 0.05;
       const wy = core.cy + s.oy * Math.min(camera.width, camera.height) * 0.05;
       const screen = camera.worldToScreen(wx, wy, 1);
@@ -1162,7 +1267,7 @@ export class NeuralRenderer {
    * @param {number} intensity @param {boolean} thinking
    * @param {object} COLORS
    */
-  _drawAtmosphericFog(ctx, w, h, intensity, thinking, COLORS) {
+  _drawAtmosphericFog(ctx, w, h, intensity, thinking, COLORS, patchLimit = 5) {
     const strength =
       (NEURAL_CONFIG.atmosphere?.fogRedStrength ?? 0.055) *
       (0.7 + intensity * 0.25 + (thinking ? 0.1 : 0));
@@ -1173,8 +1278,10 @@ export class NeuralRenderer {
       { x: 0.62, y: 0.72, rx: 0.42, ry: 0.26, a: 0.22 },
       { x: 0.36, y: 0.28, rx: 0.3, ry: 0.22, a: 0.16 },
     ];
+    const limit = Math.max(0, Math.min(patches.length, patchLimit ?? patches.length));
     ctx.save();
-    for (const p of patches) {
+    for (let i = 0; i < limit; i++) {
+      const p = patches[i];
       const cx = w * p.x;
       const cy = h * p.y;
       const rx = w * p.rx;

@@ -2,15 +2,17 @@
 
 import { routeBackendEvent } from "./event-router.js";
 import { COGNITIVE_STREAM_EVENTS } from "./cognitive-pipeline-store.js";
-import { authHeaders, getStoredToken, redirectToLogin } from "./web-auth.js";
+import { authHeaders, fetchAuthStatus, getStoredToken, redirectToLogin } from "./web-auth.js";
 import {
   createClientRequestId,
   getStoredConversationId,
   saveConversationId,
   saveRequestId,
 } from "./conversation-session.js";
-const RECONNECT_BASE_MS = 1200;
-const RECONNECT_MAX_MS = 15000;
+const RECONNECT_BASE_MS = 1500;
+const RECONNECT_MAX_MS = 30000;
+const RECONNECT_AUTH_FAIL_MAX = 3;
+const RECONNECT_HARD_MAX = 12;
 
 /** Thrown when the session cookie/token is no longer valid. */
 export class SessionExpiredError extends Error {
@@ -99,12 +101,18 @@ export class BackendBridge {
     this._shouldReconnect = false;
     /** @type {number} */
     this._reconnectAttempts = 0;
+    /** @type {number} */
+    this._authFailStreak = 0;
+    /** @type {boolean} */
+    this._authBlocked = false;
     /** @type {ReturnType<typeof setTimeout> | null} */
     this._reconnectTimer = null;
     /** @type {Array<{ event: string, data: object, id: string | null }>} */
     this._missedQueue = [];
     /** @type {boolean} */
     this._submitting = false;
+    this._boundVisibility = () => this._onVisibilityChange();
+    document.addEventListener("visibilitychange", this._boundVisibility);
 
     /** @type {{ connected: boolean, streaming: boolean, lastEventId: string | null, reconnectAttempts: number, mode: "idle"|"streaming"|"disconnected" }} */
     this.connection = {
@@ -125,11 +133,22 @@ export class BackendBridge {
   }
 
   /** Establish persistent SSE connection to /events/stream. */
-  connect() {
+  async connect() {
     if (this._eventSource) return;
 
+    // Explicit connect clears prior unauthorized lock (e.g. after login).
+    this._authBlocked = false;
+    this._authFailStreak = 0;
     this._shouldReconnect = true;
     this._reconnectAttempts = 0;
+
+    const allowed = await this._ensureAuthorizedToStream();
+    if (!allowed) {
+      this._authBlocked = true;
+      this._shouldReconnect = false;
+      return;
+    }
+
     this._openEventSource();
     this._flushMissedQueue();
   }
@@ -153,6 +172,48 @@ export class BackendBridge {
     this.connection.connected = false;
     this.connection.streaming = false;
     this.connection.mode = "disconnected";
+  }
+
+  /** Tear down listeners (logout / app destroy). */
+  destroy() {
+    this.disconnect();
+    document.removeEventListener("visibilitychange", this._boundVisibility);
+  }
+
+  _onVisibilityChange() {
+    if (document.hidden) {
+      // Pause reconnect storms while the tab is not visible.
+      if (this._reconnectTimer !== null) {
+        window.clearTimeout(this._reconnectTimer);
+        this._reconnectTimer = null;
+      }
+      return;
+    }
+    if (
+      this._shouldReconnect &&
+      !this._eventSource &&
+      !this._authBlocked &&
+      this._reconnectTimer === null
+    ) {
+      this._scheduleReconnect({ resumeVisible: true });
+    }
+  }
+
+  /**
+   * Avoid unauthorized /events/stream retry storms before login.
+   * @returns {Promise<boolean>}
+   */
+  async _ensureAuthorizedToStream() {
+    try {
+      const status = await fetchAuthStatus();
+      if (!status.auth_required) return true;
+      if (status.authenticated) return true;
+      if (getStoredToken()) return true;
+      return false;
+    } catch {
+      // Network blip — allow one attempt; error path will back off.
+      return Boolean(getStoredToken());
+    }
   }
 
   /**
@@ -390,6 +451,8 @@ export class BackendBridge {
       this.connection.connected = true;
       this.connection.mode = "idle";
       this._reconnectAttempts = 0;
+      this._authFailStreak = 0;
+      this._authBlocked = false;
       this.connection.reconnectAttempts = 0;
       if (this._store) {
         this._store.setState({ connectionState: "connected" });
@@ -406,7 +469,8 @@ export class BackendBridge {
       this._eventSource?.close();
       this._eventSource = null;
       this._dispatch("connection", { state: "disconnected" });
-      this._scheduleReconnect();
+      // EventSource does not expose HTTP status; probe auth after repeated failures.
+      void this._handleStreamError();
     };
 
     const eventTypes = [
@@ -445,23 +509,61 @@ export class BackendBridge {
     }
   }
 
-  _scheduleReconnect() {
-    if (!this._shouldReconnect) return;
+  async _handleStreamError() {
+    if (!this._shouldReconnect || this._authBlocked) return;
+    if (document.hidden) return;
+
+    this._authFailStreak += 1;
+    if (this._authFailStreak >= RECONNECT_AUTH_FAIL_MAX) {
+      const allowed = await this._ensureAuthorizedToStream();
+      if (!allowed) {
+        this._authBlocked = true;
+        this._shouldReconnect = false;
+        this._dispatch("connection", { state: "unauthorized" });
+        return;
+      }
+      this._authFailStreak = 0;
+    }
+
+    this._scheduleReconnect();
+  }
+
+  /**
+   * @param {{ resumeVisible?: boolean }} [options]
+   */
+  _scheduleReconnect(options = {}) {
+    if (!this._shouldReconnect || this._authBlocked) return;
     if (this._reconnectTimer !== null) return;
+    if (document.hidden && !options.resumeVisible) return;
 
     this._reconnectAttempts += 1;
     this.connection.reconnectAttempts = this._reconnectAttempts;
+
+    if (this._reconnectAttempts > RECONNECT_HARD_MAX) {
+      this._shouldReconnect = false;
+      this._dispatch("connection", { state: "reconnect_exhausted" });
+      return;
+    }
+
     const delay = Math.min(
       RECONNECT_MAX_MS,
-      RECONNECT_BASE_MS * 2 ** Math.min(this._reconnectAttempts - 1, 4),
+      RECONNECT_BASE_MS * 2 ** Math.min(this._reconnectAttempts - 1, 5),
     );
 
     this._reconnectTimer = window.setTimeout(() => {
       this._reconnectTimer = null;
-      if (this._shouldReconnect && !this._eventSource) {
+      if (!this._shouldReconnect || this._eventSource || this._authBlocked) return;
+      if (document.hidden) return;
+      void (async () => {
+        const allowed = await this._ensureAuthorizedToStream();
+        if (!allowed) {
+          this._authBlocked = true;
+          this._shouldReconnect = false;
+          return;
+        }
         this._openEventSource();
         this._flushMissedQueue();
-      }
+      })();
     }, delay);
   }
 
@@ -540,6 +642,7 @@ export function attachBackendBridge(brain, store = null) {
 
   brain.connect = () => bridge.connect();
   brain.disconnect = () => bridge.disconnect();
+  brain.destroyBridge = () => bridge.destroy();
   brain.on = (type, cb) => bridge.on(type, cb);
   brain.off = (type, cb) => bridge.off(type, cb);
   brain.emit = (type, payload) => bridge.emit(type, payload);

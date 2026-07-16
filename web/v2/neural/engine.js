@@ -6,11 +6,15 @@ import { NeuralCamera } from "./camera.js";
 import { DepthField } from "./depth.js";
 import { GhostLayer } from "./ghosts.js";
 import { NeuralNodes } from "./nodes.js";
+import { PerformanceMonitor } from "./performance-monitor.js";
+import { QualityController } from "./quality-controller.js";
 import { RegionFocus } from "./regions.js";
 import { NeuralRenderer } from "./renderer.js";
 import { NeuralSignals } from "./signals.js";
 import { NeuralState } from "./state.js";
 import { prefersReducedMotion } from "./utils.js";
+
+const RESIZE_DEBOUNCE_MS = 120;
 
 export class NeuralEngine {
   /**
@@ -31,6 +35,8 @@ export class NeuralEngine {
     this.cognitiveOverlay = new CognitiveOverlay();
     this.ghostLayer = new GhostLayer();
     this.regionFocus = new RegionFocus();
+    this.quality = new QualityController();
+    this.perf = new PerformanceMonitor();
 
     this.depthField.setInfiniteEnabled(true);
 
@@ -40,21 +46,31 @@ export class NeuralEngine {
     this.resizeObserver = null;
     this._lastFrameTime = 0;
     this._frameSkipCounter = 0;
-    /** @type {number[]} */
-    this._frameSamples = [];
-    this._lastDensityAdjust = 0;
+    this._idleSkipCounter = 0;
     this._baseDensity = options.density ?? NEURAL_CONFIG.nodes.densityDefault;
     this._fps = 60;
+    this._initialized = false;
+    this._destroyed = false;
+    /** @type {ReturnType<typeof setTimeout> | null} */
+    this._resizeTimer = null;
+    this._lastWidth = 0;
+    this._lastHeight = 0;
+    this._geometryBuildCount = 0;
 
-    this._boundResize = () => this.resize();
+    this._boundResize = () => this._scheduleResize();
     this._boundTick = (ts) => this.tick(ts);
     this._boundVisibility = () => this._onVisibilityChange();
   }
 
   init() {
+    if (this._initialized) {
+      return;
+    }
+    this._initialized = true;
+    this._destroyed = false;
+
     if (this.options.density) {
       this._baseDensity = this.options.density;
-      this.nodes.setDensity(this.options.density);
     }
 
     window.addEventListener("resize", this._boundResize);
@@ -70,14 +86,22 @@ export class NeuralEngine {
     this.state.setCognitiveState("idle");
     this._applyCssClasses();
 
-    this.resize();
-    this.frameId = requestAnimationFrame(this._boundTick);
+    this.resize({ immediate: true });
+    if (this.frameId === null) {
+      this.frameId = requestAnimationFrame(this._boundTick);
+    }
   }
 
   destroy() {
+    this._destroyed = true;
+    this._initialized = false;
     if (this.frameId !== null) {
       cancelAnimationFrame(this.frameId);
       this.frameId = null;
+    }
+    if (this._resizeTimer !== null) {
+      clearTimeout(this._resizeTimer);
+      this._resizeTimer = null;
     }
     window.removeEventListener("resize", this._boundResize);
     document.removeEventListener("visibilitychange", this._boundVisibility);
@@ -87,10 +111,48 @@ export class NeuralEngine {
 
   _onVisibilityChange() {
     this.state.setVisible(!document.hidden);
-    if (!document.hidden && this.frameId === null && !this.state.isPaused) {
+    this.perf.updateMeta({ paused: this.state.isPaused });
+    if (document.hidden) {
+      if (this.frameId !== null) {
+        cancelAnimationFrame(this.frameId);
+        this.frameId = null;
+      }
+      return;
+    }
+    if (this.frameId === null && !this.state.isPaused && !this._destroyed) {
       this._lastFrameTime = 0;
       this.frameId = requestAnimationFrame(this._boundTick);
     }
+  }
+
+  /**
+   * User-facing quality mode: performance | balanced | cinematic.
+   * @param {"performance"|"balanced"|"cinematic"} mode
+   */
+  setQualityMode(mode) {
+    const changed = this.quality.setMode(mode);
+    if (changed) {
+      this.resize({ immediate: true, forceRebuild: true });
+    }
+    return this.quality.getSnapshot();
+  }
+
+  getQualityMode() {
+    return this.quality.getMode();
+  }
+
+  /** Notify that input / chat UI needs main-thread priority. */
+  notifyInteractive(durationMs = 220) {
+    this.quality.notifyInteractive(durationMs);
+  }
+
+  getPerformanceSnapshot() {
+    return this.perf.getSnapshot();
+  }
+
+  /** @returns {number} */
+  getGeometryBuildCount() {
+    return this._geometryBuildCount;
   }
 
   /** @param {string} masterState */
@@ -388,24 +450,88 @@ export class NeuralEngine {
     return this._fps;
   }
 
-  resize() {
+  _scheduleResize() {
+    if (this._resizeTimer !== null) {
+      clearTimeout(this._resizeTimer);
+    }
+    this._resizeTimer = setTimeout(() => {
+      this._resizeTimer = null;
+      this.resize();
+    }, RESIZE_DEBOUNCE_MS);
+  }
+
+  /**
+   * @param {{ immediate?: boolean, forceRebuild?: boolean }} [options]
+   */
+  resize(options = {}) {
+    if (options.immediate && this._resizeTimer !== null) {
+      clearTimeout(this._resizeTimer);
+      this._resizeTimer = null;
+    }
+
     const parent = this.canvas.parentElement;
     const width = parent?.clientWidth || window.innerWidth;
     const height = parent?.clientHeight || window.innerHeight;
     if (width < 1 || height < 1) return;
 
+    const budgets = this.quality.getBudgets();
+    const sizeChanged =
+      Math.abs(width - this._lastWidth) > 1 || Math.abs(height - this._lastHeight) > 1;
+    const needsRebuild =
+      options.forceRebuild || this.quality.needsGeometryRebuild() || sizeChanged;
+
+    this._lastWidth = width;
+    this._lastHeight = height;
+
     this.camera.resize(width, height);
-    this.renderer.resize(width, height);
+    this.renderer.resize(width, height, budgets);
+
+    if (needsRebuild) {
+      this._rebuildGeometry(width, height, budgets);
+    }
+
+    this.perf.updateMeta({
+      canvasWidth: width,
+      canvasHeight: height,
+      dpr: this.renderer.dpr,
+      qualityMode: budgets.mode,
+      qualityTier: budgets.tierLabel,
+      budgets: {
+        maxEdgesDrawn: budgets.maxEdgesDrawn,
+        maxTissueDrawn: budgets.maxTissueDrawn,
+        maxNodeCount: budgets.maxNodeCount,
+        dustCount: budgets.dustCount,
+        nodeDensityScale: budgets.nodeDensityScale,
+      },
+      rafLoops: this.frameId !== null ? 1 : 0,
+      paused: this.state.isPaused,
+    });
+  }
+
+  /**
+   * @param {number} width
+   * @param {number} height
+   * @param {ReturnType<QualityController["getBudgets"]>} budgets
+   */
+  _rebuildGeometry(width, height, budgets) {
+    const density =
+      this._baseDensity * budgets.nodeDensityScale;
+    this.nodes.setDensity(density);
+    this.nodes.setMaxNodeCount(budgets.maxNodeCount);
     const densityScale = this.state.getDensityScale();
     this.nodes.build(width, height, densityScale);
     this.ghostLayer._built = false;
     this.ghostLayer.build(this.camera);
+    this.quality.markGeometryClean();
+    this._geometryBuildCount += 1;
+    this.perf.recordGeometryRebuild();
   }
 
   /** @param {number} timestamp */
   tick(timestamp) {
-    if (this.state.isPaused) {
+    if (this._destroyed || this.state.isPaused || document.hidden) {
       this.frameId = null;
+      this.perf.updateMeta({ paused: true, rafLoops: 0 });
       return;
     }
 
@@ -414,11 +540,16 @@ export class NeuralEngine {
     }
 
     let deltaMs = Math.min(timestamp - this._lastFrameTime, 50);
-    const reduced = prefersReducedMotion();
+    const budgets = this.quality.getBudgets();
+    const reduced = prefersReducedMotion() || budgets.reducedMotion;
+    const thinking = this.state.isThinking();
+    const interactive = this.quality.isInteractive();
 
+    // Reduced motion: heavy throttle.
     if (reduced) {
       this._frameSkipCounter += 1;
       if (this._frameSkipCounter % 4 !== 0) {
+        this.perf.recordSkippedFrame();
         this.frameId = requestAnimationFrame(this._boundTick);
         return;
       }
@@ -427,13 +558,56 @@ export class NeuralEngine {
       this._frameSkipCounter = 0;
     }
 
+    // Idle throttle — keep presence without full simulation cost.
+    const idleSkip = budgets.idleFrameSkip;
+    if (!thinking && !interactive && idleSkip > 0) {
+      this._idleSkipCounter += 1;
+      if (this._idleSkipCounter % (idleSkip + 1) !== 0) {
+        this.perf.recordSkippedFrame();
+        this._lastFrameTime = timestamp;
+        this.frameId = requestAnimationFrame(this._boundTick);
+        return;
+      }
+    } else {
+      this._idleSkipCounter = 0;
+    }
+
     this._fps = deltaMs > 0 ? Math.round(1000 / deltaMs) : 60;
     this._lastFrameTime = timestamp;
+    this.perf.recordFrame(deltaMs || 16.7);
 
+    const frameStart = performance.now();
     this.update(timestamp, deltaMs);
-    this.draw();
-    this._trackAdaptivePerformance(deltaMs, timestamp);
+
+    const elapsedUpdate = performance.now() - frameStart;
+    const skipDecorative =
+      interactive &&
+      budgets.interactiveSkipDecorative &&
+      elapsedUpdate > budgets.frameBudgetMs * 0.55;
+
+    if (skipDecorative) {
+      this.perf.recordDroppedDecorative();
+      // Minimal clear so the canvas does not freeze on a stale partial frame.
+      this.renderer.renderLight(this.camera, this.nodes, this.state);
+    } else {
+      this.draw(budgets);
+    }
+
+    this.quality.sampleFrame(performance.now() - frameStart, timestamp);
     this._syncCameraDom();
+    this.perf.updateMeta({
+      paused: false,
+      rafLoops: 1,
+      qualityMode: budgets.mode,
+      qualityTier: budgets.tierLabel,
+      dpr: this.renderer.dpr,
+      budgets: {
+        maxEdgesDrawn: budgets.maxEdgesDrawn,
+        maxTissueDrawn: budgets.maxTissueDrawn,
+        maxNodeCount: budgets.maxNodeCount,
+        dustCount: budgets.dustCount,
+      },
+    });
 
     this.frameId = requestAnimationFrame(this._boundTick);
   }
@@ -481,7 +655,8 @@ export class NeuralEngine {
     }
   }
 
-  draw() {
+  /** @param {ReturnType<QualityController["getBudgets"]>} [budgets] */
+  draw(budgets) {
     this.renderer.render(
       this.camera,
       this.nodes,
@@ -490,6 +665,7 @@ export class NeuralEngine {
       this.depthField,
       this.cognitiveOverlay,
       this.ghostLayer,
+      budgets ?? this.quality.getBudgets(),
     );
   }
 
@@ -559,36 +735,4 @@ export class NeuralEngine {
     }
   }
 
-  /** @param {number} deltaMs @param {number} timestamp */
-  _trackAdaptivePerformance(deltaMs, timestamp) {
-    const perfCfg = NEURAL_CONFIG.performance;
-    if (!perfCfg.adaptiveNodeCount) return;
-
-    this._frameSamples.push(deltaMs);
-    const windowSize = perfCfg.sampleWindow || 45;
-    if (this._frameSamples.length > windowSize) {
-      this._frameSamples.shift();
-    }
-    if (this._frameSamples.length < windowSize) return;
-    if (timestamp - this._lastDensityAdjust < (perfCfg.densityRecoverMs || 8000)) {
-      return;
-    }
-
-    const avg = this._frameSamples.reduce((a, b) => a + b, 0) / this._frameSamples.length;
-    const budget = perfCfg.frameBudgetMs || 16.8;
-    const floor = perfCfg.densityFloor || 0.55;
-    const current = this.nodes.density;
-
-    if (avg > budget * 1.08 && current > floor) {
-      this.nodes.setDensity(Math.max(floor, current * 0.9));
-      this.nodes.build(this.camera.width, this.camera.height, this.state.getDensityScale());
-      this.depthField.setDepthBudget(Math.max(0.65, this.depthField._depthBudget * 0.92));
-      this._lastDensityAdjust = timestamp;
-    } else if (avg < budget * 0.82 && current < this._baseDensity) {
-      this.nodes.setDensity(Math.min(this._baseDensity, current * 1.04));
-      this.nodes.build(this.camera.width, this.camera.height, this.state.getDensityScale());
-      this.depthField.setDepthBudget(Math.min(1, this.depthField._depthBudget * 1.03));
-      this._lastDensityAdjust = timestamp;
-    }
-  }
 }
