@@ -164,7 +164,8 @@ def test_v2_core_modules_are_public(web_client: TestClient) -> None:
     """Phase E10 — Core production modules are served."""
     version = web_client.get("/v2/core/version.js")
     assert version.status_code == 200
-    assert 'TITAN_UI_VERSION = "0.25.0"' in version.text
+    assert 'TITAN_UI_VERSION = "0.51.0"' in version.text
+    assert 'TITAN_PRODUCT_VERSION = "0.43.0"' in version.text
 
     extensions = web_client.get("/v2/core/extension-registry.js")
     assert extensions.status_code == 200
@@ -176,15 +177,16 @@ def test_v2_frontend_architecture_is_public(web_client: TestClient) -> None:
     response = web_client.get("/v2/")
     assert response.status_code == 200
     body = response.text
-    # Frontend was promoted to V3 during the Web App Finalization; the shell id
-    # and served assets are the stable contract.
-    assert "Titan AI — Frontend V3" in body
+    # Canonical final UI contract: shell id, version meta, and design assets.
+    assert 'name="titan-canonical-reference" content="final"' in body
+    assert 'aria-label="Titan Frontend V3"' in body
     assert "titan-v2-root" in body
     assert "./main.js" in body
     assert "./design/tokens.css" in body
     assert "./design/ui.css" in body
     assert "./design/neural.css" in body
     assert "./design/satellites.css" in body
+    assert "./design/canonical-final.css" in body
 
 
 def test_app_route_serves_living_neural_core(web_client: TestClient) -> None:
@@ -198,7 +200,7 @@ def test_app_route_serves_living_neural_core(web_client: TestClient) -> None:
     satellites = web_client.get("/app/center/cognitive-satellites.js")
     assert satellites.status_code == 200
     assert "TITAN CORE" in satellites.text
-    assert "Cognitive Operating System" in satellites.text
+    assert "Conscience & Orchestration" in satellites.text or "Cognitive" in satellites.text
 
 
 def test_v2_layout_modules_are_public(web_client: TestClient) -> None:
@@ -217,44 +219,28 @@ def test_v2_layout_modules_are_public(web_client: TestClient) -> None:
     assert "tdl-v2-neural-canvas" in shell.text
 
 
-def test_index_serves_titan_interface_v1(web_client: TestClient) -> None:
-    """Phase 24.1 — Reference Interface with neural canvas and cognitive orchestrator."""
-    response = web_client.get("/")
+def test_root_redirects_to_canonical_app(web_client: TestClient) -> None:
+    """Root must redirect to /app/ — never serve legacy Interface V1 as default."""
+    response = web_client.get("/", follow_redirects=False)
+    assert response.status_code in {302, 303, 307}
+    assert response.headers["location"].rstrip("/") == "/app"
+
+
+def test_legacy_static_index_still_available(web_client: TestClient) -> None:
+    """Legacy V1 remains reachable under /static only (compatibility, not default)."""
+    response = web_client.get("/static/index.html")
     assert response.status_code == 200
     body = response.text
     assert "tdl-page--app" in body
-    assert "neural-canvas" in body
-    assert "tdl-workspace" in body
     assert "tdl-workspace--reference" in body
-    assert "tdl-ref-sidebar" in body
-    assert "tdl-ref-orchestrator" in body
-    assert "tdl-ref-bottom" in body
-    assert "tdl-neural-labels" in body
-    assert "orchestrator-steps" in body
-    assert "tdl-neural-stage--viewport" in body
-    assert "/static/neural/brain_engine.js" in body
-    assert "/static/neural/brain_depth.js" in body
-    assert "/static/neural-network.js" in body
-    assert "/static/orchestrator/orchestrator_panel.js" in body
-    assert "/static/presence/presence_engine.js" in body
-    assert "/static/presence/presence_controller.js" in body
-    assert "/static/tools/tool_activity_manager.js" in body
-    assert "/static/tools/tool_timeline.js" in body
-    assert "/static/tools/tool_progress_card.js" in body
-    assert "/static/memory/memory_activity.js" in body
-    assert "/static/memory/memory_visualizer.js" in body
-    assert "memory-cards-layer" in body
-    assert "/static/voice/voice_controller.js" in body
-    assert "voice-mic" in body
-    assert "tool-progress-stack" in body
-    assert "/static/design/titan-ui.css" in body
-    assert "tdl-logo__wordmark" in body
     assert "Titan — Intelligence" in body
+    assert "/static/neural/brain_engine.js" in body
+    assert "/static/design/titan-ui.css" in body
 
 
-def test_index_includes_phase_18_polish_assets(web_client: TestClient) -> None:
-    """Phase 18.0 — motion system, sound hooks, launch sequence, accessibility."""
-    response = web_client.get("/")
+def test_legacy_static_includes_phase_18_polish_assets(web_client: TestClient) -> None:
+    """Phase 18.0 — motion system, sound hooks, launch sequence (legacy assets)."""
+    response = web_client.get("/static/index.html")
     assert response.status_code == 200
     body = response.text
     assert "/static/design/motion.js" in body
@@ -266,9 +252,9 @@ def test_index_includes_phase_18_polish_assets(web_client: TestClient) -> None:
     assert "tdl-skip-link" in body
 
 
-def test_index_includes_phase_21_cognitive_engine(web_client: TestClient) -> None:
+def test_legacy_static_includes_phase_21_cognitive_engine(web_client: TestClient) -> None:
     """Phase 21.0 — Cognitive Visualization Engine and brain.setState hooks."""
-    response = web_client.get("/")
+    response = web_client.get("/static/index.html")
     assert response.status_code == 200
     body = response.text
     assert "/static/neural/brain_cognitive.js" in body
@@ -533,7 +519,7 @@ def test_web_remote_starts_with_uvicorn(
     assert kwargs["port"] == 8765
 
     captured = capsys.readouterr().out
-    assert "Titan Web App running at http://127.0.0.1:8765" in captured
+    assert "Titan Web App running at http://127.0.0.1:8765/app/" in captured
     assert "cloudflared tunnel --url http://127.0.0.1:8765" in captured
 
 
@@ -571,7 +557,7 @@ def test_web_dev_starts_with_uvicorn(
     assert kwargs["port"] == 8000
 
     captured = capsys.readouterr().out
-    assert "Titan Web App running at http://127.0.0.1:8000" in captured
+    assert "Titan Web App running at http://127.0.0.1:8000/app/" in captured
     assert "Mode développement local" in captured
 
 

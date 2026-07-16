@@ -7,4 +7,6 @@ playwright>=1.40  # Phase 13.2 — Browser Playwright backend
 fastapi>=0.115  # Phase 17.1 — Private web API
 uvicorn>=0.32  # Phase 17.1 — Local web server
 httpx>=0.27  # Phase 17.1 — FastAPI TestClient / API tests
+argon2-cffi>=23.1  # Phase 10.3 — Argon2id password hashing
+bcrypt>=4.0  # Phase 10.3 — bcrypt fallback password verification
 pytest>=8.0  # test runner for CI and local dev

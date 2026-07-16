@@ -466,5 +466,20 @@ TITAN_CORS_ALLOWED_ORIGINS = os.getenv(
     "TITAN_CORS_ALLOWED_ORIGINS",
     os.getenv("CORS_ALLOWED_ORIGINS", ""),
 ).strip()
-TITAN_COOKIE_SECURE = os.getenv("TITAN_COOKIE_SECURE", "false").lower() == "true"
+TITAN_COOKIE_SECURE = (
+    os.getenv("TITAN_COOKIE_SECURE", os.getenv("COOKIE_SECURE", "false")).lower() == "true"
+)
 TITAN_DATABASE_URL = os.getenv("TITAN_DATABASE_URL", os.getenv("DATABASE_URL", "")).strip()
+
+# Phase 10.3 — Private production authentication (session cookies)
+# Never put plaintext passwords here. Use TITAN_AUTH_PASSWORD_HASH only.
+TITAN_AUTH_REQUIRED = os.getenv(
+    "TITAN_AUTH_REQUIRED",
+    os.getenv("AUTH_REQUIRED", ""),
+).strip()
+TITAN_AUTH_USERNAME = os.getenv("TITAN_AUTH_USERNAME", "").strip()
+TITAN_AUTH_PASSWORD_HASH = os.getenv("TITAN_AUTH_PASSWORD_HASH", "").strip()
+TITAN_AUTH_USERNAME_2 = os.getenv("TITAN_AUTH_USERNAME_2", "").strip()
+TITAN_AUTH_PASSWORD_HASH_2 = os.getenv("TITAN_AUTH_PASSWORD_HASH_2", "").strip()
+TITAN_SESSION_IDLE_MINUTES = int(os.getenv("TITAN_SESSION_IDLE_MINUTES", "60"))
+TITAN_SESSION_MAX_HOURS = int(os.getenv("TITAN_SESSION_MAX_HOURS", "24"))

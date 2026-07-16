@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Titan AI — Accès privé</title>
+  <link rel="stylesheet" href="/login/login.css">
+</head>
+<body class="titan-login">
+  <main class="titan-login__stage" aria-label="Connexion Titan">
+    <section class="titan-login__panel" aria-labelledby="titan-login-title">
+      <div class="titan-login__brand">
+        <img
+          class="titan-login__logo"
+          src="/login/titan-logo.svg"
+          alt=""
+          width="48"
+          height="48"
+        >
+        <p class="titan-login__eyebrow">TITAN AI</p>
+        <h1 class="titan-login__title" id="titan-login-title">ACCÈS PRIVÉ</h1>
+      </div>
+
+      <form class="titan-login__form" id="titan-login-form" autocomplete="on" novalidate>
+        <div class="titan-login__field">
+          <label class="titan-login__label" for="titan-username">Identifiant</label>
+          <input
+            class="titan-login__input"
+            id="titan-username"
+            name="username"
+            type="text"
+            autocomplete="username"
+            required
+            maxlength="128"
+            spellcheck="false"
+          >
+        </div>
+
+        <div class="titan-login__field">
+          <label class="titan-login__label" for="titan-password">Mot de passe</label>
+          <div class="titan-login__password-row">
+            <input
+              class="titan-login__input"
+              id="titan-password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+              maxlength="256"
+            >
+            <button
+              type="button"
+              class="titan-login__toggle"
+              id="titan-password-toggle"
+              aria-label="Afficher le mot de passe"
+              aria-pressed="false"
+            >
+              Voir
+            </button>
+          </div>
+        </div>
+
+        <p class="titan-login__error" id="titan-login-error" role="alert" hidden></p>
+
+        <button type="submit" class="titan-login__submit" id="titan-login-submit">
+          ENTRER DANS TITAN
+        </button>
+      </form>
+    </section>
+  </main>
+  <script src="/login/login.js" defer></script>
+</body>
+</html>

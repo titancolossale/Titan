@@ -192,6 +192,7 @@ export class BackendBridge {
       const httpResponse = await fetch("/chat/stream", {
         method: "POST",
         signal: this._chatAbort.signal,
+        credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
           ...authHeaders(),
@@ -284,6 +285,8 @@ export class BackendBridge {
   }
 
   _openEventSource() {
+    // Prefer session cookies (sent automatically by EventSource on same origin).
+    // Legacy bearer mode still passes ?token= when a localStorage secret exists.
     const token = getStoredToken();
     const params = new URLSearchParams();
     if (token) params.set("token", token);

@@ -202,9 +202,11 @@ def run_web_server(
         print("Mode production — reload désactivé, authentification requise.")
         print(f"Écoute sur {config.host}:{config.port}")
 
+    # Canonical UI entry is /app/ (web/v2). Root "/" only redirects there.
+    app_url = f"{url.rstrip('/')}/app/"
     print("======================================")
     print(f"{TITAN_NAME} AI v{VERSION} — Interface web privée")
-    print(f"Titan Web App running at {url}")
+    print(f"Titan Web App running at {app_url}")
     if production_mode:
         print("Mode production — prêt pour conteneur ou hébergeur cloud.")
     elif remote_mode:

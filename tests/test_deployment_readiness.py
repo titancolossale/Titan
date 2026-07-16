@@ -21,6 +21,7 @@ from config.deployment import (
     load_deployment_settings,
     validate_deployment_settings,
 )
+from api.password_security import hash_password
 from config.paths import get_data_directory, is_directory_writable, resolve_under_data
 
 
@@ -33,6 +34,10 @@ def test_load_deployment_settings_development_defaults(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("TITAN_APP_ENV", raising=False)
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.delenv("TITAN_WEB_HOST", raising=False)
+    monkeypatch.delenv("HOST", raising=False)
+    monkeypatch.delenv("TITAN_WEB_DEV_MODE", raising=False)
     monkeypatch.setenv("TITAN_APP_ENV", "development")
     settings = load_deployment_settings(validate=False)
     assert settings.app_env.value == "development"
@@ -91,6 +96,13 @@ def test_production_accepts_valid_settings(
 ) -> None:
     monkeypatch.setenv("TITAN_WEB_SECRET_KEY", prod_secret)
     monkeypatch.setenv("TITAN_COOKIE_SECURE", "true")
+    monkeypatch.setenv("AUTH_REQUIRED", "true")
+    monkeypatch.setenv("TITAN_AUTH_USERNAME", "nolan")
+    # Synthetic test hash only — not a real credential.
+    from api.password_security import hash_password
+
+    monkeypatch.setenv("TITAN_AUTH_PASSWORD_HASH", hash_password("ValidTestPass1!xx"))
+    monkeypatch.setenv("TITAN_WEB_HOST", "0.0.0.0")
     settings = load_deployment_settings(production_mode=True, validate=True)
     assert settings.host == "0.0.0.0"
     assert settings.is_production is True
@@ -195,6 +207,9 @@ def test_web_prod_starts_uvicorn_on_custom_port(
                 "TITAN_WEB_ENABLED=true",
                 f"TITAN_WEB_SECRET_KEY={prod_secret}",
                 "TITAN_COOKIE_SECURE=true",
+                "AUTH_REQUIRED=true",
+                "TITAN_AUTH_USERNAME=nolan",
+                f"TITAN_AUTH_PASSWORD_HASH={hash_password('ValidTestPass1!xx')}",
                 "PORT=9876",
             ]
         ),
@@ -203,6 +218,10 @@ def test_web_prod_starts_uvicorn_on_custom_port(
     monkeypatch.setattr("config.settings.ENV_FILE_PATH", env_file)
     monkeypatch.setenv("TITAN_WEB_SECRET_KEY", prod_secret)
     monkeypatch.setenv("TITAN_COOKIE_SECURE", "true")
+    monkeypatch.setenv("AUTH_REQUIRED", "true")
+    monkeypatch.setenv("TITAN_AUTH_USERNAME", "nolan")
+    monkeypatch.setenv("TITAN_AUTH_PASSWORD_HASH", hash_password("ValidTestPass1!xx"))
+    monkeypatch.setenv("TITAN_WEB_HOST", "0.0.0.0")
     monkeypatch.setenv("PORT", "9876")
 
     fake_uvicorn = MagicMock()

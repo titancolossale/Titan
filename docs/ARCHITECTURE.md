@@ -228,9 +228,9 @@ futuristic OS shell (single frontend, no duplication). Sprint 1 delivers the
 five-region layout foundation only — Brain, Cognitive OS, and reasoning systems
 are untouched.
 
-- **Mounts:** the evolving `web/v2/` is now served at **`/app`** (redesign
-  target) in addition to `/v2` (same sources). The legacy root (`/`) remains a
-  stable fallback and will be promoted to the redesign once validated.
+- **Mounts:** `web/v2/` is the **canonical** production frontend at **`/app/`**
+  (also aliased at `/v2/`). Root `/` redirects to `/app/`. Legacy V1
+  (`web/static/`) is available only under `/static/` — never the default app.
 - **Regions:** Top Bar, Left Sidebar (collapsed icon rail), Main Workspace
   (living neural core), Right Context Panel (additive resizable drawer, hidden
   by default), Bottom Status Bar.

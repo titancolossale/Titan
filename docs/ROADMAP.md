@@ -185,7 +185,8 @@ Remaining work (high level):
 |------|--------|----------|
 | 10.1 Deployment readiness audit | **Complete** | [`docs/CLOUD_DEPLOYMENT_READINESS.md`](CLOUD_DEPLOYMENT_READINESS.md) |
 | 10.2 Railway production deployment | **Complete (docs + config)** | [`docs/RAILWAY_DEPLOYMENT.md`](RAILWAY_DEPLOYMENT.md) |
-| 10.3 TLS + domain + auth hardening | Not started | — |
+| 10.3 TLS + domain + auth hardening | Done | Private Argon2id session auth + `/login` |
+
 
 **10.1 delivered:** typed env config (`config/deployment.py`), `/ready` endpoint,
 `python main.py web-prod`, Dockerfile, path helpers, tests.

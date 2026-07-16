@@ -264,6 +264,21 @@ def validate_deployment_settings(settings: DeploymentSettings) -> None:
                 "TITAN_COOKIE_SECURE must be true in production "
                 "(set TITAN_COOKIE_SECURE=true)."
             )
+        if settings.auth_required:
+            auth_user = os.getenv("TITAN_AUTH_USERNAME", "").strip()
+            auth_hash = os.getenv("TITAN_AUTH_PASSWORD_HASH", "").strip()
+            if not auth_user or not auth_hash:
+                raise DeploymentConfigError(
+                    "AUTH_REQUIRED/TITAN_AUTH_REQUIRED=true requires "
+                    "TITAN_AUTH_USERNAME and TITAN_AUTH_PASSWORD_HASH in production."
+                )
+            if auth_hash.startswith("$argon2") is False and not auth_hash.startswith(
+                ("$2a$", "$2b$", "$2y$")
+            ):
+                raise DeploymentConfigError(
+                    "TITAN_AUTH_PASSWORD_HASH must be an Argon2id or bcrypt hash "
+                    "(generate with: python scripts/generate_titan_password_hash.py)."
+                )
 
     if settings.public_base_url and not re.match(r"^https?://", settings.public_base_url):
         raise DeploymentConfigError(

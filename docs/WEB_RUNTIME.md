@@ -11,8 +11,8 @@ This document describes the **production web architecture** for Titan — how `w
 
 | Layer | Path | Role |
 |-------|------|------|
-| **Production frontend** | `web/v2/` | SPA conversation UI (only production frontend) |
-| **Legacy frontend** | `web/static/` | **Deprecated** — V1 reference UI; do not extend |
+| **Production frontend** | `web/v2/` at `/app/` | **Canonical** approved final Titan Web App |
+| **Legacy frontend** | `web/static/` under `/static/` | **Deprecated** — V1 reference UI; `/` redirects to `/app/` |
 | **Web API** | `api/app.py` | FastAPI routes, auth, SSE |
 | **Chat service** | `api/chat_service.py` | Thread-safe `Brain.process_request()` delegation |
 | **Shared runtime** | `api/titan_service.py` | Lazy singleton `Titan` (same composition root as REPL) |

@@ -1,0 +1,190 @@
+/* =====================================
+   Titan Private Login — Phase 10.3
+   Pure black · deep-red accents · smoked glass
+   ===================================== */
+
+:root {
+  --login-bg: #000000;
+  --login-surface: rgba(14, 14, 16, 0.78);
+  --login-border: rgba(255, 255, 255, 0.08);
+  --login-border-focus: rgba(220, 38, 38, 0.45);
+  --login-red: #b91c1c;
+  --login-red-bright: #dc2626;
+  --login-text: #f4f1f1;
+  --login-muted: #8a8383;
+  --login-error: #f87171;
+  --login-font: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--login-bg);
+  color: var(--login-text);
+  font-family: var(--login-font);
+}
+
+body.titan-login {
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 0%, rgba(127, 29, 29, 0.18), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 80% 100%, rgba(60, 10, 10, 0.2), transparent 50%),
+    var(--login-bg);
+}
+
+.titan-login__stage {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.titan-login__panel {
+  width: min(100%, 400px);
+  padding: 2.25rem 2rem 2rem;
+  border-radius: 18px;
+  border: 1px solid var(--login-border);
+  background: var(--login-surface);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+.titan-login__brand {
+  text-align: center;
+  margin-bottom: 1.75rem;
+}
+
+.titan-login__logo {
+  display: block;
+  margin: 0 auto 1rem;
+  width: 48px;
+  height: 48px;
+}
+
+.titan-login__eyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.28em;
+  font-weight: 600;
+  color: var(--login-muted);
+}
+
+.titan-login__title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--login-text);
+}
+
+.titan-login__form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.titan-login__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.titan-login__label {
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  color: var(--login-muted);
+  text-transform: uppercase;
+}
+
+.titan-login__input {
+  width: 100%;
+  padding: 0.8rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid var(--login-border);
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--login-text);
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.titan-login__input:focus {
+  border-color: var(--login-border-focus);
+}
+
+.titan-login__password-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.titan-login__toggle {
+  height: 100%;
+  min-height: 2.75rem;
+  padding: 0 0.85rem;
+  border-radius: 10px;
+  border: 1px solid var(--login-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--login-muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.titan-login__toggle:hover,
+.titan-login__toggle[aria-pressed="true"] {
+  color: var(--login-text);
+  border-color: rgba(220, 38, 38, 0.35);
+}
+
+.titan-login__error {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--login-error);
+}
+
+.titan-login__submit {
+  margin-top: 0.35rem;
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(185, 28, 28, 0.55);
+  border-radius: 11px;
+  background: linear-gradient(180deg, rgba(185, 28, 28, 0.35), rgba(127, 29, 29, 0.55));
+  color: var(--login-text);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+}
+
+.titan-login__submit:hover:not(:disabled) {
+  border-color: var(--login-red-bright);
+  background: linear-gradient(180deg, rgba(220, 38, 38, 0.4), rgba(127, 29, 29, 0.65));
+}
+
+.titan-login__submit:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+@media (max-width: 480px) {
+  .titan-login__panel {
+    padding: 1.75rem 1.25rem 1.5rem;
+    border-radius: 14px;
+  }
+
+  .titan-login__title {
+    font-size: 1.15rem;
+    letter-spacing: 0.14em;
+  }
+}

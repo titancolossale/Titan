@@ -1,6 +1,7 @@
-/** Titan Frontend V2 — Private web authentication (Bearer token, localStorage). */
+/** Titan Frontend V2 — Authentication (session cookies + legacy bearer). */
 
 export const AUTH_STORAGE_KEY = "titan_web_secret_key";
+export const CSRF_COOKIE_NAME = "titan_csrf";
 
 /**
  * @returns {string}
@@ -34,19 +35,81 @@ export function clearStoredToken() {
 }
 
 /**
- * @returns {Record<string, string>}
+ * Read a cookie value by name (used for CSRF double-submit).
+ * @param {string} name
+ * @returns {string}
  */
-export function authHeaders() {
-  const key = getStoredToken();
-  if (!key) return {};
-  return { Authorization: `Bearer ${key}` };
+export function readCookie(name) {
+  try {
+    const parts = document.cookie.split(";");
+    for (const part of parts) {
+      const [rawKey, ...rest] = part.trim().split("=");
+      if (rawKey === name) {
+        return decodeURIComponent(rest.join("=") || "");
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return "";
 }
 
 /**
- * @returns {Promise<{ auth_required: boolean, dev_mode: boolean, secret_configured?: boolean }>}
+ * @returns {string}
+ */
+export function getCsrfToken() {
+  return readCookie(CSRF_COOKIE_NAME);
+}
+
+/**
+ * Headers for authenticated API calls.
+ * Session mode relies on cookies + CSRF; bearer mode uses Authorization.
+ * @returns {Record<string, string>}
+ */
+export function authHeaders() {
+  /** @type {Record<string, string>} */
+  const headers = {};
+  const csrf = getCsrfToken();
+  if (csrf) {
+    headers["X-CSRF-Token"] = csrf;
+  }
+  const key = getStoredToken();
+  if (key) {
+    headers.Authorization = `Bearer ${key}`;
+  }
+  return headers;
+}
+
+/**
+ * Default fetch init for Titan API calls (send cookies in session mode).
+ * @param {RequestInit} [init]
+ * @returns {RequestInit}
+ */
+export function authFetchInit(init = {}) {
+  const headers = {
+    ...(init.headers || {}),
+    ...authHeaders(),
+  };
+  return {
+    credentials: "same-origin",
+    ...init,
+    headers,
+  };
+}
+
+/**
+ * @returns {Promise<{
+ *   auth_required: boolean,
+ *   auth_mode?: string,
+ *   dev_mode: boolean,
+ *   secret_configured?: boolean,
+ *   session_auth?: boolean,
+ *   authenticated?: boolean,
+ *   username?: string | null
+ * }>}
  */
 export async function fetchAuthStatus() {
-  const response = await fetch("/auth/status");
+  const response = await fetch("/auth/status", { credentials: "same-origin" });
   if (!response.ok) {
     throw new Error("Impossible de contacter le serveur Titan.");
   }
@@ -64,8 +127,10 @@ export async function verifyToken(token) {
   try {
     const response = await fetch("/auth/verify", {
       method: "POST",
+      credentials: "same-origin",
       headers: {
         Authorization: `Bearer ${trimmed}`,
+        ...authHeaders(),
       },
     });
     return response.ok;
@@ -75,12 +140,65 @@ export async function verifyToken(token) {
 }
 
 /**
- * Block boot until the user provides a valid secret (skipped in web-dev mode).
+ * @returns {Promise<boolean>}
+ */
+export async function verifySession() {
+  try {
+    const response = await fetch("/auth/verify", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        ...authHeaders(),
+      },
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Server-side logout — destroys session cookie when session auth is active.
+ * @returns {Promise<void>}
+ */
+export async function logoutSession() {
+  try {
+    await fetch("/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        ...authHeaders(),
+      },
+    });
+  } catch {
+    /* ignore network errors — clear local state anyway */
+  }
+  clearStoredToken();
+}
+
+/**
+ * Block boot until the user is authenticated.
+ * Session mode: middleware redirects unauthenticated /app to /login.
+ * Bearer mode: overlay gate (legacy local/remote).
  * @returns {Promise<void>}
  */
 export async function ensureAuthenticated() {
   const status = await fetchAuthStatus();
   if (!status.auth_required) {
+    return;
+  }
+
+  if (status.auth_mode === "session" || status.session_auth) {
+    if (status.authenticated) {
+      return;
+    }
+    if (await verifySession()) {
+      return;
+    }
+    const next = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
+    window.location.assign(`/login?next=${next || "%2Fapp%2F"}`);
+    // Keep the promise pending while navigation occurs.
+    await new Promise(() => {});
     return;
   }
 
@@ -189,52 +307,83 @@ export function wireSettingsAuthControls() {
   const saveBtn = document.getElementById("tdl-v2-save-auth");
   const logoutBtn = document.getElementById("tdl-v2-logout-auth");
   const statusEl = document.getElementById("tdl-v2-auth-status");
+  const labelEl = document.querySelector('label[for="tdl-v2-secret-key"]');
 
-  if (!input || !saveBtn || !logoutBtn) {
+  if (!logoutBtn) {
     return;
   }
 
-  const syncStatus = () => {
+  let sessionMode = false;
+
+  const syncStatus = async () => {
+    try {
+      const status = await fetchAuthStatus();
+      sessionMode = Boolean(status.auth_mode === "session" || status.session_auth);
+      if (sessionMode) {
+        if (labelEl) labelEl.textContent = "Session";
+        if (input) {
+          input.disabled = true;
+          input.placeholder = "Authentification par session";
+          input.value = status.username ? status.username : "";
+          input.type = "text";
+        }
+        if (saveBtn) saveBtn.hidden = true;
+        if (statusEl) {
+          statusEl.textContent = status.authenticated
+            ? `Connecté${status.username ? ` — ${status.username}` : ""}.`
+            : "Non authentifié.";
+        }
+        return;
+      }
+    } catch {
+      /* fall through to bearer UI */
+    }
+
     const hasToken = Boolean(getStoredToken());
     if (statusEl) {
       statusEl.textContent = hasToken ? "Authentifié sur cet appareil." : "Non authentifié.";
     }
-    if (!input.value && hasToken) {
+    if (input && !input.value && hasToken) {
       input.value = "••••••••";
     }
   };
 
   syncStatus();
 
-  saveBtn.addEventListener("click", async () => {
-    const raw = input.value.trim();
-    if (!raw || raw === "••••••••") {
-      if (statusEl) statusEl.textContent = "Entre une nouvelle clé secrète.";
-      input.focus();
-      return;
-    }
+  if (saveBtn && input) {
+    saveBtn.addEventListener("click", async () => {
+      if (sessionMode) return;
+      const raw = input.value.trim();
+      if (!raw || raw === "••••••••") {
+        if (statusEl) statusEl.textContent = "Entre une nouvelle clé secrète.";
+        input.focus();
+        return;
+      }
 
-    const ok = await verifyToken(raw);
-    if (!ok) {
-      if (statusEl) statusEl.textContent = "Clé secrète incorrecte.";
-      return;
-    }
+      const ok = await verifyToken(raw);
+      if (!ok) {
+        if (statusEl) statusEl.textContent = "Clé secrète incorrecte.";
+        return;
+      }
 
-    saveStoredToken(raw);
-    input.value = "••••••••";
-    if (statusEl) statusEl.textContent = "Clé enregistrée sur cet appareil.";
+      saveStoredToken(raw);
+      input.value = "••••••••";
+      if (statusEl) statusEl.textContent = "Clé enregistrée sur cet appareil.";
+    });
+  }
+
+  logoutBtn.addEventListener("click", async () => {
+    await logoutSession();
+    if (input) input.value = "";
+    if (statusEl) statusEl.textContent = "Déconnecté.";
+    window.location.assign("/login");
   });
 
-  logoutBtn.addEventListener("click", () => {
-    clearStoredToken();
-    input.value = "";
-    if (statusEl) statusEl.textContent = "Clé effacée. Recharge la page pour te réauthentifier.";
-    window.location.reload();
-  });
-
-  input.addEventListener("focus", () => {
-    if (input.value === "••••••••") {
-      input.value = "";
-    }
-  });
+  if (input) {
+    input.addEventListener("focus", () => {
+      if (input.value === "••••••••") {
+        input.value = "";
+      }
+    });
+  }
 }

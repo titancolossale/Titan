@@ -2,7 +2,7 @@
 
 **Phase:** Canonical Final Reference (UI 0.50.0) — supersedes prior visual sprints
 **Frontend:** `web/v2/` (single production frontend — evolved in place)
-**Served at:** `/app` (redesign target) and `/v2` (same sources); `/` remains the legacy fallback
+**Served at:** `/app/` (canonical production entry) and `/v2/` (same sources). `/` redirects to `/app/`. Legacy V1 remains at `/static/index.html` only — never the default.
 **Canonical visual:** `docs/design/screenshots/titan-final-canonical-reference.png`  
 **Implementation record:** `docs/TITAN_FINAL_REFERENCE_IMPLEMENTATION.md`
 

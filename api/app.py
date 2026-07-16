@@ -11,14 +11,18 @@ from typing import Any
 
 import asyncio
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from api.auth import require_web_auth, validate_web_token
+from api.auth_config import is_session_auth_enabled
+from api.auth_middleware import PrivateAuthMiddleware
+from api.auth_routes import router as auth_router
 from api.chat_models import ChatErrorResponse, ChatMessageRequest, ChatMessageResponse
 from api.chat_service import process_chat_message, validate_message_size
 from api.event_hub import event_hub
@@ -47,9 +51,12 @@ from config.settings import (
 )
 from voice.voice_manager import VoiceManager
 
+# Canonical production frontend: web/v2/ (approved final Titan Web App).
+# Legacy V1 UI remains under web/static/ for compatibility only — never the default.
 WEB_ROOT = Path(__file__).resolve().parent.parent / "web"
 STATIC_DIR = WEB_ROOT / "static"
 V2_DIR = WEB_ROOT / "v2"
+CANONICAL_APP_PATH = "/app/"
 
 
 class ChatRequest(BaseModel):
@@ -91,6 +98,9 @@ def create_app() -> FastAPI:
         redoc_url=None,
     )
 
+    # Outermost: honor X-Forwarded-Proto/For from Railway's reverse proxy.
+    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+
     cors_origins = _parse_csv(TITAN_CORS_ALLOWED_ORIGINS)
     if cors_origins:
         app.add_middleware(
@@ -98,22 +108,30 @@ def create_app() -> FastAPI:
             allow_origins=cors_origins,
             allow_credentials=True,
             allow_methods=["GET", "POST", "OPTIONS"],
-            allow_headers=["Authorization", "Content-Type", "Last-Event-ID"],
+            allow_headers=[
+                "Authorization",
+                "Content-Type",
+                "Last-Event-ID",
+                "X-CSRF-Token",
+            ],
         )
 
     allowed_hosts = _parse_csv(TITAN_ALLOWED_HOSTS)
     if allowed_hosts:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
+    # Private session gate (no-op when session auth is not configured).
+    app.add_middleware(PrivateAuthMiddleware)
+
+    app.include_router(auth_router)
+
     if STATIC_DIR.is_dir():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
     if V2_DIR.is_dir():
+        # Canonical Titan Web App (approved final UI). /app is the production entry;
+        # /v2 is a same-source alias. Do not remount web/static as the default app.
         app.mount("/v2", StaticFiles(directory=str(V2_DIR), html=True), name="v2")
-        # Web App Finalization: the redesigned production frontend is served at
-        # /app while the legacy root ("/") remains a stable fallback. Both /app
-        # and /v2 serve the same evolving web/v2 sources (single frontend, no
-        # duplication). /app becomes the default root once the redesign ships.
         app.mount("/app", StaticFiles(directory=str(V2_DIR), html=True), name="app")
 
     @app.get("/health")
@@ -121,13 +139,15 @@ def create_app() -> FastAPI:
         """Public liveness probe — no authentication required."""
         dev_mode = is_web_dev_mode()
         secret_configured = bool(get_web_secret_key())
+        session_auth = is_session_auth_enabled()
         return {
             "status": "ok",
             "name": TITAN_NAME,
             "version": VERSION,
             "web_enabled": env_bool("TITAN_WEB_ENABLED"),
             "dev_mode": dev_mode,
-            "auth_required": not dev_mode and secret_configured,
+            "auth_required": (not dev_mode) and (session_auth or secret_configured),
+            "session_auth": session_auth,
         }
 
     @app.get("/ready")
@@ -137,31 +157,24 @@ def create_app() -> FastAPI:
         http_status = int(payload.pop("http_status", 200))
         return JSONResponse(status_code=http_status, content=payload)
 
-    @app.get("/auth/status")
-    def auth_status() -> dict[str, Any]:
-        """Public auth policy — tells the frontend whether a secret gate is required."""
-        dev_mode = is_web_dev_mode()
-        secret_configured = bool(get_web_secret_key())
-        return {
-            "auth_required": not dev_mode and secret_configured,
-            "dev_mode": dev_mode,
-            "secret_configured": secret_configured,
-        }
-
     @app.post("/auth/verify", dependencies=[Depends(require_web_auth)])
     def auth_verify() -> dict[str, bool]:
-        """Validate the bearer token without exposing the configured secret."""
+        """Validate the active session or bearer token without exposing secrets."""
         return {"ok": True}
 
     @app.get("/")
-    def index() -> FileResponse:
-        """Serve Titan Interface V1 (legacy — see docs/WEB_RUNTIME.md)."""
-        index_path = STATIC_DIR / "index.html"
-        return FileResponse(index_path)
+    def index() -> RedirectResponse:
+        """Redirect to the canonical Titan Web App at /app/.
+
+        Unauthenticated browsers are redirected to /login by PrivateAuthMiddleware
+        before this handler runs. Authenticated (and web-dev) traffic lands on
+        web/v2 — never the legacy web/static Interface V1.
+        """
+        return RedirectResponse(url=CANONICAL_APP_PATH, status_code=303)
 
     @app.get("/design")
     def design_preview() -> FileResponse:
-        """Serve the Titan Design Language preview (Phase 17.2)."""
+        """Serve the Titan Design Language preview (legacy — not the default app)."""
         design_path = STATIC_DIR / "design.html"
         return FileResponse(design_path)
 
@@ -233,12 +246,15 @@ def create_app() -> FastAPI:
 
     @app.get("/events/stream")
     def events_stream(
+        request: Request,
         token: str | None = Query(default=None),
         snapshot: bool = Query(default=False),
         last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
     ) -> StreamingResponse:
         """Persistent SSE stream — status, brain_state, telemetry, and hub events."""
-        validate_web_token(token)
+        # Session cookies are preferred (EventSource cannot set Authorization).
+        # Legacy ?token= remains only when session auth is disabled.
+        validate_web_token(token, request=request)
 
         def generate():
             for event_type, data in emit_initial_status():
