@@ -70,14 +70,14 @@ export class NeuralStage {
   }
 
   /**
-   * @param {"performance"|"balanced"|"cinematic"} mode
+   * @param {"auto"|"performance"|"balanced"|"cinematic"} mode
    */
   setQualityMode(mode) {
     return this._engine?.setQualityMode(mode) ?? null;
   }
 
   getQualityMode() {
-    return this._engine?.getQualityMode?.() ?? "balanced";
+    return this._engine?.getQualityMode?.() ?? "auto";
   }
 
   notifyInteractive(durationMs = 220) {

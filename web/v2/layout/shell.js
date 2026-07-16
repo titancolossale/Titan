@@ -377,11 +377,12 @@ export class Shell {
         <div class="tdl-v2-settings-section">
           <label class="tdl-v2-settings-auth__label" for="tdl-v2-visual-quality">Qualité visuelle</label>
           <select class="tdl-v2-settings-auth__input" id="tdl-v2-visual-quality" aria-label="Qualité visuelle">
+            <option value="auto" selected>Auto</option>
             <option value="performance">Performance</option>
-            <option value="balanced" selected>Balanced</option>
+            <option value="balanced">Balanced</option>
             <option value="cinematic">Cinematic</option>
           </select>
-          <p class="tdl-v2-settings-hint">Balanced est le défaut — fluidité prioritaire sans redessiner l’identité Titan.</p>
+          <p class="tdl-v2-settings-hint">Auto (défaut) — budgets conservateurs, bascule en urgence si le FPS reste bas.</p>
           <label class="tdl-v2-settings-check">
             <input type="checkbox" id="tdl-v2-reduce-motion-pref" />
             Réduire les animations

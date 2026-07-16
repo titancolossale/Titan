@@ -69,6 +69,8 @@ export class NeuralSignals {
   }
 
   _spawnSignals(timestamp, intensity, thinking, state, brightness = 1, connIntensity = 0.72) {
+    const lighten = Boolean(state.signalLighten);
+    const effectiveThinking = thinking && !lighten;
     const sigCfg = NEURAL_CONFIG.signals;
     const signature = state.getCognitiveSignature();
     const density = signature.signalDensity ?? state.presenceSignalDensity ?? 0.35;
@@ -77,10 +79,11 @@ export class NeuralSignals {
     const intervalMult = signature.spawnIntervalMult ?? 1;
     const speedMult = signature.speedMult ?? 1;
 
-    const maxActive = thinking
-      ? Math.floor(sigCfg.maxActiveThinking * maxMult)
+    const maxActive = effectiveThinking
+      ? Math.floor(sigCfg.maxActiveThinking * maxMult * (lighten ? 0.35 : 1))
       : Math.max(sigCfg.maxActiveIdle, Math.floor(sigCfg.maxActiveIdle + density * 18));
-    let interval = (thinking ? sigCfg.spawnIntervalThinking : sigCfg.spawnIntervalIdle) * intervalMult;
+    let interval = (effectiveThinking ? sigCfg.spawnIntervalThinking : sigCfg.spawnIntervalIdle) * intervalMult;
+    if (lighten) interval *= 1.8;
     interval *= 1.08 - vitality * 0.38;
 
     if (this.signals.length >= maxActive) return;
@@ -88,22 +91,24 @@ export class NeuralSignals {
 
     this.lastSpawn = timestamp;
 
-    let originId = thinking
+    let originId = effectiveThinking
       ? this.nodes.getRandomNode(true)
       : this.nodes.getRandomNode(Math.random() > 0.28);
-    if (signature.distributedExploration) {
+    if (signature.distributedExploration && !lighten) {
       originId = this.nodes.getRandomNode(true, null, NODE_CLASSES.TOOL);
     }
-    if (signature.distantRegions && Math.random() < 0.58) {
+    if (signature.distantRegions && Math.random() < 0.58 && !lighten) {
       originId = this.nodes.getDeepRecallOrigin();
     }
     if (originId < 0) return;
 
-    this._emitSignal(originId, intensity, thinking, brightness, connIntensity, speedMult, signature);
+    this._emitSignal(originId, intensity, effectiveThinking, brightness, connIntensity, speedMult, signature);
   }
 
   _spawnCoreEmissions(timestamp, intensity, thinking, state) {
-    const interval = thinking ? 180 : 920;
+    const lighten = Boolean(state.signalLighten);
+    const effectiveThinking = thinking && !lighten;
+    const interval = effectiveThinking ? 180 : 920;
     if (timestamp - this.lastCorePulse < interval) return;
     this.lastCorePulse = timestamp;
 
@@ -114,7 +119,7 @@ export class NeuralSignals {
     const connections = this.nodes.getEdgesForNode(coreId);
     if (connections.length === 0) return;
 
-    const burst = thinking ? 2 + Math.floor(intensity * 3) : 1;
+    const burst = effectiveThinking ? 2 + Math.floor(intensity * 3) : 1;
     for (let i = 0; i < burst; i++) {
       const pick = connections[Math.floor(Math.random() * connections.length)];
       const originNode = this.nodes.getNode(coreId);
@@ -123,8 +128,8 @@ export class NeuralSignals {
         fromNode: coreId,
         toNode: pick.other,
         progress: 0,
-        speed: rand(sigCfg.speedMin, sigCfg.speedMax) * (thinking ? 1.15 : 0.55),
-        strength: (thinking ? 0.82 : 0.38) + intensity * 0.18,
+        speed: rand(sigCfg.speedMin, sigCfg.speedMax) * (effectiveThinking ? 1.15 : 0.55),
+        strength: (effectiveThinking ? 0.82 : 0.38) + intensity * 0.18,
         direction: 1,
         colorKey: "redHot",
         fragmented: false,
@@ -132,8 +137,8 @@ export class NeuralSignals {
         length: rand(0.6, 1.0),
       });
       if (originNode) {
-        originNode.glow = Math.max(originNode.glow, thinking ? 0.75 : 0.42);
-        originNode.activation = Math.max(originNode.activation, thinking ? 0.55 : 0.28);
+        originNode.glow = Math.max(originNode.glow, effectiveThinking ? 0.75 : 0.42);
+        originNode.activation = Math.max(originNode.activation, effectiveThinking ? 0.55 : 0.28);
       }
     }
   }

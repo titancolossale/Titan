@@ -478,7 +478,7 @@ export class BackendBridge {
           duration_ms: Math.round(performance.now() - startedAt),
         });
         throw new ChatRequestError(
-          "Titan met trop de temps à répondre. Réessaie.",
+          "Titan n’a pas pu répondre dans le délai prévu. Réessaie.",
           {
             code: "provider_timeout",
             retryable: true,

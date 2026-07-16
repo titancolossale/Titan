@@ -64,6 +64,7 @@ def test_performance_monitor_module_exists() -> None:
 def test_settings_visual_quality_surface() -> None:
     shell = (V2 / "layout" / "shell.js").read_text(encoding="utf-8")
     assert "tdl-v2-visual-quality" in shell
+    assert "Auto" in shell
     assert "Performance" in shell
     assert "Balanced" in shell
     assert "Cinematic" in shell
@@ -71,6 +72,7 @@ def test_settings_visual_quality_surface() -> None:
 
     settings = (V2 / "core" / "settings-performance.js").read_text(encoding="utf-8")
     assert "wireVisualQualitySettings" in settings
+    assert "readQualityUrlOverride" in settings
 
 
 def test_engine_idempotent_init_and_visibility() -> None:
@@ -101,7 +103,7 @@ def test_sse_reconnect_guards() -> None:
 
 def test_config_quality_defaults() -> None:
     cfg = (V2 / "neural" / "config.js").read_text(encoding="utf-8")
-    assert 'defaultQualityMode: "balanced"' in cfg
+    assert 'defaultQualityMode: "auto"' in cfg
     assert "adaptiveNodeCount: false" in cfg
     assert "maxDpr: 1.75" in cfg
 
@@ -115,6 +117,7 @@ def test_quality_preset_budgets_in_source() -> None:
         end = text.index("}),", start)
         return text[start:end]
 
+    auto = _block("auto")
     perf = _block("performance")
     bal = _block("balanced")
     cine = _block("cinematic")
@@ -126,6 +129,7 @@ def test_quality_preset_budgets_in_source() -> None:
         assert match, f"missing {key}"
         return float(match.group(1))
 
+    assert _num(auto, "maxDpr") <= 1.0
     assert _num(perf, "maxDpr") <= _num(bal, "maxDpr") <= _num(cine, "maxDpr")
     assert _num(perf, "maxNodeCount") < _num(bal, "maxNodeCount")
     assert _num(perf, "maxEdgesDrawn") < _num(bal, "maxEdgesDrawn")
@@ -136,6 +140,8 @@ def test_quality_preset_budgets_in_source() -> None:
     assert _num(perf, "maxDpr") <= 1.0
     assert "adaptive: true" in bal
     assert "adaptive: false" in perf
+    assert "EMERGENCY_PRESET" in text
+    assert "sampleRollingFps" in text
 
 
 @pytest.mark.skipif(not _node_available(), reason="node not available")

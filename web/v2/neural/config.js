@@ -311,7 +311,7 @@ export const NEURAL_CONFIG = {
     // Cinematic ceilings — Balanced/Performance scale these at runtime.
     maxEdgesDrawn: 26000,
     maxTissueDrawn: 3400,
-    defaultQualityMode: "balanced",
+    defaultQualityMode: "auto",
   },
 
   boot: {

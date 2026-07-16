@@ -26,7 +26,7 @@ LLM_ERROR_MESSAGE = (
     "Désolé, je n'ai pas pu contacter le modèle. Réessaie dans un instant."
 )
 LLM_TIMEOUT_MESSAGE = (
-    "Titan met trop de temps à répondre. Réessaie."
+    "Titan n’a pas pu répondre dans le délai prévu. Réessaie."
 )
 MAX_RETRIES = 2
 BACKOFF_SECONDS = (1, 2)
@@ -102,29 +102,35 @@ class LLM(LLMProvider):
         model_name = model if model is not None else self.model
         started = time.perf_counter()
         self.last_error_code = None
-        if request_id:
-            logger.info(
-                "CHAT_PROVIDER_START request_id=%s model=%s",
-                request_id,
-                model_name,
-            )
+        corr_id = request_id or getattr(self, "_active_request_id", None) or "-"
+        logger.info(
+            "CHAT_PROVIDER_START request_id=%s model=%s elapsed_ms=0 stage=provider",
+            corr_id,
+            model_name,
+        )
         for attempt in range(MAX_RETRIES + 1):
             try:
                 response = self._create_scoped_response(prompt, instructions, model_name)
-                if request_id:
-                    logger.info(
-                        "CHAT_PROVIDER_END request_id=%s status=ok duration_ms=%d",
-                        request_id,
-                        int((time.perf_counter() - started) * 1000),
-                    )
+                logger.info(
+                    "CHAT_PROVIDER_END request_id=%s status=ok duration_ms=%d "
+                    "elapsed_ms=%d stage=provider model=%s",
+                    corr_id,
+                    int((time.perf_counter() - started) * 1000),
+                    int((time.perf_counter() - started) * 1000),
+                    model_name,
+                )
                 return response.output_text
             except Exception as exc:
                 if isinstance(exc, APITimeoutError):
                     self.last_error_code = PROVIDER_TIMEOUT_CODE
                     logger.warning(
-                        "CHAT_PROVIDER_END request_id=%s status=timeout duration_ms=%d",
-                        request_id or "-",
+                        "CHAT_PROVIDER_END request_id=%s status=timeout duration_ms=%d "
+                        "elapsed_ms=%d stage=provider model=%s code=%s",
+                        corr_id,
                         int((time.perf_counter() - started) * 1000),
+                        int((time.perf_counter() - started) * 1000),
+                        model_name,
+                        PROVIDER_TIMEOUT_CODE,
                     )
                     return LLM_TIMEOUT_MESSAGE
                 if self._is_transient_error(exc) and attempt < MAX_RETRIES:
@@ -140,7 +146,14 @@ class LLM(LLMProvider):
                     continue
 
                 self.last_error_code = "provider_unavailable"
-                logger.error("LLM scoped request failed: %s", type(exc).__name__)
+                logger.error(
+                    "CHAT_PROVIDER_END request_id=%s status=error duration_ms=%d "
+                    "elapsed_ms=%d stage=provider model=%s code=provider_unavailable",
+                    corr_id,
+                    int((time.perf_counter() - started) * 1000),
+                    int((time.perf_counter() - started) * 1000),
+                    model_name,
+                )
                 return LLM_ERROR_MESSAGE
 
         self.last_error_code = "provider_unavailable"

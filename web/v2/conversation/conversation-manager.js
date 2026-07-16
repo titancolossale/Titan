@@ -50,6 +50,10 @@ export class ConversationManager {
     this._retryBtn = null;
     /** @type {string | null} */
     this._activeRequestId = null;
+    /** @type {ReturnType<typeof setInterval> | null} */
+    this._thinkingTimer = null;
+    /** @type {number} */
+    this._thinkingStartedAt = 0;
     /** @type {(event: Event) => void} */
     this._onSendClick = () => {
       void this.send();
@@ -168,7 +172,15 @@ export class ConversationManager {
       }
 
       this._showThinking(true);
+      this._startThinkingElapsed();
       await yieldForPaint();
+
+      this._store?.setState({
+        chatStage: "submitting",
+        chatElapsedMs: 0,
+        lastHttpStatus: null,
+        providerDurationMs: null,
+      });
 
       chatDiag("CHAT_SUBMIT_START", {
         message_length: text.length,
@@ -182,6 +194,13 @@ export class ConversationManager {
 
       requestId = result?.request_id ?? null;
       this._activeRequestId = requestId;
+      this._store?.setState({
+        lastRequestId: requestId,
+        chatStage: "response_received",
+        lastHttpStatus: result?.http_status ?? 200,
+        providerDurationMs: result?.provider_duration_ms ?? null,
+        chatElapsedMs: Math.round(performance.now() - startedAt),
+      });
 
       if (result?.skipped) {
         chatDiag("CHAT_ERROR", {
@@ -252,7 +271,9 @@ export class ConversationManager {
         (aborted ? "provider_timeout" : "network_error");
       const message =
         error instanceof ChatRequestError || error instanceof Error
-          ? error.message
+          ? aborted
+            ? "Titan n’a pas pu répondre dans le délai prévu. Réessaie."
+            : error.message
           : "Erreur de connexion au backend Titan.";
 
       chatDiag("CHAT_ERROR", {
@@ -260,6 +281,12 @@ export class ConversationManager {
         code,
         retryable,
         duration_ms: Math.round(performance.now() - startedAt),
+      });
+
+      this._store?.setState({
+        chatStage: "error",
+        chatElapsedMs: Math.round(performance.now() - startedAt),
+        lastHttpStatus: error?.status ?? null,
       });
 
       if (retryable) {
@@ -364,10 +391,15 @@ export class ConversationManager {
   }
 
   _clearBusyState() {
+    this._stopThinkingElapsed();
     this._showThinking(false);
     this._setComposerBusy(false);
     this._busy = false;
     this._setChatPending(false);
+    this._store?.setState({
+      chatStage: null,
+      chatElapsedMs: null,
+    });
   }
 
   /** @param {boolean} pending */
@@ -379,6 +411,48 @@ export class ConversationManager {
     }
   }
 
+  _startThinkingElapsed() {
+    this._stopThinkingElapsed();
+    this._thinkingStartedAt = performance.now();
+    this._updateThinkingLabel(0);
+    this._thinkingTimer = window.setInterval(() => {
+      const elapsed = performance.now() - this._thinkingStartedAt;
+      this._store?.setState({
+        chatElapsedMs: Math.round(elapsed),
+        chatStage: "awaiting_provider",
+      });
+      this._updateThinkingLabel(elapsed);
+    }, 1000);
+  }
+
+  _stopThinkingElapsed() {
+    if (this._thinkingTimer !== null) {
+      window.clearInterval(this._thinkingTimer);
+      this._thinkingTimer = null;
+    }
+  }
+
+  /**
+   * Progressive French feedback — never fake a Titan reply.
+   * @param {number} elapsedMs
+   */
+  _updateThinkingLabel(elapsedMs) {
+    if (!this._thinkingEl) {
+      this._thinkingEl = document.getElementById("tdl-v2-thinking-indicator");
+    }
+    if (!this._thinkingEl) return;
+    const sec = Math.floor(elapsedMs / 1000);
+    let text = "Titan réfléchit…";
+    if (sec >= 30) {
+      text = `Le traitement prend plus de temps que prévu… (${sec}s)`;
+    } else if (sec >= 10) {
+      text = `Titan traite ta demande… (${sec}s)`;
+    } else if (sec >= 3) {
+      text = `Titan réfléchit… (${sec}s)`;
+    }
+    this._thinkingEl.textContent = text;
+  }
+
   /** @param {boolean} visible */
   _showThinking(visible) {
     if (!this._thinkingEl) {
@@ -387,6 +461,11 @@ export class ConversationManager {
     if (!this._thinkingEl) return;
     this._thinkingEl.dataset.visible = String(visible);
     this._thinkingEl.hidden = !visible;
+    if (visible) {
+      this._updateThinkingLabel(0);
+    } else {
+      this._thinkingEl.textContent = "Titan réfléchit…";
+    }
   }
 
   /** @param {boolean} busy */
@@ -427,6 +506,7 @@ export class ConversationManager {
 
   destroy() {
     this.interrupt();
+    this._stopThinkingElapsed();
     if (this._domBound) {
       this._sendBtn?.removeEventListener("click", this._onSendClick);
       this._stopBtn?.removeEventListener("click", this._onStopClick);

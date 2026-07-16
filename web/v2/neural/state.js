@@ -49,6 +49,8 @@ export class NeuralState {
     this._toolActivitySignature = null;
     /** @type {number} */
     this._toolActivityWeight = 0;
+    /** When true, signal spawn uses idle density even if cognitive state is thinking. */
+    this.signalLighten = false;
 
     /** @type {object | null} */
     this._memoryActivitySignature = null;

@@ -1,38 +1,31 @@
-# Web App Chat Diagnostics — Phase 11.1B
+# Web App Chat Diagnostics — Phase 11.1B + 11.P2
 
 ## Previous failure symptoms
 
 On Railway production (multiple computers):
 
 - Titan Web App felt very slow / frozen after submit
-- User message did not appear in the conversation panel
-- Composer did not clearly confirm send
-- No Titan response appeared
+- User message did not appear in the conversation panel (fixed in 11.1B)
+- Composer did not clearly confirm send (fixed in 11.1B)
+- No Titan response appeared / “Titan réfléchit…” stayed indefinitely
 - No useful recoverable error was shown
-- Railway logs previously showed repeated `GET /events/stream → 401`
+- UI remained visually overloaded (~20 FPS) while waiting (addressed in 11.P2)
 
 ## Root cause (ranked)
 
-1. **Primary — frontend message container race (highest impact)**  
-   `ConversationManager.bindDom()` ran **before** the chat panel was mounted into the center slot.  
-   `MessageRenderer` kept a **null** `_container`. On submit, `appendMessage()` threw  
-   `MessageRenderer: container not mounted` **before** the network call.  
-   The catch path also tried to append an error into the same null container and failed.  
-   Result: no visible user message, no request, no error card — perceived freeze.
+1. **Primary (11.1B) — frontend message container race**  
+   `ConversationManager.bindDom()` ran before the chat panel was mounted.  
+   Fixed with lazy `ensureContainer()` + bind-after-navigate.
 
-2. **Secondary — boot order**  
-   Render pipeline subscribed after router sync in some paths; first chat panel mount  
-   could be delayed by transition animation. Lazy `ensureContainer()` + bind-after-navigate  
-   eliminate this class of failure.
+2. **Secondary (11.P2) — renderer overload during wait**  
+   Thinking / pending chat previously increased decorative neural work.  
+   Fixed: Auto/Emergency budgets, static cache, thinking lighten, visual Hz cap.
 
-3. **Contributing — no client timeout**  
-   Hung provider calls left the UI waiting indefinitely.
+3. **Contributing — provider / Brain latency**  
+   OpenAI calls can take tens of seconds. UI must show elapsed feedback and timeout cleanly.
 
-4. **Contributing — SSE unauthorized reconnects**  
-   EventSource 401s cannot expose status; reconnect needed earlier auth probe + hard stop.
-
-5. **Contributing — busy cleared early on FINISHED**  
-   Opened a double-submit window during typewriter; fixed to keep busy until render completes.
+4. **Contributing — incomplete server timing trail**  
+   Hard to see whether a hang was before Brain, inside Brain, or in the provider.
 
 ## Exact frontend / backend path
 
@@ -41,7 +34,7 @@ Composer Enter/click
   → ConversationManager.send()
       → ensureContainer() + append user message (optimistic)
       → clear composer
-      → show “Titan réfléchit…”
+      → show “Titan réfléchit…” + elapsed timer (10s / 30s copy)
       → yieldForPaint()
       → brain.emit("send_message")
           → BackendBridge._streamChat
@@ -52,88 +45,104 @@ Composer Enter/click
                   ← SSE conversation_finished
           ← response
       → render Titan message / error card
+      → always clear pending / re-enable composer
 ```
 
 Chat does **not** depend on `GET /events/stream`. SSE is a presence bus only.
 
-## Correlation lifecycle
+## Correlation lifecycle (request_id)
 
 Every submit uses a `client_request_id` / `request_id` (same value).
 
-Safe structured logs (no message body, no secrets):
+Safe structured logs (no message body, no secrets, no chain-of-thought):
 
-| Event | Where |
-|-------|--------|
-| `CHAT_SUBMIT_START` | frontend ConversationManager |
-| `CHAT_HTTP_SENT` | frontend BackendBridge |
-| `CHAT_API_RECEIVED` | `api/chat_service.py` |
-| `CHAT_BRAIN_START` | `api/chat_service.py` |
-| `CHAT_PROVIDER_START` / `CHAT_PROVIDER_END` | `brain/llm.py` |
-| `CHAT_API_RESPONSE` | backend + frontend |
-| `CHAT_UI_RENDERED` | frontend |
-| `CHAT_ERROR` | any failure |
+| Event | Where | Fields |
+|-------|--------|--------|
+| `CHAT_SUBMIT_START` | frontend ConversationManager | message_length |
+| `CHAT_HTTP_SENT` | frontend BackendBridge | request_id |
+| `CHAT_API_RECEIVED` | `api/chat_service.py` | request_id, elapsed_ms, stage |
+| `CHAT_BRAIN_START` | `api/chat_service.py` | request_id, elapsed_ms, model |
+| `CHAT_PROVIDER_START` | `brain/llm.py` | request_id, model |
+| `CHAT_PROVIDER_END` | `brain/llm.py` | request_id, status, duration_ms, model |
+| `CHAT_BRAIN_END` | `api/chat_service.py` | request_id, elapsed_ms, status |
+| `CHAT_RESPONSE_SERIALIZED` | `api/chat_service.py` | request_id, elapsed_ms |
+| `CHAT_RESPONSE_SENT` | `api/chat_service.py` | request_id, elapsed_ms |
+| `CHAT_REQUEST_TIMEOUT` | `api/chat_service.py` | request_id, code |
+| `CHAT_REQUEST_ERROR` | `api/chat_service.py` | request_id, code |
+| `CHAT_API_RESPONSE` | backend + frontend | status, duration_ms |
+| `CHAT_UI_RENDERED` | frontend | request_id |
+| `CHAT_ERROR` | any failure | code, request_id |
 
 Gate backend logs with `TITAN_CHAT_DIAGNOSTICS` (default `true`).  
 Gate frontend console logs with `localStorage.titan_chat_diag !== "0"`.
 
-## Timeout behavior
+Railway: filter Deploy Logs by `CHAT_` and the `request_id` from the debug overlay / Network tab.
 
-| Layer | Default | Env |
-|-------|---------|-----|
+## Timeout and user feedback
+
+| Layer | Default | Env / constant |
+|-------|---------|----------------|
 | OpenAI client | 45s | `TITAN_LLM_TIMEOUT_SECONDS` |
-| Browser AbortController | 55s | `CHAT_CLIENT_TIMEOUT_MS` in bridge |
-| Soft chat budget | 50s | `TITAN_CHAT_TIMEOUT_SECONDS` (config reserved) |
+| Browser AbortController | 55s | `CHAT_CLIENT_TIMEOUT_MS` |
+| Soft chat budget | 50s | `TITAN_CHAT_TIMEOUT_SECONDS` (reserved) |
 
-Timeout surfaces as:
+Progressive French copy (never invents a Titan reply):
 
-```json
-{
-  "ok": false,
-  "error": {
-    "code": "provider_timeout",
-    "message": "Titan met trop de temps à répondre. Réessaie.",
-    "retryable": true
-  },
-  "request_id": "..."
-}
-```
+| Elapsed | Message |
+|---------|---------|
+| 0–9s | `Titan réfléchit…` (+ seconds after 3s) |
+| ≥10s | `Titan traite ta demande… (Ns)` |
+| ≥30s | `Le traitement prend plus de temps que prévu… (Ns)` |
+| Timeout / abort | `Titan n’a pas pu répondre dans le délai prévu. Réessaie.` |
 
-Pending state is always cleared in `finally` / `_clearBusyState()`.
+On timeout / error:
+
+- Structured error card
+- Retry button (new `request_id`)
+- Pending state cleared
+- Composer re-enabled
+- Abort supported via Stop
+
+## How to identify where a request stopped
+
+1. Note `request_id` from Network POST body or debug overlay.
+2. Search Railway logs for that id.
+3. Interpret last completed stage:
+
+| Last log seen | Meaning |
+|---|---|
+| `CHAT_API_RECEIVED` only | Blocked before Brain (auth/queue/lock) |
+| `CHAT_BRAIN_START` then silence | Inside Brain / orchestration |
+| `CHAT_PROVIDER_START` then silence | Waiting on OpenAI |
+| `CHAT_PROVIDER_END status=timeout` | Provider deadline |
+| `CHAT_BRAIN_END` + `CHAT_RESPONSE_SENT` | Server finished — check frontend parse/render |
+| No `CHAT_API_RECEIVED` | Request never reached API (client/network/auth) |
 
 ## SSE behavior
 
-- `connect()` only after authenticated boot (`ensureAuthenticated` → `app.start` → delayed `brain.connect`)
-- Auth probe via `/auth/status` before opening EventSource
-- On repeated errors: probe auth; on 401/403 equivalent → `_authBlocked`, stop reconnect
-- Bounded exponential backoff (1.5s → 30s, hard max 12)
-- Logout disconnects EventSource before clearing session
-- SSE failure never blocks `/chat/stream` submit
-
-## Error codes
-
-| Code | Meaning | Retryable |
-|------|---------|-----------|
-| `unauthenticated` | 401 / session expired | false (redirect `/login`) |
-| `invalid_request` | bad body / CSRF | often true after reload |
-| `duplicate_request` | in-flight guard / idempotent replay | — |
-| `provider_timeout` | LLM or client deadline | true |
-| `provider_unavailable` | provider down | true |
-| `brain_failure` | Brain exception | true |
-| `response_parse_error` | bad SSE body | true |
-| `network_error` | fetch failure | true |
-| `unexpected_error` | catch-all | true |
+- `connect()` only after authenticated boot
+- Auth probe via `/auth/status` before EventSource
+- Unauthorized → hard stop reconnect
+- SSE failure **never** blocks `/chat/stream`
 
 ## Diagnostics endpoint
 
-`GET /api/chat/diagnostics` (authenticated only):
+`GET /api/chat/diagnostics` (authenticated):
 
-- chat endpoint ready
-- Brain adapter available
-- provider configured (boolean)
-- model name
-- event stream enabled
+- chat endpoint ready, Brain adapter, provider configured (boolean), model name
 - last safe error code / request id
 - **no** API keys, **no** message content
+
+## Browser diagnostic overlay (debug only)
+
+Enable with `?debug=1` or `localStorage.titan_debug_perf=1`:
+
+- FPS / quality tier / DPR
+- particle/edge budgets
+- `request_id`, chat stage, elapsed time
+- last HTTP status / provider duration when known
+
+Not shown in normal production.
 
 ## Local diagnostics (PowerShell)
 
@@ -142,47 +151,38 @@ cd $env:USERPROFILE\OneDrive\Desktop\Titan
 python main.py web-dev
 ```
 
-1. Open `http://127.0.0.1:8000/app/`
+1. Open `http://127.0.0.1:8000/app/?debug=1`
 2. Log in
-3. DevTools → Network + Console
+3. Confirm Auto quality (top-right select)
 4. Send `Bonjour Titan`
-5. Confirm user bubble appears immediately; composer clears; “Titan réfléchit…” shows
-6. Confirm **exactly one** `POST /chat/stream`
-7. Confirm Titan reply or inline error card
-8. Confirm UI remains clickable (sidebar, settings)
-9. Simulate timeout: temporarily set a low `TITAN_LLM_TIMEOUT_SECONDS` or abort in Network
-10. Confirm retry button resubmits with a **new** request id
+5. Confirm optimistic user bubble + elapsed thinking copy
+6. Confirm exactly one `POST /chat/stream`
+7. Confirm reply **or** structured timeout/error + retry
+8. Search console / server logs for `CHAT_` + `request_id`
 
-Search logs for `CHAT_` + the request id.
+## Railway verification
 
-## Railway diagnostics
-
-1. Commit/push only after Nolan approves
-2. Wait for Railway **Active**
-3. Incognito → log in → DevTools
+1. Deploy only after Nolan approves push
+2. Hard refresh
+3. Confirm Auto mode loads; Emergency activates if FPS stays low
 4. Send `Bonjour Titan`
-5. Record `POST /chat/stream` status + duration
-6. Confirm optimistic user message
-7. Confirm response or structured error
-8. Railway Deploy Logs → filter `CHAT_` + `request_id`
+5. Confirm UI remains responsive during wait
+6. Confirm reply or timeout/error card (no permanent pending)
+7. Railway Deploy Logs → `CHAT_` + `request_id` → note final stage
+8. Test Performance via top-right select and `?quality=performance`
 9. `GET /health` and `GET /ready`
-10. Confirm no unauthorized SSE retry storm
-11. Repeat on both computers
+10. Repeat on both computers
 
 ## Known limitations
 
-- In-memory sessions: deploy/restart invalidates cookies → re-login required
+- In-memory sessions: deploy/restart invalidates cookies → re-login
 - Global `_brain_lock` serializes concurrent Brain turns
-- Typewriter animation is cosmetic; reduced-motion skips it
-- SSE still cannot send custom headers (cookies / `?token=` only)
 - Full authenticated E2E against live OpenAI is not claimed green until manually verified on Railway
+- FPS and provider latency are independent failure modes — diagnose with the tables above
 
-## Files touched (11.1B)
+## Files touched (11.P2 chat trace)
 
-Frontend: `conversation-manager.js`, `message-renderer.js`, `backend-bridge.js`, `app.js`,
-`composer-region.js`, `state-store.js`, `panel-mount.js`, `web-auth.js`, neural engine/stage,
-`chat-diagnostics.js`, `ui.css`
-
-Backend: `api/app.py`, `api/chat_service.py`, `brain/llm.py`, `config/settings.py`
-
-Tests: `tests/test_web_chat_freeze_11_1b.py`
+Frontend: `conversation-manager.js`, `backend-bridge.js`, `chat-diagnostics.js`, settings/topbar quality wiring  
+Backend: `api/chat_service.py`, `brain/llm.py`  
+Tests: `tests/test_web_v2_emergency_fluidity_11_p2.py`  
+Docs: this file + `docs/WEB_APP_PERFORMANCE.md`

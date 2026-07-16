@@ -28,6 +28,28 @@ export class NeuralRenderer {
     this._highwayFirst = [];
     this._bandStrands = [];
     this._maxEdgesDrawn = NEURAL_CONFIG.performance.maxEdgesDrawn;
+    /** @type {HTMLCanvasElement | OffscreenCanvas | null} */
+    this._staticCanvas = null;
+    /** @type {CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null} */
+    this._staticCtx = null;
+    this._staticDirty = true;
+    this._staticRebuildCount = 0;
+    this._staticWidth = 0;
+    this._staticHeight = 0;
+    this._staticDpr = 0;
+  }
+
+  /** Invalidate cached far-field neural layers (rebuild on next draw). */
+  invalidateStaticCache() {
+    this._staticDirty = true;
+  }
+
+  getStaticRebuildCount() {
+    return this._staticRebuildCount;
+  }
+
+  isStaticCacheDirty() {
+    return this._staticDirty;
   }
 
   /**
@@ -48,6 +70,7 @@ export class NeuralRenderer {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this._rebuildDust(budgets?.dustCount);
     this._rebuildBokeh(budgets?.bokehCount);
+    this.invalidateStaticCache();
   }
 
   /** @param {number} [count] */
@@ -90,17 +113,138 @@ export class NeuralRenderer {
    * @param {import("./camera.js").NeuralCamera} camera
    * @param {import("./nodes.js").NeuralNodes} nodes
    * @param {import("./state.js").NeuralState} state
+   * @param {ReturnType<import("./quality-controller.js").QualityController["getBudgets"]> | null} [budgets]
    */
-  renderLight(camera, nodes, state) {
+  renderLight(camera, nodes, state, budgets = null) {
     const ctx = this.ctx;
     const w = this.width;
     const h = this.height;
     const COLORS = NEURAL_CONFIG.colors;
-    ctx.fillStyle = NEURAL_CONFIG.render.voidColor;
-    ctx.fillRect(0, 0, w, h);
-    this._drawAmbientGlow(ctx, w, h, state.getIntensity(), false, state.getVitality(), COLORS, 2);
+    const q = budgets ?? this._budgets;
+    if (q?.useStaticCache && this._staticCanvas && !this._staticDirty) {
+      this._blitStatic(ctx);
+    } else {
+      ctx.fillStyle = NEURAL_CONFIG.render.voidColor;
+      ctx.fillRect(0, 0, w, h);
+      this._drawAmbientGlow(ctx, w, h, state.getIntensity(), false, state.getVitality(), COLORS, 1);
+    }
     this._drawNeuralCore(ctx, camera, nodes, state.getIntensity(), false, state.getVitality(), COLORS);
     this._drawVignette(ctx, w, h, COLORS);
+  }
+
+  /**
+   * @param {number} cssW
+   * @param {number} cssH
+   * @param {number} dpr
+   */
+  _ensureStaticSurface(cssW, cssH, dpr) {
+    const pw = Math.max(1, Math.floor(cssW * dpr));
+    const ph = Math.max(1, Math.floor(cssH * dpr));
+    if (
+      this._staticCanvas &&
+      this._staticWidth === pw &&
+      this._staticHeight === ph &&
+      this._staticDpr === dpr
+    ) {
+      return;
+    }
+    const canOffscreen = typeof OffscreenCanvas !== "undefined";
+    this._staticCanvas = canOffscreen
+      ? new OffscreenCanvas(pw, ph)
+      : document.createElement("canvas");
+    if (!canOffscreen) {
+      /** @type {HTMLCanvasElement} */ (this._staticCanvas).width = pw;
+      /** @type {HTMLCanvasElement} */ (this._staticCanvas).height = ph;
+    }
+    this._staticCtx = /** @type {CanvasRenderingContext2D} */ (
+      this._staticCanvas.getContext("2d", { alpha: false })
+    );
+    this._staticWidth = pw;
+    this._staticHeight = ph;
+    this._staticDpr = dpr;
+    this._staticDirty = true;
+  }
+
+  /**
+   * Far-field architecture baked once — not redrawn every frame.
+   * @param {import("./camera.js").NeuralCamera} camera
+   * @param {import("./nodes.js").NeuralNodes} nodes
+   * @param {import("./state.js").NeuralState} state
+   * @param {object} q
+   * @param {object} COLORS
+   */
+  _rebuildStaticCache(camera, nodes, state, q, COLORS) {
+    this._ensureStaticSurface(this.width, this.height, this.dpr);
+    const sctx = this._staticCtx;
+    if (!sctx || !this._staticCanvas) return;
+
+    sctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    const w = this.width;
+    const h = this.height;
+    const vitality = state.getVitality();
+    const brightness = 1;
+    const thinking = false;
+    const prevBudgets = this._budgets;
+    const prevTissue = this._tissueBudget;
+    this._budgets = q;
+    this._maxEdgesDrawn = q?.maxEdgesDrawn ?? this._maxEdgesDrawn;
+    this._tissueBudget = q?.maxTissueDrawn ?? 800;
+
+    sctx.fillStyle = NEURAL_CONFIG.render.voidColor;
+    sctx.fillRect(0, 0, w, h);
+    this._drawAmbientGlow(
+      sctx,
+      w,
+      h,
+      0.35,
+      false,
+      vitality,
+      COLORS,
+      Math.min(2, q?.ambientPatchCount ?? 2),
+    );
+
+    this._drawFieldTissue(sctx, camera, nodes, "veryFar", thinking, vitality, COLORS, brightness);
+    this._drawFieldTissue(sctx, camera, nodes, "far", thinking, vitality, COLORS, brightness);
+    this._drawFieldTissue(sctx, camera, nodes, "mid", thinking, vitality, COLORS, brightness);
+
+    const layerCount = NEURAL_CONFIG.layers.length;
+    const startLayer = 1;
+    for (let layer = startLayer; layer < layerCount; layer++) {
+      this._drawLayerEdges(sctx, camera, nodes, layer, thinking, COLORS, brightness);
+    }
+    this._drawFieldTissue(sctx, camera, nodes, "bridge", thinking, vitality, COLORS, brightness);
+    for (let layer = startLayer; layer < layerCount; layer++) {
+      this._drawLayerNodes(sctx, camera, nodes, layer, thinking, COLORS, brightness);
+    }
+
+    // Static dust speckles (no per-frame motion).
+    if ((q?.dustCount ?? 0) > 0 && this._dust.length) {
+      sctx.save();
+      sctx.globalCompositeOperation = "lighter";
+      for (let i = 0; i < this._dust.length; i++) {
+        const d = this._dust[i];
+        sctx.fillStyle = `rgba(248, 113, 113, ${d.a * 0.55})`;
+        sctx.beginPath();
+        sctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+        sctx.fill();
+      }
+      sctx.restore();
+    }
+
+    this._budgets = prevBudgets;
+    this._tissueBudget = prevTissue;
+    this._staticDirty = false;
+    this._staticRebuildCount += 1;
+  }
+
+  /** @param {CanvasRenderingContext2D} ctx */
+  _blitStatic(ctx) {
+    if (!this._staticCanvas) return;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(/** @type {CanvasImageSource} */ (this._staticCanvas), 0, 0);
+    ctx.restore();
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   }
 
   /**
@@ -118,54 +262,78 @@ export class NeuralRenderer {
     const w = this.width;
     const h = this.height;
     const intensity = state.getIntensity();
-    const thinking = state.isThinking();
+    const rawThinking = state.isThinking();
+    const q = budgets ?? this._budgets;
+    this._budgets = q;
+    // Thinking must not inflate decorative brightness when lightenThinking is on.
+    const thinking = rawThinking && !q?.lightenThinking;
     const vitality = state.getVitality();
     const brightness = thinking ? NEURAL_CONFIG.render.thinkingBrightness : 1;
     const COLORS = NEURAL_CONFIG.colors;
     const recallDive = depthField?.getRecallDive?.() ?? 0;
-    const q = budgets ?? this._budgets;
-    this._budgets = q;
     this._maxEdgesDrawn = q?.maxEdgesDrawn ?? NEURAL_CONFIG.performance.maxEdgesDrawn;
 
     this._time += 0.016;
     this._tissueBudget = q?.maxTissueDrawn ?? NEURAL_CONFIG.performance.maxTissueDrawn ?? 1600;
 
-    ctx.fillStyle = NEURAL_CONFIG.render.voidColor;
-    ctx.fillRect(0, 0, w, h);
+    const useCache = Boolean(q?.useStaticCache);
+    if (useCache) {
+      if (this._staticDirty || !this._staticCanvas) {
+        this._rebuildStaticCache(camera, nodes, state, q, COLORS);
+      }
+      this._blitStatic(ctx);
+    } else {
+      ctx.fillStyle = NEURAL_CONFIG.render.voidColor;
+      ctx.fillRect(0, 0, w, h);
 
-    this._drawAmbientGlow(
-      ctx,
-      w,
-      h,
-      intensity,
-      thinking,
-      vitality,
-      COLORS,
-      q?.ambientPatchCount ?? 6,
-    );
+      this._drawAmbientGlow(
+        ctx,
+        w,
+        h,
+        intensity,
+        thinking,
+        vitality,
+        COLORS,
+        q?.ambientPatchCount ?? 6,
+      );
 
-    // Large-scale depth: very far → far → mid → near → foreground.
-    this._drawFieldTissue(ctx, camera, nodes, "veryFar", thinking, vitality, COLORS, brightness);
-    this._drawFieldTissue(ctx, camera, nodes, "far", thinking, vitality, COLORS, brightness);
-    this._drawFieldTissue(ctx, camera, nodes, "mid", thinking, vitality, COLORS, brightness);
+      this._drawFieldTissue(ctx, camera, nodes, "veryFar", thinking, vitality, COLORS, brightness);
+      this._drawFieldTissue(ctx, camera, nodes, "far", thinking, vitality, COLORS, brightness);
+      this._drawFieldTissue(ctx, camera, nodes, "mid", thinking, vitality, COLORS, brightness);
 
-    const layerCount = NEURAL_CONFIG.layers.length;
-    const startLayer = q?.softHaloFarLayers === false ? 1 : 0;
-    for (let layer = startLayer; layer < layerCount; layer++) {
-      this._drawLayerEdges(ctx, camera, nodes, layer, thinking, COLORS, brightness);
+      const layerCount = NEURAL_CONFIG.layers.length;
+      const startLayer = q?.softHaloFarLayers === false ? 1 : 0;
+      for (let layer = startLayer; layer < layerCount; layer++) {
+        this._drawLayerEdges(ctx, camera, nodes, layer, thinking, COLORS, brightness);
+      }
+
+      this._drawFieldTissue(ctx, camera, nodes, "bridge", thinking, vitality, COLORS, brightness);
+      this._drawFieldTissue(ctx, camera, nodes, "near", thinking, vitality, COLORS, brightness);
+      this._drawFieldTissue(ctx, camera, nodes, "foreground", thinking, vitality, COLORS, brightness);
+
+      for (let layer = startLayer; layer < layerCount; layer++) {
+        this._drawLayerNodes(ctx, camera, nodes, layer, thinking, COLORS, brightness);
+      }
     }
 
-    this._drawFieldTissue(ctx, camera, nodes, "bridge", thinking, vitality, COLORS, brightness);
-    this._drawFieldTissue(ctx, camera, nodes, "near", thinking, vitality, COLORS, brightness);
-    this._drawFieldTissue(ctx, camera, nodes, "foreground", thinking, vitality, COLORS, brightness);
-
-    for (let layer = startLayer; layer < layerCount; layer++) {
-      this._drawLayerNodes(ctx, camera, nodes, layer, thinking, COLORS, brightness);
+    // Dynamic foreground — Core, live signals, restrained pulse.
+    if (useCache) {
+      this._drawFieldTissue(ctx, camera, nodes, "near", thinking, vitality, COLORS, brightness * 0.85);
+      this._drawFieldTissue(
+        ctx,
+        camera,
+        nodes,
+        "foreground",
+        thinking,
+        vitality,
+        COLORS,
+        brightness * 0.85,
+      );
     }
 
-    this._drawNeuralCore(ctx, camera, nodes, intensity, thinking, vitality, COLORS);
+    this._drawNeuralCore(ctx, camera, nodes, intensity, rawThinking, vitality, COLORS);
 
-    if (ghostLayer?.isActive()) {
+    if (ghostLayer?.isActive() && !q?.emergency && !q?.chatPending) {
       this._drawGhosts(ctx, camera, ghostLayer, COLORS);
     }
 
@@ -174,18 +342,18 @@ export class NeuralRenderer {
       this._drawSignalParticles(ctx, camera, signals, COLORS, thinking);
     }
 
-    if (cognitiveOverlay) {
+    if (cognitiveOverlay && !q?.emergency) {
       cognitiveOverlay.draw(ctx, w, h, state.getCognitiveSignature(), COLORS);
     }
 
-    this._drawDust(ctx, thinking, vitality, COLORS);
-    // Near-foreground Core filaments — canvas depth in front of mid tissue,
-    // still behind the DOM label overlay filaments.
+    if (!useCache && (q?.dustCount ?? 0) > 0) {
+      this._drawDust(ctx, thinking, vitality, COLORS);
+    }
     this._drawCoreFrontTissue(ctx, camera, nodes, intensity, thinking, vitality, COLORS);
-    if (q?.enableBokeh !== false) {
+    if (q?.enableBokeh) {
       this._drawForegroundBokeh(ctx, thinking, vitality, COLORS);
     }
-    if (q?.enableVolumetricHaze !== false) {
+    if (q?.enableVolumetricHaze) {
       this._drawVolumetricHaze(ctx, w, h, intensity, thinking, COLORS, q?.hazePatchCount);
     }
     if (q?.enableAtmosphericFog) {
@@ -194,11 +362,13 @@ export class NeuralRenderer {
     if (q?.enableLightShafts) {
       this._drawLightShafts(ctx, w, h, intensity, thinking, vitality, COLORS);
     }
-    this._drawDepthFog(ctx, w, h, intensity, recallDive);
+    if (!q?.emergency) {
+      this._drawDepthFog(ctx, w, h, intensity, recallDive);
+    }
     if (q?.enableForegroundFog) {
       this._drawForegroundFog(ctx, camera, nodes, w, h);
     }
-    if (q?.enableBloom !== false) {
+    if (q?.enableBloom) {
       this._drawRestrainedBloom(ctx, camera, nodes, thinking, COLORS, q?.bloomSpotCount);
     }
     if (q?.enableLensDiffusion) {

@@ -210,9 +210,31 @@ export class TopbarRegion {
         '<circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
       ),
     );
+    settings.id = "tdl-v2-topbar-settings";
     settings.addEventListener("click", () => {
       this._store.setState({ settingsOpen: true });
     });
+
+    const qualityWrap = el("label", "tdl-v2-topbar__quality", {
+      title: "Qualité visuelle",
+    });
+    qualityWrap.setAttribute("aria-label", "Qualité visuelle");
+    const qualitySelect = document.createElement("select");
+    qualitySelect.id = "tdl-v2-topbar-quality";
+    qualitySelect.className = "tdl-v2-topbar__quality-select";
+    qualitySelect.setAttribute("aria-label", "Qualité visuelle");
+    for (const [value, label] of [
+      ["auto", "Auto"],
+      ["performance", "Perf"],
+      ["balanced", "Balanced"],
+      ["cinematic", "Cinema"],
+    ]) {
+      const opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = label;
+      qualitySelect.appendChild(opt);
+    }
+    qualityWrap.appendChild(qualitySelect);
 
     const profile = el("button", "tdl-v2-topbar__profile", {
       type: "button",
@@ -230,7 +252,7 @@ export class TopbarRegion {
     );
     profile.append(avatar, profileMeta);
 
-    appendChildren(actions, brainMode, contextToggle, settings, profile);
+    appendChildren(actions, brainMode, contextToggle, qualityWrap, settings, profile);
     return actions;
   }
 

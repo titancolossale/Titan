@@ -1385,6 +1385,39 @@
   white-space: pre;
 }
 
+.tdl-v2-topbar__quality {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+}
+
+.tdl-v2-topbar__quality-select {
+  appearance: none;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 230, 225, 0.88);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.28rem 0.55rem;
+  border-radius: 4px;
+  cursor: pointer;
+  max-width: 5.6rem;
+}
+
+.tdl-v2-topbar__quality-select:hover,
+.tdl-v2-topbar__quality-select:focus {
+  border-color: rgba(185, 28, 28, 0.55);
+  outline: none;
+}
+
+/* Emergency / Performance — pause decorative DOM atmosphere, keep neural canvas. */
+.tdl-v2--perf-light .tdl-v2-living-presence__particle,
+.tdl-v2--perf-light .tdl-v2-living-presence__flash {
+  animation: none !important;
+  opacity: 0 !important;
+}
+
 .tdl-v2-settings-auth {
   display: grid;
   gap: 0.65rem;

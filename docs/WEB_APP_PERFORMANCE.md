@@ -1,4 +1,4 @@
-# Titan Web App — Performance Stabilization (Phase 11.P1)
+# Titan Web App — Performance Stabilization (Phase 11.P1 + 11.P2)
 
 ## Goal
 
@@ -8,93 +8,131 @@ Targets:
 
 - Prefer ~60 FPS when possible
 - Never remain below ~30 FPS during normal idle use
+- Auto mode must escalate to Emergency when rolling FPS stays low
 - Typing, scrolling, navigation, and chat submission stay responsive
 - No decorative work when the tab is hidden
+- Single neural `requestAnimationFrame` loop; canvas `devicePixelRatio` capped per mode
 - No backend/chat regression
 
 This is a **renderer optimization pass**, not a redesign.
 
 ---
 
-## Root causes (ranked by impact)
+## Why the first performance pass (11.P1) was insufficient
 
-1. **Extreme per-frame draw volume** — up to 12 000 nodes, tens of thousands of edge strokes, multi-band tissue strands, filaments, micro-neurons, dust, bokeh, and multiple full-canvas gradient haze/fog/bloom passes every frame.
-2. **Uncapped / high devicePixelRatio** — internal canvas up to DPR 2 on retina displays → 4× pixel fill vs CSS size.
-3. **Per-frame allocations** — `filter`/`sort` of node layers and new tissue band arrays every frame → GC spikes.
-4. **Adaptive density rebuilt the whole scene** — old adaptive path called `nodes.build()` on FPS dips, regenerating thousands of objects (popping + long tasks).
-5. **Secondary RAF loops** — orchestrator sparkline ran at full 60 FPS alongside the neural engine.
-6. **SSE reconnect storms** — unauthorized `/events/stream` could retry without an auth gate.
+11.P1 added quality modes, DPR caps, adaptive tiers, and interactive `renderLight`. Field reports after deploy still showed ~**20 FPS**.
 
-**Verdict:** This was primarily a **coding / renderer budget problem**, not a requirement for extreme client hardware. The LLM still runs on Railway; the UI must not burn the client GPU/CPU while idle.
+Root causes that remained:
+
+1. **Default was Balanced** — still drew far too much tissue/edges/effects for integrated GPUs.
+2. **No automatic emergency escape hatch** — if FPS stayed at 20, the renderer never forced a hard cut.
+3. **Full scene redraw every frame** — far-field highways, colonies, and dust were stroked every RAF tick.
+4. **Thinking made things worse** — chat pending only throttled when *not* thinking; once the orchestrator went active, decorative spawn density increased.
+5. **Quality control hard to reach** — Settings gear existed, but production users did not find a visible quality selector.
+
+11.P2 addresses those gaps directly.
 
 ---
 
-## Profiling snapshot (pre-fix architecture)
+## Emergency tier (Phase 11.P2)
 
-Approximate budgets at 1920×1080, DPR 2, Cinematic ceilings:
+Explicit `EMERGENCY_PRESET` (and `critical` sub-tier):
 
-| Metric | Pre-fix (config ceilings) |
+| Control | Emergency | Critical (FPS &lt; 25) |
+|---|---|---|
+| Canvas DPR | **1.0 hard cap** | 1.0 |
+| Visual update rate | ~24 Hz | ~20 Hz |
+| Edges / tissue / nodes | ~2800 / 520 / 2200 | ×0.65 further |
+| Dust / bokeh / fog / plasma | off | off |
+| Glow / shadowBlur / gradients | minimal (1 bloom spot max) | bloom off |
+| Titan Core + main arteries | kept | kept (restrained) |
+| Panels / composer / orchestrator | untouched | untouched |
+
+### Auto-performance watchdog
+
+Default production mode: **Auto**.
+
+1. Page load starts with conservative Auto budgets (DPR ≤ 1.0, static cache on).
+2. If rolling FPS &lt; 35 for **&gt; 3 seconds** → enter **Emergency** (session-persisted).
+3. If rolling FPS &lt; 25 → escalate to **Critical**.
+4. Does not wait for Settings.
+5. Chat pending further reduces decorative budgets and never increases thinking particle density.
+
+---
+
+## Static vs dynamic layers
+
+```
+Offscreen static cache (rebuild on resize / quality / seed / explicit regen only)
+  ├── far-field tissue
+  ├── most neural highways / mid colonies
+  ├── background edge/node layers
+  └── static dust speckles
+
+Dynamic foreground (each visual update)
+  ├── Titan Core breathing
+  ├── near/foreground tissue accents
+  ├── live signal particles (capped)
+  └── restrained pulse / vignette
+```
+
+Never rebuild the full neural civilization every frame.
+
+---
+
+## Quality selection access
+
+| Surface | Control |
 |---|---|
-| Nodes | 5 200–12 000 (capped at max) |
-| Core filaments | 1 280 |
-| Micro neurons | 3 200 |
-| Field tissue strands | ~3 000+ (colonies + highways + wisps) |
-| maxEdgesDrawn | 26 000 |
-| maxTissueDrawn | 3 400 |
-| Dust / bokeh | 180 / 28 |
-| Ambient + fog + bloom patches | many full-canvas gradients / frame |
-| Active neural RAF loops | 1 (plus orchestrator sparkline RAF) |
-| Hidden tab | paused via `isPaused`, but resume path needed hardening |
+| Top-right | Compact **Auto / Perf / Balanced / Cinema** select |
+| Settings overlay (gear) | Full **Qualité visuelle** select + reduce motion |
+| URL override | `/app/?quality=performance` (also `auto`, `balanced`, `cinematic`) |
+| Debug overlay | `?debug=1` or `localStorage.titan_debug_perf=1` |
 
-Reported field observation before this step: roughly **20–28 FPS idle** on a second computer.
+Default: **Auto**.
+
+Persistence: `localStorage.titan_visual_quality_mode`  
+Emergency session lock: `sessionStorage.titan_visual_emergency_tier`
 
 ---
 
-## Renderer architecture (after 11.P1)
+## Measured budgets (architectural, 1920×1080 CSS)
 
-```
-NeuralStage
-  └── NeuralEngine  (single requestAnimationFrame)
-        ├── QualityController   (mode + adaptive tier)
-        ├── PerformanceMonitor  (FPS / budgets snapshot)
-        ├── NeuralNodes / tissue geometry  (built on resize / mode change only)
-        └── NeuralRenderer      (draw-time budgets + effect toggles)
-```
+| Mode | DPR cap | maxEdges | maxTissue | maxNodes | dust | target visual Hz |
+|---|---|---|---|---|---|---|
+| Pre-11.P1 cinematic ceilings | ≤2.0 | 26 000 | 3 400 | ~12 000 | 180 | ~60 (uncapped cost) |
+| Auto (11.P2 default) | 1.0 | 5 200 | 1 100 | 3 800 | 28 | 30 |
+| Performance | 1.0 | 4 200 | 900 | 3 200 | 24 | 28 |
+| Emergency | 1.0 | 2 800 | 520 | 2 200 | 0 | 24 |
+| Critical | 1.0 | ~1 820 | ~338 | ~1 430 | 0 | 20 |
+| Balanced | 1.25 | 10 000 | 1 800 | 6 500 | 72 | 45 |
+| Cinematic | 1.75 | 26 000 | 3 400 | config max | 180 | 60 |
 
-### Quality modes
+### Browser FPS Benchmark (must be measured on real hardware)
 
-| Mode | Default DPR cap | Node scale | Edges | Tissue | Notes |
-|---|---|---|---|---|---|
-| **Performance** | 1.0 | ~0.32 / max 3 200 | 4 200 | 900 | Weak laptops / iGPU |
-| **Balanced** (default) | 1.25 | ~0.55 / max 6 500 | 10 000 | 1 800 | Adaptive tiers; nearly full look |
-| **Cinematic** | 1.75 | 1.0 / config max | 26 000 | 3 400 | Full approved density |
+Fill after local/Railway verification with DevTools FPS meter:
 
-Balanced adapts draw budgets with hysteresis (degrade ~2.2 s, recover ~9 s, min gap ~3.5 s). It does **not** rebuild geometry every few seconds.
+| Scenario | Avg FPS | 1% low | DPR | Notes |
+|---|---|---|---|---|
+| Before (field) | ~20 | — | often 1.5–2 | continuous full redraw |
+| Auto idle after 11.P2 | _measure_ | _measure_ | ≤1.0 | expect ≥30; ideally 45–60 |
+| Auto/Emergency idle | _measure_ | | 1.0 | |
+| Pending chat | _measure_ | | 1.0 | must stay responsive |
+| Balanced | _measure_ | | ≤1.25 | |
+| Typing latency | _measure_ | | | keys must feel immediate |
 
-### Persistence
-
-- Mode stored in `localStorage` key `titan_visual_quality_mode`
-- Settings → **Qualité visuelle**: Performance / Balanced / Cinematic
-- Optional reduce-motion checkbox; FPS overlay only in debug (`?debug` or `localStorage.titan_debug_perf=1`)
+**Do not claim 60 FPS without DevTools measurement on the target machine.**
 
 ---
 
-## Optimizations applied
+## Thinking-state performance
 
-1. DPR capped per quality mode
-2. Geometry built once per resize / mode change (cached layer lists)
-3. Draw-time tissue/edge/filament/micro budgets
-4. Reduced gradient patch counts by mode/tier
-5. Skip expensive fog/lens/bokeh when tier or mode says so
-6. Viewport AABB culling for edges/nodes
-7. Reused tissue band arrays (less GC)
-8. Hidden tab cancels RAF; resume without duplicates
-9. Idle frame skip in Performance / low adaptive tier
-10. Interactive priority: typing/submit can drop decorative passes (`renderLight`)
-11. Resize debounced (120 ms)
-12. Orchestrator sparkline throttled (~12 FPS) + skips work when hidden
-13. SSE auth gate + bounded backoff + pause while hidden
-14. Idempotent `NeuralEngine.init()` / `NeuralStage.mount()`
+When a chat request is pending:
+
+- Decorative canvas work is reduced further (`renderLight` / static blit + Core)
+- Signal spawn uses idle density (`signalLighten`) — thinking does **not** densify particles
+- DOM atmosphere particles paused via `.tdl-v2--perf-light`
+- Input, message list, and network processing stay first priority
 
 ---
 
@@ -102,88 +140,20 @@ Balanced adapts draw budgets with hysteresis (degrade ~2.2 s, recover ~9 s, 
 
 | Signal | Meaning |
 |---|---|
-| Railway `/chat` duration, Brain stage events | **Titan is thinking** (server/LLM) |
-| `clientFps` / `clientFrameMs` in store + FPS overlay | **UI is rendering slowly** |
+| Railway `CHAT_*` timing + `request_id` | Brain / provider latency |
+| FPS overlay / `clientFps` | UI renderer cost |
 
-Do not confuse a long Brain response with a low FPS canvas.
-
----
-
-## Benchmark procedure (local)
-
-Environment:
-
-- 1920×1080, browser zoom 100%
-- Chrome or Edge DevTools → Performance / Rendering → FPS meter
-- Open Settings → Visual Quality
-
-### Balanced — idle 60 s
-
-1. Load Web App, authenticate
-2. Set **Balanced**
-3. Leave idle (no typing) for 60 s
-4. Record average FPS, 1% low if available, DPR from overlay (`?debug` + enable FPS)
-5. Note Task Manager / Activity Monitor browser process CPU
-
-### Balanced — active chat
-
-1. Send a short message
-2. Watch FPS during typing and while the response streams
-3. Confirm input remains responsive (no multi-hundred-ms key delay)
-
-### Hidden / restore
-
-1. Switch tab away for 10 s
-2. Confirm neural RAF pauses (FPS overlay shows PAUSED or CPU drops)
-3. Return — single loop resumes, no duplicate activity
-
-### Performance mode
-
-Repeat idle 60 s with **Performance**. Expect higher FPS / lower CPU than Balanced; lighter density is intentional.
-
-### After deploy (Railway)
-
-1. Hard-refresh the Railway URL
-2. Confirm Settings quality control works and persists across reload
-3. Confirm `/health` and `/ready` still OK
-4. Confirm chat still streams
-
----
-
-## Measured results
-
-### Instrumentation approach
-
-Node-level unit tests validate budgets, DPR caps, single RAF, visibility pause, debounce, adaptive hysteresis, and SSE auth gate.
-
-**Browser FPS must be measured on a real machine** (DevTools FPS meter). This document does not claim 60 FPS without that measurement.
-
-### Expected after-fix (engineering estimate)
-
-| Scenario | Expected |
-|---|---|
-| Balanced idle, 1080p, integrated GPU | typically ≥ 30 FPS; often 45–60 on mid hardware |
-| Performance idle | typically closer to 45–60 FPS |
-| Cinematic idle | may sit 30–55 FPS depending on GPU |
-| Hidden tab | ~0 neural frames |
-
-Fill in actual numbers after local/Railway verification:
-
-| Scenario | Avg FPS | 1% low | DPR | Canvas CSS | Notes |
-|---|---|---|---|---|---|
-| Balanced idle 60 s | _measure_ | _measure_ | ≤ 1.25 | 1920×1080 | |
-| Performance idle 60 s | _measure_ | _measure_ | 1.0 | 1920×1080 | |
-| Active chat | _measure_ | | | | input priority |
+A long “Titan réfléchit…” with healthy FPS is a **server/provider** wait, not a canvas problem.
 
 ---
 
 ## Known limitations
 
-- Field tissue geometry is still built at full architectural richness; Performance/Balanced reduce **draw** density more than rebuild topology.
-- Offscreen static far-field caching is not yet a separate canvas layer (future win).
+- Static cache freezes far-field parallax until the next rebuild (resize / quality change).
+- Field tissue geometry is still *built* richly; Emergency mainly cuts **draw** + update rate.
 - `performance.memory` is Chromium-only.
-- Orchestrator sparkline still uses its own RAF (throttled), not merged into the neural scheduler.
-- Extreme 4K + Cinematic + discrete GPU can still exceed 16 ms/frame — use Balanced/Performance.
+- Orchestrator sparkline still has its own throttled RAF.
+- Authenticated Railway Brain latency is independent of FPS fixes.
 
 ---
 
@@ -191,40 +161,32 @@ Fill in actual numbers after local/Railway verification:
 
 | Symptom | Check |
 |---|---|
-| Still ~20 FPS idle | Confirm mode is not Cinematic; enable FPS overlay; verify DPR ≤ 1.25 in Balanced |
-| Popping / scene rebuilds often | Should only happen on resize or mode change — report if otherwise |
-| Chat laggy while FPS high | Likely server/LLM latency, not renderer |
-| Event stream reconnect spam | Ensure logged in; unauthorized should stop after auth probe |
-| Blank canvas after tab switch | Visibility resume bug — hard refresh and file issue |
+| Still ~20 FPS | Confirm Auto/Emergency in overlay; DPR must be 1.0; hard refresh |
+| Quality control missing | Top-right compact select + Settings gear |
+| Chat laggy while FPS high | Search Railway logs for `CHAT_` + `request_id` |
+| Permanent “réfléchit…” | Client timeout 55s; should show error card + retry |
 
 Debug:
 
 ```
-?debug=1
+/app/?debug=1
+/app/?quality=performance
 localStorage.setItem('titan_debug_perf', '1')
 ```
 
-Then enable **Afficher FPS (debug)** in Settings.
-
 ---
 
-## Files touched (11.P1)
+## Files touched (11.P2)
 
-- `web/v2/neural/quality-controller.js` (new)
-- `web/v2/neural/performance-monitor.js` (new)
-- `web/v2/neural/engine.js`
-- `web/v2/neural/renderer.js`
-- `web/v2/neural/nodes.js`
-- `web/v2/neural/utils.js`
-- `web/v2/neural/config.js`
-- `web/v2/neural/stage.js`
+- `web/v2/neural/quality-controller.js` — Auto + Emergency + FPS watchdog
+- `web/v2/neural/renderer.js` — static/dynamic split
+- `web/v2/neural/engine.js` — visual Hz cap, thinking lighten, emergency rebuild
+- `web/v2/neural/signals.js` / `state.js` — signal lighten
+- `web/v2/neural/config.js` / `stage.js`
+- `web/v2/core/settings-performance.js` / `state-store.js`
+- `web/v2/layout/shell.js` / `center/topbar-region.js` / `design/ui.css`
+- `web/v2/conversation/conversation-manager.js`
 - `web/v2/core/backend-bridge.js`
-- `web/v2/core/settings-performance.js` (new)
-- `web/v2/core/app.js`
-- `web/v2/core/state-store.js`
-- `web/v2/composer/composer-region.js`
-- `web/v2/layout/shell.js`
-- `web/v2/design/ui.css`
-- `web/v2/orchestrator/orchestrator-region.js`
-- `tests/test_web_v2_performance.py`
-- `docs/WEB_APP_PERFORMANCE.md`
+- `api/chat_service.py` / `brain/llm.py`
+- `tests/test_web_v2_emergency_fluidity_11_p2.py`
+- `docs/WEB_APP_PERFORMANCE.md` / `docs/WEB_APP_CHAT_DIAGNOSTICS.md`

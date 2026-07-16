@@ -56,7 +56,7 @@
  * @property {string | null} approvalSummary
  * @property {boolean} devMetadataOpen
  * @property {boolean} showFpsOverlay
- * @property {"performance"|"balanced"|"cinematic"} visualQuality
+ * @property {"auto"|"performance"|"balanced"|"cinematic"} visualQuality
  * @property {string | null} lastError
  * @property {string} connectionState
  * @property {string[] | null} runtimeStages
@@ -66,6 +66,10 @@
  * @property {number | null} clientFps
  * @property {number | null} clientFrameMs
  * @property {boolean} chatPending
+ * @property {number | null} chatElapsedMs
+ * @property {string | null} chatStage
+ * @property {number | null} lastHttpStatus
+ * @property {number | null} providerDurationMs
  */
 
 /** @type {AppState} */
@@ -120,7 +124,7 @@ const DEFAULT_STATE = Object.freeze({
   approvalSummary: null,
   devMetadataOpen: false,
   showFpsOverlay: false,
-  visualQuality: "balanced",
+  visualQuality: "auto",
   lastError: null,
   connectionState: "disconnected",
   runtimeStages: null,
@@ -130,6 +134,10 @@ const DEFAULT_STATE = Object.freeze({
   clientFps: null,
   clientFrameMs: null,
   chatPending: false,
+  chatElapsedMs: null,
+  chatStage: null,
+  lastHttpStatus: null,
+  providerDurationMs: null,
 });
 
 export class StateStore {

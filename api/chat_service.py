@@ -76,7 +76,7 @@ PROVIDER_UNAVAILABLE_MESSAGE = (
 )
 PROVIDER_TIMEOUT_CODE = "provider_timeout"
 PROVIDER_TIMEOUT_MESSAGE = (
-    "Titan met trop de temps à répondre. Réessaie."
+    "Titan n’a pas pu répondre dans le délai prévu. Réessaie."
 )
 BRAIN_FAILURE_CODE = "brain_failure"
 BRAIN_FAILURE_MESSAGE = (
@@ -91,6 +91,10 @@ def _chat_log(event: str, **fields: Any) -> None:
         return
     parts = [f"{key}={value}" for key, value in fields.items() if value is not None]
     logger.info("%s %s", event, " ".join(parts))
+
+
+def _elapsed_ms(started: datetime) -> int:
+    return int((datetime.now(timezone.utc) - started).total_seconds() * 1000)
 
 
 def _record_diag_error(code: str | None, request_id: str | None = None) -> None:
@@ -545,6 +549,8 @@ def process_chat_message(
         request_id=req_id,
         message_length=len(text),
         conversation_id=(conversation_id or "")[:32] or None,
+        elapsed_ms=0,
+        stage="received",
     )
 
     if client_metadata:
@@ -557,6 +563,8 @@ def process_chat_message(
     titan = get_titan()
     conv_id = _resolve_conversation_id(titan, conversation_id)
     message_id = _new_message_id()
+    llm = getattr(getattr(titan, "brain", None), "llm", None)
+    model_name = getattr(llm, "model", None) or LLM_MODEL
 
     with _brain_lock:
         if user:
@@ -567,12 +575,25 @@ def process_chat_message(
 
         audit_start = _audit_start_index(titan)
 
-        _chat_log("CHAT_BRAIN_START", request_id=req_id, conversation_id=conv_id)
+        # Thread request_id into LLM for CHAT_PROVIDER_* correlation.
+        if llm is not None:
+            setattr(llm, "_active_request_id", req_id)
+
+        _chat_log(
+            "CHAT_BRAIN_START",
+            request_id=req_id,
+            conversation_id=conv_id,
+            elapsed_ms=_elapsed_ms(started),
+            stage="brain",
+            model=model_name,
+        )
+        brain_error = False
         try:
             # Provider timeout is enforced by OpenAI client (TITAN_LLM_TIMEOUT_SECONDS).
             # This call is sync and must run off the FastAPI event loop (threadpool / to_thread).
             result = titan.brain.process_request(text, stream=stream)
         except Exception:
+            brain_error = True
             logger.exception("Brain.process_request failure during web chat")
             from brain.natural_language_orchestrator import SystemsUsed
 
@@ -594,14 +615,53 @@ def process_chat_message(
                 duration_seconds=0.0,
             )
             _record_diag_error(BRAIN_FAILURE_CODE, req_id)
+            _chat_log(
+                "CHAT_REQUEST_ERROR",
+                request_id=req_id,
+                elapsed_ms=_elapsed_ms(started),
+                stage="brain",
+                status="error",
+                code=BRAIN_FAILURE_CODE,
+                model=model_name,
+            )
+        finally:
+            if llm is not None:
+                setattr(llm, "_active_request_id", None)
+
+        _chat_log(
+            "CHAT_BRAIN_END",
+            request_id=req_id,
+            elapsed_ms=_elapsed_ms(started),
+            stage="brain",
+            status="error" if brain_error else "ok",
+            model=model_name,
+        )
 
         response_text = result.final_response
         if _is_provider_timeout(result):
             response_text = PROVIDER_TIMEOUT_MESSAGE
             _record_diag_error(PROVIDER_TIMEOUT_CODE, req_id)
+            _chat_log(
+                "CHAT_REQUEST_TIMEOUT",
+                request_id=req_id,
+                elapsed_ms=_elapsed_ms(started),
+                stage="provider",
+                status="timeout",
+                code=PROVIDER_TIMEOUT_CODE,
+                model=model_name,
+            )
         elif _is_provider_failure(result):
             response_text = PROVIDER_UNAVAILABLE_MESSAGE
             _record_diag_error(PROVIDER_UNAVAILABLE_CODE, req_id)
+            _chat_log(
+                "CHAT_REQUEST_ERROR",
+                request_id=req_id,
+                elapsed_ms=_elapsed_ms(started),
+                stage="provider",
+                status="error",
+                code=PROVIDER_UNAVAILABLE_CODE,
+                model=model_name,
+            )
         titan.conversation.add_message("Titan", response_text)
 
         tool_activity, memory_activity, orchestrator_progress = _collect_activity(
@@ -620,8 +680,15 @@ def process_chat_message(
         message_id=message_id,
     )
 
-    duration_ms = int(
-        (datetime.now(timezone.utc) - started).total_seconds() * 1000,
+    duration_ms = _elapsed_ms(started)
+    _chat_log(
+        "CHAT_RESPONSE_SERIALIZED",
+        request_id=req_id,
+        elapsed_ms=duration_ms,
+        stage="serialize",
+        status="ok" if payload.get("ok") else "error",
+        code=payload.get("error_code"),
+        model=model_name,
     )
     _chat_log(
         "CHAT_API_RESPONSE",
@@ -629,6 +696,17 @@ def process_chat_message(
         status="ok" if payload.get("ok") else "error",
         code=payload.get("error_code"),
         duration_ms=duration_ms,
+        elapsed_ms=duration_ms,
+        stage="response",
+        model=model_name,
+    )
+    _chat_log(
+        "CHAT_RESPONSE_SENT",
+        request_id=req_id,
+        elapsed_ms=duration_ms,
+        stage="sent",
+        status="ok" if payload.get("ok") else "error",
+        model=model_name,
     )
 
     if client_provided_id:
