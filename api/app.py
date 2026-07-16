@@ -24,7 +24,13 @@ from api.auth_config import is_session_auth_enabled
 from api.auth_middleware import PrivateAuthMiddleware
 from api.auth_routes import router as auth_router
 from api.chat_models import ChatErrorResponse, ChatMessageRequest, ChatMessageResponse
-from api.chat_service import process_chat_message, validate_message_size
+from api.chat_service import (
+    BRAIN_FAILURE_CODE,
+    PROVIDER_UNAVAILABLE_CODE,
+    PROVIDER_UNAVAILABLE_MESSAGE,
+    process_chat_message,
+    validate_message_size,
+)
 from api.event_hub import event_hub
 from api.sse import format_sse_event, format_stream_event, sse_comment
 from api.stream_service import emit_initial_status, handle_chat_stream
@@ -66,7 +72,16 @@ class ChatRequest(BaseModel):
     user: str | None = None
     conversation_id: str | None = Field(default=None, max_length=128)
     request_id: str | None = Field(default=None, max_length=128)
+    client_request_id: str | None = Field(default=None, max_length=128)
     client_metadata: dict[str, str] | None = None
+
+    def resolved_request_id(self) -> str | None:
+        """Prefer request_id; accept client_request_id as Phase 11.1 alias."""
+        if self.request_id and self.request_id.strip():
+            return self.request_id.strip()[:128]
+        if self.client_request_id and self.client_request_id.strip():
+            return self.client_request_id.strip()[:128]
+        return None
 
 
 class ChatResponse(BaseModel):
@@ -178,13 +193,35 @@ def create_app() -> FastAPI:
         design_path = STATIC_DIR / "design.html"
         return FileResponse(design_path)
 
+    def _chat_contract_error(
+        *,
+        code: str,
+        message: str,
+        retryable: bool,
+        request_id: str | None = None,
+        conversation_id: str | None = None,
+        message_id: str | None = None,
+        http_status: int = 400,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=http_status,
+            content=ChatErrorResponse.from_parts(
+                code=code,
+                message=message,
+                retryable=retryable,
+                request_id=request_id,
+                conversation_id=conversation_id,
+                message_id=message_id,
+            ).model_dump(),
+        )
+
     @app.post(
-        "/api/chat/message",
+        "/api/chat",
         dependencies=[Depends(require_web_auth)],
-        response_model=ChatMessageResponse,
+        response_model=None,
     )
-    def chat_message(body: ChatMessageRequest) -> ChatMessageResponse | JSONResponse:
-        """Canonical authenticated chat endpoint — Brain.process_request()."""
+    def chat_contract(body: ChatMessageRequest) -> dict[str, Any] | JSONResponse:
+        """Phase 11.1 production chat contract — Brain.process_request()."""
         try:
             payload = process_chat_message(
                 body.message,
@@ -193,13 +230,78 @@ def create_app() -> FastAPI:
                 request_id=body.request_id,
                 client_metadata=body.client_metadata,
             )
-            return ChatMessageResponse(**payload)
+        except ValueError as exc:
+            return _chat_contract_error(
+                code="invalid_request",
+                message=str(exc),
+                retryable=False,
+                request_id=body.request_id,
+                conversation_id=body.conversation_id,
+                http_status=400,
+            )
+        except Exception:
+            return _chat_contract_error(
+                code="internal_error",
+                message="Erreur interne pendant le traitement du message.",
+                retryable=True,
+                request_id=body.request_id,
+                conversation_id=body.conversation_id,
+                http_status=500,
+            )
+
+        if payload.get("error_code") == PROVIDER_UNAVAILABLE_CODE or (
+            not payload.get("ok", True)
+            and PROVIDER_UNAVAILABLE_CODE in (payload.get("errors") or [])
+        ):
+            return _chat_contract_error(
+                code=PROVIDER_UNAVAILABLE_CODE,
+                message=PROVIDER_UNAVAILABLE_MESSAGE,
+                retryable=True,
+                request_id=payload.get("request_id"),
+                conversation_id=payload.get("conversation_id"),
+                message_id=payload.get("message_id"),
+                http_status=503,
+            )
+
+        if BRAIN_FAILURE_CODE in (payload.get("errors") or []):
+            return _chat_contract_error(
+                code=BRAIN_FAILURE_CODE,
+                message=payload.get("response")
+                or "Désolé, une erreur interne s'est produite. On peut réessayer.",
+                retryable=True,
+                request_id=payload.get("request_id"),
+                conversation_id=payload.get("conversation_id"),
+                message_id=payload.get("message_id"),
+                http_status=500,
+            )
+
+        return payload
+
+    @app.post(
+        "/api/chat/message",
+        dependencies=[Depends(require_web_auth)],
+        response_model=ChatMessageResponse,
+    )
+    def chat_message(body: ChatMessageRequest) -> ChatMessageResponse | JSONResponse:
+        """Authenticated chat endpoint — Brain.process_request() (Web Runtime V1)."""
+        try:
+            payload = process_chat_message(
+                body.message,
+                user=body.user,
+                conversation_id=body.conversation_id,
+                request_id=body.request_id,
+                client_metadata=body.client_metadata,
+            )
+            model_fields = set(ChatMessageResponse.model_fields)
+            trimmed = {k: v for k, v in payload.items() if k in model_fields}
+            return ChatMessageResponse(**trimmed)
         except ValueError as exc:
             return JSONResponse(
                 status_code=400,
-                content=ChatErrorResponse(
-                    error=str(exc),
+                content=ChatErrorResponse.from_parts(
                     code="invalid_request",
+                    message=str(exc),
+                    retryable=False,
                     request_id=body.request_id,
                     conversation_id=body.conversation_id,
                 ).model_dump(),
@@ -207,9 +309,10 @@ def create_app() -> FastAPI:
         except Exception:
             return JSONResponse(
                 status_code=500,
-                content=ChatErrorResponse(
-                    error="Erreur interne pendant le traitement du message.",
+                content=ChatErrorResponse.from_parts(
                     code="internal_error",
+                    message="Erreur interne pendant le traitement du message.",
+                    retryable=True,
                     request_id=body.request_id,
                     conversation_id=body.conversation_id,
                 ).model_dump(),
@@ -227,7 +330,7 @@ def create_app() -> FastAPI:
             body.message,
             user=body.user,
             conversation_id=body.conversation_id,
-            request_id=body.request_id,
+            request_id=body.resolved_request_id(),
             client_metadata=body.client_metadata,
         )
         return ChatResponse(
@@ -277,6 +380,8 @@ def create_app() -> FastAPI:
     @app.post("/chat/stream", dependencies=[Depends(require_web_auth)])
     async def chat_stream(body: ChatRequest) -> StreamingResponse:
         """Stream sanitized cognitive events during Brain.process_request() via SSE."""
+        if not (body.message or "").strip():
+            raise HTTPException(status_code=400, detail="Message cannot be empty.")
         try:
             validate_message_size(body.message)
         except ValueError as exc:
@@ -295,7 +400,7 @@ def create_app() -> FastAPI:
                     body.message,
                     user=body.user,
                     conversation_id=body.conversation_id,
-                    request_id=body.request_id,
+                    request_id=body.resolved_request_id(),
                     client_metadata=body.client_metadata,
                     emit=emit,
                 )

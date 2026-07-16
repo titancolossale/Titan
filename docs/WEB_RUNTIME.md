@@ -43,6 +43,11 @@ web/v2 conversation interface
 
 ## Canonical API route
 
+### `POST /api/chat` (Phase 11.1 production contract)
+
+Authenticated sync chat with `{ ok, message_id, response, runtime }`.  
+See `docs/WEB_APP_BRAIN_INTEGRATION.md` for the full contract, error codes, and Railway verification.
+
 ### `POST /api/chat/message` (authenticated)
 
 **Request body:**

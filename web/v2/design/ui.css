@@ -689,6 +689,8 @@
   font-size: var(--tdl-text-sm);
   line-height: 1.55;
   border: 1px solid rgba(255, 255, 255, 0.05);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .tdl-v2-conversation__message--user .tdl-v2-conversation__bubble {

@@ -3,6 +3,7 @@
 import { MessageRenderer } from "./message-renderer.js";
 import { CONVERSATION_ACTIVITY_EVENTS } from "./conversation-activity-engine.js";
 import { getStoredConversationId } from "../core/conversation-session.js";
+import { SessionExpiredError } from "../core/backend-bridge.js";
 
 /**
  * Orchestrates composer UX, message rendering, and backend chat stream.
@@ -126,8 +127,23 @@ export class ConversationManager {
         );
       }
     } catch (error) {
+      if (error instanceof SessionExpiredError || error?.name === "SessionExpiredError") {
+        this._showThinking(false);
+        this._setComposerBusy(false);
+        this._busy = false;
+        this._renderer.appendMessage(
+          "Session expirée. Redirection vers la connexion…",
+          "system",
+        );
+        return;
+      }
       this._lastFailedMessage = text;
-      this._showRetry();
+      const retryable = error?.retryable !== false;
+      if (retryable) {
+        this._showRetry();
+      } else {
+        this._hideRetry();
+      }
       this._showThinking(false);
       this._setComposerBusy(false);
       this._busy = false;

@@ -57,6 +57,10 @@
  * @property {boolean} devMetadataOpen
  * @property {string | null} lastError
  * @property {string} connectionState
+ * @property {string[] | null} runtimeStages
+ * @property {boolean | null} runtimeMemoryUsed
+ * @property {string[] | null} runtimeToolsUsed
+ * @property {string | null} runtimeModel
  */
 
 /** @type {AppState} */
@@ -112,6 +116,10 @@ const DEFAULT_STATE = Object.freeze({
   devMetadataOpen: false,
   lastError: null,
   connectionState: "disconnected",
+  runtimeStages: null,
+  runtimeMemoryUsed: null,
+  runtimeToolsUsed: null,
+  runtimeModel: null,
 });
 
 export class StateStore {

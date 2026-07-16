@@ -177,6 +177,17 @@ export async function logoutSession() {
 }
 
 /**
+ * Redirect to /login preserving the current path as next=.
+ * Used on boot and when a mid-session API call returns 401.
+ */
+export function redirectToLogin() {
+  const next = encodeURIComponent(
+    `${window.location.pathname}${window.location.search}` || "/app/",
+  );
+  window.location.assign(`/login?next=${next}`);
+}
+
+/**
  * Block boot until the user is authenticated.
  * Session mode: middleware redirects unauthenticated /app to /login.
  * Bearer mode: overlay gate (legacy local/remote).
@@ -195,8 +206,7 @@ export async function ensureAuthenticated() {
     if (await verifySession()) {
       return;
     }
-    const next = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
-    window.location.assign(`/login?next=${next || "%2Fapp%2F"}`);
+    redirectToLogin();
     // Keep the promise pending while navigation occurs.
     await new Promise(() => {});
     return;

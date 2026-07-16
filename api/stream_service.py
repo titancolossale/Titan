@@ -144,6 +144,55 @@ def _build_telemetry(titan: Any) -> dict[str, Any]:
     }
 
 
+def _emit_honest_post_stages(
+    emit: EmitCallback,
+    *,
+    tool_activity: list[dict[str, Any]],
+    memory_activity: list[dict[str, Any]],
+    orchestrator_progress: list[dict[str, Any]],
+) -> None:
+    """Emit stages only from real Brain activity — never invent tool/memory use."""
+    for record in orchestrator_progress:
+        phase = str(record.get("phase") or "understanding")
+        emit("conversation_stage", {
+            "phase": phase,
+            "label": record.get("label", phase),
+            "neural_state": record.get("neural_state", "thinking"),
+            "tool": record.get("tool"),
+            "stage": phase,
+        })
+
+    for record in memory_activity:
+        if not (
+            record.get("has_matches") is True
+            or int(record.get("match_count") or 0) > 0
+            or record.get("phase") == "recall"
+        ):
+            continue
+        emit("memory_activity", record)
+        emit("conversation_stage", {
+            "phase": "memory",
+            "label": record.get("title") or record.get("status_line") or "Mémoire",
+            "neural_state": "memory_retrieval",
+            "stage": "retrieving_memory",
+        })
+
+    for record in tool_activity:
+        if record.get("state") in {"blocked", "skipped", "cancelled"}:
+            continue
+        tool_name = record.get("tool")
+        if not tool_name:
+            continue
+        emit("tool_activity", record)
+        emit("conversation_stage", {
+            "phase": "research",
+            "label": record.get("status_line") or tool_name,
+            "neural_state": "tool_usage",
+            "tool": tool_name,
+            "stage": "executing_tools",
+        })
+
+
 def emit_initial_status(emit: EmitCallback | None = None) -> list[tuple[str, dict[str, Any]]]:
     """Emit status, brain_state, and telemetry on SSE connect."""
     emitted: list[tuple[str, dict[str, Any]]] = []
@@ -175,55 +224,12 @@ def _emit_non_conversation_stages(
     intent: str,
     label: str,
 ) -> None:
-    """Emit synthetic progress for NLO non-conversation intents."""
-    neural = _INTENT_NEURAL_STATE.get(intent, "thinking")
-    emit("orchestration_started", {
-        "label": label,
-        "intent": intent,
-        "neural_state": neural,
-        "phase": "understanding",
-    })
-    _emit_legacy_alias(emit, "orchestration_started", {
-        "label": label,
-        "neural_state": neural,
-        "phase": "understanding",
-    })
-    if intent in {
-        DetectedIntent.PLANNING.value,
-        DetectedIntent.CODE_PLANNING.value,
-        DetectedIntent.MISSION_MANAGEMENT.value,
-    }:
-        emit("planning", {
-            "label": "Planification en cours…",
-            "neural_state": "planning",
-            "phase": "planning",
-        })
-        _emit_legacy_alias(emit, "planning", {
-            "label": "Planification en cours…",
-            "neural_state": "planning",
-            "phase": "planning",
-        })
-    elif intent in {DetectedIntent.TOOL_REQUEST.value, DetectedIntent.RESEARCH.value}:
-        emit("tool_execution", {
-            "label": "Exécution outil…",
-            "neural_state": "tool_usage",
-            "phase": "research",
-        })
-        _emit_legacy_alias(emit, "tool_execution", {
-            "label": "Exécution outil…",
-            "neural_state": "tool_usage",
-            "phase": "research",
-        })
-    emit("response_building", {
-        "label": "Construction de la réponse…",
-        "neural_state": neural,
-        "phase": "writing",
-    })
-    _emit_legacy_alias(emit, "response_building", {
-        "label": "Construction de la réponse…",
-        "neural_state": neural,
-        "phase": "writing",
-    })
+    """Deprecated — kept for import compatibility; does not emit synthetic stages.
+
+    Phase 11.1: never claim planning/tool/memory stages that did not execute.
+    Real stages are emitted after Brain completes via ``_emit_honest_post_stages``.
+    """
+    del emit, intent, label
 
 
 def handle_chat_stream(
@@ -351,11 +357,13 @@ def handle_chat_stream(
     })
 
     if not is_conversation:
-        _emit_non_conversation_stages(
-            publisher,
-            intent=preview_intent.value,
-            label=f"Routage: {preview_intent.value}",
-        )
+        # Phase 11.1: do not emit synthetic planning/tool stages before Brain runs.
+        publisher("conversation_stage", {
+            "phase": "understanding",
+            "label": f"Routage: {preview_intent.value}",
+            "neural_state": "thinking",
+            "stage": "understanding",
+        })
 
     try:
         payload = process_chat_message(
@@ -414,15 +422,20 @@ def handle_chat_stream(
     )
     pipeline_snapshot = stream.snapshot()
 
-    for record in memory_activity:
-        publisher("memory_activity", record)
-
-    for record in tool_activity:
-        publisher("tool_activity", record)
-
     if is_conversation:
         stream.finish_thinking()
+        for record in memory_activity:
+            publisher("memory_activity", record)
+        for record in tool_activity:
+            publisher("tool_activity", record)
     else:
+        # Honest post-Brain stages only (no pre-claimed tool/planning animation).
+        _emit_honest_post_stages(
+            publisher,
+            tool_activity=tool_activity,
+            memory_activity=memory_activity,
+            orchestrator_progress=orchestrator_progress,
+        )
         publisher("response_ready", {
             "label": "Réponse prête",
             "neural_state": payload.get("brain_state", "completed"),
@@ -468,6 +481,8 @@ def handle_chat_stream(
         "user": speaker,
         "conversation_id": payload.get("conversation_id"),
         "request_id": payload.get("request_id"),
+        "message_id": payload.get("message_id"),
+        "ok": payload.get("ok", True),
         "orchestrator_progress": orchestrator_progress,
         "tool_activity": tool_activity,
         "memory_activity": memory_activity,
@@ -475,12 +490,15 @@ def handle_chat_stream(
         "stage_history": pipeline_snapshot.get("stage_history", []),
         "timeline": pipeline_snapshot.get("timeline", []),
         "orchestration": orchestration_meta,
+        "runtime": payload.get("runtime"),
         "approval_required": payload.get("approval_required", False),
         "approval_id": payload.get("approval_id"),
         "approval_summary": payload.get("approval_summary"),
         "brain_state": brain_state,
         "detected_intent": payload.get("detected_intent"),
         "duration_seconds": payload.get("duration_seconds"),
+        "retryable": payload.get("retryable", False),
+        "error_code": payload.get("error_code"),
     })
     _emit_presence(publisher, "idle")
     publisher("brain_state", {"state": "idle"})

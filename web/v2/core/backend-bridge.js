@@ -2,7 +2,7 @@
 
 import { routeBackendEvent } from "./event-router.js";
 import { COGNITIVE_STREAM_EVENTS } from "./cognitive-pipeline-store.js";
-import { authHeaders, getStoredToken } from "./web-auth.js";
+import { authHeaders, getStoredToken, redirectToLogin } from "./web-auth.js";
 import {
   createClientRequestId,
   getStoredConversationId,
@@ -11,6 +11,31 @@ import {
 } from "./conversation-session.js";
 const RECONNECT_BASE_MS = 1200;
 const RECONNECT_MAX_MS = 15000;
+
+/** Thrown when the session cookie/token is no longer valid. */
+export class SessionExpiredError extends Error {
+  constructor(message = "Session expirée.") {
+    super(message);
+    this.name = "SessionExpiredError";
+    this.code = "session_expired";
+    this.retryable = false;
+  }
+}
+
+/** Structured chat/stream failure with optional retry flag. */
+export class ChatRequestError extends Error {
+  /**
+   * @param {string} message
+   * @param {{ code?: string, retryable?: boolean, status?: number }} [options]
+   */
+  constructor(message, options = {}) {
+    super(message);
+    this.name = "ChatRequestError";
+    this.code = options.code ?? "request_failed";
+    this.retryable = Boolean(options.retryable);
+    this.status = options.status ?? 0;
+  }
+}
 
 /**
  * Parse SSE text chunks into { event, data, id } records.
@@ -187,6 +212,8 @@ export class BackendBridge {
 
     let responseText = "";
     let orchestrationPayload = null;
+    /** @type {ChatRequestError | null} */
+    let streamError = null;
 
     try {
       const httpResponse = await fetch("/chat/stream", {
@@ -207,8 +234,41 @@ export class BackendBridge {
       });
 
       if (!httpResponse.ok) {
-        const detail = await httpResponse.text();
-        throw new Error(detail || httpResponse.statusText);
+        if (httpResponse.status === 401) {
+          redirectToLogin();
+          throw new SessionExpiredError();
+        }
+        let detail = "";
+        let code = "request_failed";
+        let retryable = httpResponse.status >= 500;
+        try {
+          const raw = await httpResponse.text();
+          detail = raw;
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed?.error?.message) {
+              detail = parsed.error.message;
+              code = parsed.error.code ?? parsed.code ?? code;
+              retryable = Boolean(parsed.error.retryable ?? retryable);
+            } else if (parsed?.detail) {
+              detail = typeof parsed.detail === "string"
+                ? parsed.detail
+                : JSON.stringify(parsed.detail);
+            } else if (parsed?.error && typeof parsed.error === "string") {
+              detail = parsed.error;
+              code = parsed.code ?? code;
+            }
+          } catch {
+            /* keep raw text */
+          }
+        } catch {
+          detail = httpResponse.statusText;
+        }
+        throw new ChatRequestError(detail || httpResponse.statusText, {
+          code,
+          retryable,
+          status: httpResponse.status,
+        });
       }
 
       const reader = httpResponse.body?.getReader();
@@ -238,9 +298,33 @@ export class BackendBridge {
             }
             orchestrationPayload = frame.data.orchestration ?? frame.data;
             this._applyOrchestrationMeta(frame.data);
+            if (frame.data.error_code || frame.data.ok === false) {
+              streamError = new ChatRequestError(
+                frame.data.response
+                  || frame.data.error_code
+                  || "Erreur pendant le traitement Titan.",
+                {
+                  code: frame.data.error_code ?? "brain_failure",
+                  retryable: frame.data.retryable !== false,
+                },
+              );
+            }
+          }
+          if (frame.event === "error" && !responseText) {
+            streamError = new ChatRequestError(
+              frame.data.message ?? "Erreur pendant le traitement Titan.",
+              {
+                code: frame.data.code ?? "stream_error",
+                retryable: true,
+              },
+            );
           }
           this._handleBackendEvent(frame.event, frame.data, frame.id);
         }
+      }
+
+      if (streamError && !responseText) {
+        throw streamError;
       }
 
       return {
@@ -265,6 +349,7 @@ export class BackendBridge {
   /** @param {object} data */
   _applyOrchestrationMeta(data) {
     if (!this._store) return;
+    const runtime = data.runtime ?? data.orchestration?.runtime ?? null;
     this._store.setState({
       conversationId: data.conversation_id ?? this._store.getState().conversationId,
       lastRequestId: data.request_id ?? null,
@@ -281,6 +366,13 @@ export class BackendBridge {
       ),
       approvalId: data.approval_id ?? null,
       approvalSummary: data.approval_summary ?? null,
+      runtimeStages: runtime?.stages ?? null,
+      runtimeMemoryUsed: runtime?.memory_used ?? null,
+      runtimeToolsUsed: runtime?.tools_used ?? null,
+      runtimeModel: runtime?.model ?? null,
+      lastError: data.error_code
+        ? (data.response ?? data.error_code)
+        : this._store.getState().lastError,
     });
   }
 

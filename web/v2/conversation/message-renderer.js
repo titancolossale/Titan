@@ -113,7 +113,14 @@ export class MessageRenderer {
     const banner = document.createElement("div");
     banner.className = "tdl-v2-conversation__approval";
     banner.dataset.approvalId = data.approval_id ?? "";
-    banner.innerHTML = `<strong>Approbation requise</strong><span>${summary}</span>`;
+
+    const title = document.createElement("strong");
+    title.textContent = "Approbation requise";
+    const body = document.createElement("span");
+    body.textContent = String(summary ?? "");
+    banner.appendChild(title);
+    banner.appendChild(body);
+
     this._container.parentElement?.insertBefore(banner, this._container);
     this._store?.setState({
       approvalRequired: true,

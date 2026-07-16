@@ -6,9 +6,11 @@
 
 from __future__ import annotations
 
+import copy
 import logging
 import threading
 import uuid
+from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any
 
@@ -19,12 +21,18 @@ from api.orchestrator_progress import (
 )
 from api.tool_activity import collect_audit_events_since, format_tool_activity
 from api.titan_service import _audit_start_index, get_titan
+from brain.llm import LLM_ERROR_MESSAGE
 from brain.natural_language_orchestrator import DetectedIntent, OrchestrationResult
-from config.settings import TITAN_WEB_MAX_MESSAGE_LENGTH
+from config.settings import LLM_MODEL, TITAN_WEB_MAX_MESSAGE_LENGTH
 
 logger = logging.getLogger(__name__)
 
 _brain_lock = threading.Lock()
+
+# Idempotency: duplicate client request_id returns the cached payload (same turn).
+_IDEMPOTENCY_MAX = 256
+_idempotency_lock = threading.Lock()
+_idempotency_cache: OrderedDict[str, dict[str, Any]] = OrderedDict()
 
 _CONVERSATION_INTENTS = frozenset({
     DetectedIntent.CONVERSATION.value,
@@ -40,10 +48,56 @@ _SECRET_SUBSTRINGS = (
     "token",
 )
 
+# Map real orchestrator phases → safe operational stage ids for telemetry.
+_PHASE_TO_STAGE: dict[str, str] = {
+    "understanding": "understanding",
+    "planning": "planning",
+    "memory": "retrieving_memory",
+    "research": "selecting_tools",
+    "writing": "generating",
+    "verification": "finished",
+}
+
+PROVIDER_UNAVAILABLE_CODE = "provider_unavailable"
+PROVIDER_UNAVAILABLE_MESSAGE = (
+    "Titan ne peut pas joindre son modèle pour le moment."
+)
+BRAIN_FAILURE_CODE = "brain_failure"
+BRAIN_FAILURE_MESSAGE = (
+    "Désolé, une erreur interne s'est produite. On peut réessayer."
+)
+
 
 def _new_request_id(request_id: str | None) -> str:
     cleaned = (request_id or "").strip()
     return cleaned[:128] if cleaned else uuid.uuid4().hex
+
+
+def _new_message_id() -> str:
+    return f"msg-{uuid.uuid4().hex[:16]}"
+
+
+def _cache_get(request_id: str) -> dict[str, Any] | None:
+    with _idempotency_lock:
+        cached = _idempotency_cache.get(request_id)
+        if cached is None:
+            return None
+        _idempotency_cache.move_to_end(request_id)
+        return copy.deepcopy(cached)
+
+
+def _cache_put(request_id: str, payload: dict[str, Any]) -> None:
+    with _idempotency_lock:
+        _idempotency_cache[request_id] = copy.deepcopy(payload)
+        _idempotency_cache.move_to_end(request_id)
+        while len(_idempotency_cache) > _IDEMPOTENCY_MAX:
+            _idempotency_cache.popitem(last=False)
+
+
+def clear_idempotency_cache() -> None:
+    """Test helper — clear duplicate-request cache."""
+    with _idempotency_lock:
+        _idempotency_cache.clear()
 
 
 def _resolve_conversation_id(titan: Any, conversation_id: str | None) -> str:
@@ -196,6 +250,114 @@ def _build_errors(result: OrchestrationResult) -> list[str]:
     return [_sanitize_text(str(error), max_len=200)]
 
 
+def _is_provider_failure(result: OrchestrationResult) -> bool:
+    """Detect LLM provider failure without inventing a successful answer."""
+    artifacts = result.artifacts or {}
+    if artifacts.get("error") in {PROVIDER_UNAVAILABLE_CODE, "llm_unavailable"}:
+        return True
+    response = (result.final_response or "").strip()
+    return response == LLM_ERROR_MESSAGE.strip()
+
+
+def _memory_was_used(memory_activity: list[dict[str, Any]]) -> bool:
+    """True only when retrieval returned usable context — never invent hits."""
+    for record in memory_activity:
+        if record.get("has_matches") is True:
+            return True
+        if int(record.get("match_count") or 0) > 0:
+            return True
+        if record.get("phase") == "recall" and record.get("state") != "empty":
+            return True
+    return False
+
+
+def _tools_used(tool_activity: list[dict[str, Any]]) -> list[str]:
+    """Tool names that actually executed — never invent catalog entries."""
+    names: list[str] = []
+    seen: set[str] = set()
+    for record in tool_activity:
+        tool = str(record.get("tool") or "").strip()
+        if not tool or tool in seen:
+            continue
+        if record.get("state") in {"blocked", "skipped", "cancelled"}:
+            continue
+        seen.add(tool)
+        names.append(tool)
+    return names
+
+
+def _runtime_stages(
+    *,
+    orchestrator_progress: list[dict[str, Any]],
+    memory_used: bool,
+    tools_used: list[str],
+    execution_status: str,
+    provider_failure: bool,
+) -> list[str]:
+    """Build honest stage list from real progress only."""
+    stages: list[str] = ["receiving"]
+    seen: set[str] = set(stages)
+
+    def _add(stage: str) -> None:
+        if stage and stage not in seen:
+            seen.add(stage)
+            stages.append(stage)
+
+    for record in orchestrator_progress:
+        phase = str(record.get("phase") or "").lower()
+        mapped = _PHASE_TO_STAGE.get(phase)
+        if mapped:
+            _add(mapped)
+        if record.get("tool") and "selecting_tools" not in seen:
+            _add("selecting_tools")
+            _add("executing_tools")
+
+    if memory_used:
+        _add("retrieving_memory")
+    if tools_used:
+        _add("selecting_tools")
+        _add("executing_tools")
+
+    if provider_failure or execution_status == "error":
+        _add("error")
+    else:
+        _add("generating")
+        _add("finished")
+
+    return stages
+
+
+def build_runtime_summary(
+    *,
+    tool_activity: list[dict[str, Any]],
+    memory_activity: list[dict[str, Any]],
+    orchestrator_progress: list[dict[str, Any]],
+    duration_seconds: float,
+    execution_status: str,
+    provider_failure: bool = False,
+) -> dict[str, Any]:
+    """Honest runtime object for Phase 11.1 contract."""
+    memory_used = _memory_was_used(memory_activity)
+    tools = _tools_used(tool_activity)
+    state = "error" if provider_failure or execution_status == "error" else "finished"
+    if execution_status == "awaiting_approval":
+        state = "awaiting_approval"
+    return {
+        "state": state,
+        "stages": _runtime_stages(
+            orchestrator_progress=orchestrator_progress,
+            memory_used=memory_used,
+            tools_used=tools,
+            execution_status=execution_status,
+            provider_failure=provider_failure,
+        ),
+        "memory_used": memory_used,
+        "tools_used": tools,
+        "model": LLM_MODEL,
+        "duration_ms": int(round(max(duration_seconds, 0.0) * 1000)),
+    }
+
+
 def build_chat_response(
     *,
     result: OrchestrationResult,
@@ -205,21 +367,53 @@ def build_chat_response(
     tool_activity: list[dict[str, Any]],
     memory_activity: list[dict[str, Any]],
     orchestrator_progress: list[dict[str, Any]],
+    message_id: str | None = None,
 ) -> dict[str, Any]:
     """Serialize orchestration result into a user-safe API payload."""
     approval = _extract_approval(result)
     think_ctx = titan.brain.last_think_context
+    provider_failure = _is_provider_failure(result)
+    if provider_failure:
+        approval["execution_status"] = "error"
+
     brain_state = _brain_state_for_result(result, think_ctx, approval)
+    if provider_failure:
+        brain_state = "error"
+
+    artifacts = dict(result.artifacts or {})
+    if provider_failure:
+        artifacts.setdefault("error", PROVIDER_UNAVAILABLE_CODE)
+
     pipeline_summary = {
         "intent": result.detected_intent.value,
         "systems": result.pipeline_decision.to_dict(),
-        "artifacts_summary": _safe_artifacts_summary(result.artifacts),
+        "artifacts_summary": _safe_artifacts_summary(artifacts),
     }
 
+    errors = _build_errors(result)
+    if provider_failure and PROVIDER_UNAVAILABLE_CODE not in errors:
+        errors.append(PROVIDER_UNAVAILABLE_CODE)
+
+    ok = not provider_failure and approval["execution_status"] != "error"
+    runtime = build_runtime_summary(
+        tool_activity=tool_activity,
+        memory_activity=memory_activity,
+        orchestrator_progress=orchestrator_progress,
+        duration_seconds=result.duration_seconds,
+        execution_status=approval["execution_status"],
+        provider_failure=provider_failure,
+    )
+
+    response_text = result.final_response
+    if provider_failure:
+        response_text = PROVIDER_UNAVAILABLE_MESSAGE
+
     return {
+        "ok": ok,
+        "message_id": message_id or _new_message_id(),
         "request_id": request_id,
         "conversation_id": conversation_id,
-        "response": result.final_response,
+        "response": response_text,
         "user": titan.context.current_user,
         "detected_intent": result.detected_intent.value,
         "confidence": round(result.confidence, 3),
@@ -232,12 +426,15 @@ def build_chat_response(
         "approval_id": approval["approval_id"],
         "approval_summary": approval["approval_summary"],
         "warnings": _build_warnings(result),
-        "errors": _build_errors(result),
+        "errors": errors,
         "tool_activity": tool_activity,
         "memory_activity": memory_activity,
         "orchestrator_progress": orchestrator_progress,
         "duration_seconds": round(result.duration_seconds, 4),
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "runtime": runtime,
+        "error_code": PROVIDER_UNAVAILABLE_CODE if provider_failure else None,
+        "retryable": provider_failure,
     }
 
 
@@ -264,7 +461,15 @@ def process_chat_message(
         raise ValueError("Message cannot be empty.")
     validate_message_size(text)
 
+    client_provided_id = bool((request_id or "").strip())
     req_id = _new_request_id(request_id)
+
+    if client_provided_id:
+        cached = _cache_get(req_id)
+        if cached is not None:
+            logger.info("Idempotent chat replay request_id=%s", req_id)
+            return cached
+
     if client_metadata:
         logger.debug(
             "Web chat metadata request_id=%s keys=%s",
@@ -274,6 +479,7 @@ def process_chat_message(
 
     titan = get_titan()
     conv_id = _resolve_conversation_id(titan, conversation_id)
+    message_id = _new_message_id()
 
     with _brain_lock:
         if user:
@@ -303,14 +509,14 @@ def process_chat_message(
                 systems_used=SystemsUsed(),
                 reasoning_summary="Erreur interne pendant l'orchestration.",
                 confidence=0.0,
-                final_response=(
-                    "Désolé, une erreur interne s'est produite. On peut réessayer."
-                ),
-                artifacts={"error": "brain_failure"},
+                final_response=BRAIN_FAILURE_MESSAGE,
+                artifacts={"error": BRAIN_FAILURE_CODE},
                 duration_seconds=0.0,
             )
 
         response_text = result.final_response
+        if _is_provider_failure(result):
+            response_text = PROVIDER_UNAVAILABLE_MESSAGE
         titan.conversation.add_message("Titan", response_text)
 
         tool_activity, memory_activity, orchestrator_progress = _collect_activity(
@@ -318,7 +524,7 @@ def process_chat_message(
             audit_start,
         )
 
-    return build_chat_response(
+    payload = build_chat_response(
         result=result,
         titan=titan,
         request_id=req_id,
@@ -326,4 +532,11 @@ def process_chat_message(
         tool_activity=tool_activity,
         memory_activity=memory_activity,
         orchestrator_progress=orchestrator_progress,
+        message_id=message_id,
     )
+
+    if client_provided_id:
+        _cache_put(req_id, payload)
+
+    return payload
+
