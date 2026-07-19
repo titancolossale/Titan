@@ -26,10 +26,13 @@ from api.auth_routes import router as auth_router
 from api.chat_models import ChatErrorResponse, ChatMessageRequest, ChatMessageResponse
 from api.chat_service import (
     BRAIN_FAILURE_CODE,
+    BRAIN_TIMEOUT_CODE,
+    BRAIN_TIMEOUT_MESSAGE,
     PROVIDER_TIMEOUT_CODE,
     PROVIDER_TIMEOUT_MESSAGE,
     PROVIDER_UNAVAILABLE_CODE,
     PROVIDER_UNAVAILABLE_MESSAGE,
+    cancel_chat_request,
     get_last_chat_diag,
     process_chat_message,
     validate_message_size,
@@ -204,6 +207,7 @@ def create_app() -> FastAPI:
         request_id: str | None = None,
         conversation_id: str | None = None,
         message_id: str | None = None,
+        last_completed_stage: str | None = None,
         http_status: int = 400,
     ) -> JSONResponse:
         return JSONResponse(
@@ -215,6 +219,7 @@ def create_app() -> FastAPI:
                 request_id=request_id,
                 conversation_id=conversation_id,
                 message_id=message_id,
+                last_completed_stage=last_completed_stage,
             ).model_dump(),
         )
 
@@ -266,6 +271,21 @@ def create_app() -> FastAPI:
                 http_status=503,
             )
 
+        if payload.get("error_code") == BRAIN_TIMEOUT_CODE or (
+            not payload.get("ok", True)
+            and BRAIN_TIMEOUT_CODE in (payload.get("errors") or [])
+        ):
+            return _chat_contract_error(
+                code=BRAIN_TIMEOUT_CODE,
+                message=BRAIN_TIMEOUT_MESSAGE,
+                retryable=True,
+                request_id=payload.get("request_id"),
+                conversation_id=payload.get("conversation_id"),
+                message_id=payload.get("message_id"),
+                last_completed_stage=payload.get("last_completed_stage"),
+                http_status=504,
+            )
+
         if payload.get("error_code") == PROVIDER_TIMEOUT_CODE or (
             not payload.get("ok", True)
             and PROVIDER_TIMEOUT_CODE in (payload.get("errors") or [])
@@ -277,6 +297,7 @@ def create_app() -> FastAPI:
                 request_id=payload.get("request_id"),
                 conversation_id=payload.get("conversation_id"),
                 message_id=payload.get("message_id"),
+                last_completed_stage=payload.get("last_completed_stage"),
                 http_status=504,
             )
 
@@ -450,6 +471,8 @@ def create_app() -> FastAPI:
                         break
                     yield item
             finally:
+                # Client disconnect / Stop — abandon in-flight Brain work.
+                cancel_chat_request(request_id)
                 if not task.done():
                     task.cancel()
 
@@ -462,6 +485,17 @@ def create_app() -> FastAPI:
                 "X-Accel-Buffering": "no",
             },
         )
+
+    class ChatCancelRequest(BaseModel):
+        request_id: str | None = Field(default=None, max_length=128)
+        client_request_id: str | None = Field(default=None, max_length=128)
+
+    @app.post("/api/chat/cancel", dependencies=[Depends(require_web_auth)])
+    def chat_cancel(body: ChatCancelRequest) -> dict[str, Any]:
+        """Best-effort cancellation of an in-flight chat request."""
+        req_id = (body.request_id or body.client_request_id or "").strip()
+        cancelled = cancel_chat_request(req_id)
+        return {"ok": True, "cancelled": cancelled, "request_id": req_id or None}
 
     @app.get("/api/chat/diagnostics", dependencies=[Depends(require_web_auth)])
     def chat_diagnostics() -> dict[str, Any]:

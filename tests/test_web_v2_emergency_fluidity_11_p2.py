@@ -101,12 +101,12 @@ def test_chat_elapsed_feedback_and_timeout_copy() -> None:
     cm = (V2 / "conversation" / "conversation-manager.js").read_text(encoding="utf-8")
     assert "Titan traite ta demande" in cm
     assert "Le traitement prend plus de temps que prévu" in cm
-    assert "Titan n’a pas pu répondre dans le délai prévu" in cm
+    assert "Titan n’a pas pu terminer sa réponse dans le délai prévu" in cm
     assert "_startThinkingElapsed" in cm
     assert "_clearBusyState" in cm
 
     bridge = (V2 / "core" / "backend-bridge.js").read_text(encoding="utf-8")
-    assert "Titan n’a pas pu répondre dans le délai prévu" in bridge
+    assert "Titan n’a pas pu terminer sa réponse dans le délai prévu" in bridge
 
 
 def test_server_timing_events_present() -> None:
@@ -115,11 +115,12 @@ def test_server_timing_events_present() -> None:
         "CHAT_API_RECEIVED",
         "CHAT_BRAIN_START",
         "CHAT_BRAIN_END",
-        "CHAT_RESPONSE_SERIALIZED",
-        "CHAT_RESPONSE_SENT",
-        "CHAT_REQUEST_TIMEOUT",
-        "CHAT_REQUEST_ERROR",
+        "CHAT_RESPONSE_READY",
+        "CHAT_TIMEOUT",
+        "CHAT_ERROR",
+        "CHAT_CANCELLED",
         "elapsed_ms",
+        "remaining_budget_ms",
     ):
         assert event in chat
 

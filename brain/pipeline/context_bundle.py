@@ -47,6 +47,7 @@ class ThinkContext:
     learning_text: str = ""
     active_project: str = ""
     skip_llm: bool = False
+    skip_agents: bool = False
     prompt: str = ""
     response: str = ""
     obsidian_consulted: bool = False

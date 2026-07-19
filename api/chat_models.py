@@ -101,11 +101,13 @@ class ChatMessageResponse(BaseModel):
 
 
 class ChatErrorDetail(BaseModel):
-    """Structured error detail for Phase 11.1 contract."""
+    """Structured error detail for Phase 11.1 / 11.4 contract."""
 
     code: str
     message: str
     retryable: bool = False
+    request_id: str | None = None
+    last_completed_stage: str | None = None
 
 
 class ChatErrorResponse(BaseModel):
@@ -129,11 +131,18 @@ class ChatErrorResponse(BaseModel):
         request_id: str | None = None,
         conversation_id: str | None = None,
         message_id: str | None = None,
+        last_completed_stage: str | None = None,
     ) -> ChatErrorResponse:
         """Build a Phase 11.1 error payload with nested error object."""
         return cls(
             ok=False,
-            error=ChatErrorDetail(code=code, message=message, retryable=retryable),
+            error=ChatErrorDetail(
+                code=code,
+                message=message,
+                retryable=retryable,
+                request_id=request_id,
+                last_completed_stage=last_completed_stage,
+            ),
             code=code,
             request_id=request_id,
             conversation_id=conversation_id,

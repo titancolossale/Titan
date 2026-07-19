@@ -1,4 +1,4 @@
-# Web App Chat Diagnostics — Phase 11.1B + 11.P2
+# Web App Chat Diagnostics — Phase 11.1B + 11.P2 + 11.4
 
 ## Previous failure symptoms
 
@@ -10,21 +10,27 @@ On Railway production (multiple computers):
 - No Titan response appeared / “Titan réfléchit…” stayed indefinitely
 - No useful recoverable error was shown
 - UI remained visually overloaded (~20 FPS) while waiting (addressed in 11.P2)
+- After UI fixes, **“Bonjour Titan” still took &gt;2 minutes** (Phase 11.4)
 
 ## Root cause (ranked)
 
-1. **Primary (11.1B) — frontend message container race**  
+1. **Primary (11.4) — triple OpenAI path for greetings**  
+   Default agent pipeline ran reasoning + planning agents (2 LLM calls) then the main conversational LLM.  
+   Measured: `_stage_execution_coordinate` / `_run_agents` ~15–18s locally before the final provider call.  
+   See `docs/WEB_APP_BRAIN_LATENCY.md`.
+
+2. **Primary (11.1B) — frontend message container race**  
    `ConversationManager.bindDom()` ran before the chat panel was mounted.  
    Fixed with lazy `ensureContainer()` + bind-after-navigate.
 
-2. **Secondary (11.P2) — renderer overload during wait**  
+3. **Secondary (11.P2) — renderer overload during wait**  
    Thinking / pending chat previously increased decorative neural work.  
    Fixed: Auto/Emergency budgets, static cache, thinking lighten, visual Hz cap.
 
-3. **Contributing — provider / Brain latency**  
-   OpenAI calls can take tens of seconds. UI must show elapsed feedback and timeout cleanly.
+4. **Contributing — nested provider timeouts / retries**  
+   Multiple 45s attempts could stack toward multi-minute hangs.
 
-4. **Contributing — incomplete server timing trail**  
+5. **Contributing — incomplete server timing trail**  
    Hard to see whether a hang was before Brain, inside Brain, or in the provider.
 
 ## Exact frontend / backend path
@@ -58,20 +64,21 @@ Safe structured logs (no message body, no secrets, no chain-of-thought):
 
 | Event | Where | Fields |
 |-------|--------|--------|
-| `CHAT_SUBMIT_START` | frontend ConversationManager | message_length |
+| `CHAT_SUBMIT_START` | frontend ConversationManager | message_length, request_id |
 | `CHAT_HTTP_SENT` | frontend BackendBridge | request_id |
-| `CHAT_API_RECEIVED` | `api/chat_service.py` | request_id, elapsed_ms, stage |
+| `CHAT_API_RECEIVED` | `api/chat_service.py` | request_id, elapsed_ms, remaining_budget_ms |
+| `CHAT_FAST_PATH_SELECTED` / `CHAT_COMPLEX_PATH_SELECTED` | NLO | request_id, stage, model |
+| `CHAT_CONTEXT_START` / `CHAT_CONTEXT_END` | (complex path stages via deadline marks) | elapsed_ms, remaining_budget_ms |
 | `CHAT_BRAIN_START` | `api/chat_service.py` | request_id, elapsed_ms, model |
-| `CHAT_PROVIDER_START` | `brain/llm.py` | request_id, model |
-| `CHAT_PROVIDER_END` | `brain/llm.py` | request_id, status, duration_ms, model |
+| `CHAT_PROVIDER_START` | `brain/llm.py` | request_id, model, prompt_chars, attempt |
+| `CHAT_PROVIDER_END` | `brain/llm.py` | request_id, status, duration_ms, attempt |
 | `CHAT_BRAIN_END` | `api/chat_service.py` | request_id, elapsed_ms, status |
-| `CHAT_RESPONSE_SERIALIZED` | `api/chat_service.py` | request_id, elapsed_ms |
-| `CHAT_RESPONSE_SENT` | `api/chat_service.py` | request_id, elapsed_ms |
-| `CHAT_REQUEST_TIMEOUT` | `api/chat_service.py` | request_id, code |
-| `CHAT_REQUEST_ERROR` | `api/chat_service.py` | request_id, code |
+| `CHAT_RESPONSE_READY` | `api/chat_service.py` | request_id, elapsed_ms, code |
+| `CHAT_TIMEOUT` | `api/chat_service.py` / NLO | request_id, code=`brain_timeout` |
+| `CHAT_CANCELLED` | cancel path | request_id |
+| `CHAT_ERROR` | any failure | code, request_id |
 | `CHAT_API_RESPONSE` | backend + frontend | status, duration_ms |
 | `CHAT_UI_RENDERED` | frontend | request_id |
-| `CHAT_ERROR` | any failure | code, request_id |
 
 Gate backend logs with `TITAN_CHAT_DIAGNOSTICS` (default `true`).  
 Gate frontend console logs with `localStorage.titan_chat_diag !== "0"`.
@@ -82,9 +89,10 @@ Railway: filter Deploy Logs by `CHAT_` and the `request_id` from the debug overl
 
 | Layer | Default | Env / constant |
 |-------|---------|----------------|
-| OpenAI client | 45s | `TITAN_LLM_TIMEOUT_SECONDS` |
-| Browser AbortController | 55s | `CHAT_CLIENT_TIMEOUT_MS` |
-| Soft chat budget | 50s | `TITAN_CHAT_TIMEOUT_SECONDS` (reserved) |
+| Global chat deadline | 30s | `TITAN_CHAT_DEADLINE_SECONDS` |
+| OpenAI client (per attempt) | 20s (capped by remaining) | `TITAN_LLM_TIMEOUT_SECONDS` |
+| Provider retries | 1 | `TITAN_LLM_MAX_RETRIES` |
+| Browser AbortController | 35s | `CHAT_CLIENT_TIMEOUT_MS` |
 
 Progressive French copy (never invents a Titan reply):
 
@@ -93,7 +101,7 @@ Progressive French copy (never invents a Titan reply):
 | 0–9s | `Titan réfléchit…` (+ seconds after 3s) |
 | ≥10s | `Titan traite ta demande… (Ns)` |
 | ≥30s | `Le traitement prend plus de temps que prévu… (Ns)` |
-| Timeout / abort | `Titan n’a pas pu répondre dans le délai prévu. Réessaie.` |
+| Timeout / abort | `Titan n’a pas pu terminer sa réponse dans le délai prévu.` |
 
 On timeout / error:
 

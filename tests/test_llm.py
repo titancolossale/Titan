@@ -36,6 +36,8 @@ def llm() -> LLM:
     """LLM with mocked OpenAI client — no real API calls."""
     with patch("brain.llm.OpenAI"):
         instance = LLM()
+    # Phase 11.4 uses client.with_options(timeout=...).responses.create
+    instance.client.with_options.return_value = instance.client
     return instance
 
 
@@ -50,10 +52,12 @@ def test_ask_returns_output_text_on_success(llm: LLM) -> None:
 
 
 def test_ask_retries_transient_errors_then_succeeds(llm: LLM) -> None:
-    """P1-101/P1-102: two transient failures then success returns response."""
+    """P1-101/P1-102: transient failures then success — retries bounded by settings."""
+    from config.settings import TITAN_LLM_MAX_RETRIES
+
+    # First attempt fails, second succeeds (default max retries = 1 → 2 attempts).
     llm.client.responses.create.side_effect = [
         _make_rate_limit_error(),
-        _make_connection_error(),
         _success_response("Après retry."),
     ]
 
@@ -61,23 +65,25 @@ def test_ask_retries_transient_errors_then_succeeds(llm: LLM) -> None:
         result = llm.ask("test prompt")
 
     assert result == "Après retry."
-    assert llm.client.responses.create.call_count == 3
-    assert mock_sleep.call_args_list == [((1,),), ((2,),)]
+    assert llm.client.responses.create.call_count == 2
+    assert mock_sleep.call_count == 1
+    assert TITAN_LLM_MAX_RETRIES >= 1
 
 
 def test_ask_returns_french_fallback_after_max_retries(llm: LLM) -> None:
-    """P1-100/P1-102: three consecutive transient failures return French message."""
+    """P1-100/P1-102: consecutive transient failures return French message."""
+    from config.settings import TITAN_LLM_MAX_RETRIES
+
+    attempts = TITAN_LLM_MAX_RETRIES + 1
     llm.client.responses.create.side_effect = [
-        _make_rate_limit_error(),
-        _make_connection_error(),
-        _make_rate_limit_error(),
+        _make_rate_limit_error() for _ in range(attempts)
     ]
 
     with patch("brain.llm.time.sleep"):
         result = llm.ask("test prompt")
 
     assert result == LLM_ERROR_MESSAGE
-    assert llm.client.responses.create.call_count == 3
+    assert llm.client.responses.create.call_count == attempts
 
 
 def test_ask_does_not_retry_non_transient_errors(llm: LLM) -> None:

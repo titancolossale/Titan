@@ -2,8 +2,12 @@
 
 import { MessageRenderer } from "./message-renderer.js";
 import { CONVERSATION_ACTIVITY_EVENTS } from "./conversation-activity-engine.js";
-import { getStoredConversationId } from "../core/conversation-session.js";
+import {
+  createClientRequestId,
+  getStoredConversationId,
+} from "../core/conversation-session.js";
 import { SessionExpiredError, ChatRequestError } from "../core/backend-bridge.js";
+import { authHeaders } from "../core/web-auth.js";
 import { chatDiag } from "../core/chat-diagnostics.js";
 
 /**
@@ -50,6 +54,10 @@ export class ConversationManager {
     this._retryBtn = null;
     /** @type {string | null} */
     this._activeRequestId = null;
+    /** Monotonic generation — discard abandoned/late responses. */
+    this._sendGeneration = 0;
+    /** @type {number} */
+    this._activeGeneration = 0;
     /** @type {ReturnType<typeof setInterval> | null} */
     this._thinkingTimer = null;
     /** @type {number} */
@@ -162,6 +170,8 @@ export class ConversationManager {
 
     const startedAt = performance.now();
     let requestId = null;
+    const generation = ++this._sendGeneration;
+    this._activeGeneration = generation;
 
     try {
       // Optimistic UI BEFORE any network await — must paint first.
@@ -182,17 +192,33 @@ export class ConversationManager {
         providerDurationMs: null,
       });
 
+      requestId = createClientRequestId();
+      this._activeRequestId = requestId;
+
       chatDiag("CHAT_SUBMIT_START", {
         message_length: text.length,
+        request_id: requestId,
         conversation_id: this._store?.getState().conversationId ?? getStoredConversationId(),
       });
 
       const result = await this._brain.emit?.("send_message", {
         message: text,
+        request_id: requestId,
+        client_request_id: requestId,
         conversation_id: this._store?.getState().conversationId ?? getStoredConversationId(),
       });
 
-      requestId = result?.request_id ?? null;
+      // Abandoned after Stop / newer send — never render late results.
+      if (generation !== this._activeGeneration) {
+        chatDiag("CHAT_ERROR", {
+          request_id: requestId,
+          code: "abandoned",
+          status: "discarded",
+        });
+        return;
+      }
+
+      requestId = result?.request_id ?? requestId;
       this._activeRequestId = requestId;
       this._store?.setState({
         lastRequestId: requestId,
@@ -209,6 +235,18 @@ export class ConversationManager {
           status: "skipped",
         });
         return;
+      }
+
+      if (result?.error_code === "brain_timeout" || result?.error_code === "provider_timeout") {
+        throw new ChatRequestError(
+          result?.response
+            || "Titan n’a pas pu terminer sa réponse dans le délai prévu.",
+          {
+            code: result.error_code,
+            retryable: true,
+            requestId,
+          },
+        );
       }
 
       const response = result?.response ?? "";
@@ -248,13 +286,23 @@ export class ConversationManager {
         return;
       }
 
+      if (generation !== this._activeGeneration) {
+        this._clearBusyState();
+        return;
+      }
+
       const aborted =
         error?.name === "AbortError" ||
         error?.code === "provider_timeout" ||
+        error?.code === "brain_timeout" ||
         (typeof error?.message === "string" && /aborted|timeout/i.test(error.message));
 
       // User-initiated stop — not a hard failure.
-      if (error?.name === "AbortError" && error?.code !== "provider_timeout") {
+      if (
+        error?.name === "AbortError"
+        && error?.code !== "provider_timeout"
+        && error?.code !== "brain_timeout"
+      ) {
         chatDiag("CHAT_ERROR", {
           request_id: requestId,
           code: "aborted",
@@ -268,11 +316,12 @@ export class ConversationManager {
       const retryable = error?.retryable !== false;
       const code =
         error?.code ??
-        (aborted ? "provider_timeout" : "network_error");
+        (aborted ? "brain_timeout" : "network_error");
       const message =
         error instanceof ChatRequestError || error instanceof Error
           ? aborted
-            ? "Titan n’a pas pu répondre dans le délai prévu. Réessaie."
+            ? (error?.message
+              || "Titan n’a pas pu terminer sa réponse dans le délai prévu.")
             : error.message
           : "Erreur de connexion au backend Titan.";
 
@@ -321,12 +370,27 @@ export class ConversationManager {
 
   /** Cancel in-flight chat stream and streaming display. */
   interrupt() {
+    // Invalidate generation so late SSE/provider results are never rendered.
+    this._activeGeneration = -1;
     if (this._streamTimer !== null) {
       window.clearInterval(this._streamTimer);
       this._streamTimer = null;
     }
+    const requestId = this._activeRequestId;
     this._brain._backendBridge?._chatAbort?.abort();
     this._brain.conversation.cancel?.();
+    // Best-effort server-side cancel (does not block UI clear).
+    if (requestId) {
+      void fetch("/api/chat/cancel", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders(),
+        },
+        body: JSON.stringify({ request_id: requestId, client_request_id: requestId }),
+      }).catch(() => {});
+    }
     this._clearBusyState();
     this._input?.focus();
   }

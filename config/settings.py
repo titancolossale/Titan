@@ -409,9 +409,31 @@ TITAN_WEB_DEV_SECRET = "titan-local-dev-only"
 TITAN_WEB_MAX_MESSAGE_LENGTH = int(
     os.getenv("TITAN_WEB_MAX_MESSAGE_LENGTH", "16000"),
 )
-# Phase 11.1B — bounded chat/provider deadlines (seconds).
-TITAN_CHAT_TIMEOUT_SECONDS = float(os.getenv("TITAN_CHAT_TIMEOUT_SECONDS", "50"))
-TITAN_LLM_TIMEOUT_SECONDS = float(os.getenv("TITAN_LLM_TIMEOUT_SECONDS", "45"))
+# Phase 11.1B / 11.4 — bounded chat/provider deadlines (seconds).
+# Global wall-clock budget for one authenticated chat turn (preferred ≤30s).
+TITAN_CHAT_DEADLINE_SECONDS = float(os.getenv("TITAN_CHAT_DEADLINE_SECONDS", "30"))
+# Soft UI budget (legacy alias); must not exceed deadline + small client slack.
+TITAN_CHAT_TIMEOUT_SECONDS = float(
+    os.getenv("TITAN_CHAT_TIMEOUT_SECONDS", str(TITAN_CHAT_DEADLINE_SECONDS))
+)
+# Per-attempt provider HTTP timeout — capped further by remaining deadline.
+TITAN_LLM_TIMEOUT_SECONDS = float(os.getenv("TITAN_LLM_TIMEOUT_SECONDS", "20"))
+# Provider retries beyond the first attempt (total attempts = 1 + retries).
+TITAN_LLM_MAX_RETRIES = int(os.getenv("TITAN_LLM_MAX_RETRIES", "1"))
+# Complex-path orchestration caps (Phase 11.4).
+TITAN_MAX_PLANNING_ITERATIONS = int(os.getenv("TITAN_MAX_PLANNING_ITERATIONS", "3"))
+TITAN_MAX_REASONING_ITERATIONS = int(os.getenv("TITAN_MAX_REASONING_ITERATIONS", "3"))
+TITAN_MAX_AGENT_HANDOFFS = int(os.getenv("TITAN_MAX_AGENT_HANDOFFS", "2"))
+TITAN_MAX_TOOL_DECISION_SECONDS = float(
+    os.getenv("TITAN_MAX_TOOL_DECISION_SECONDS", "5")
+)
+# Fast-path compact prompt / output caps.
+TITAN_FAST_PATH_MAX_CONTEXT_CHARS = int(
+    os.getenv("TITAN_FAST_PATH_MAX_CONTEXT_CHARS", "400")
+)
+TITAN_FAST_PATH_MAX_OUTPUT_TOKENS = int(
+    os.getenv("TITAN_FAST_PATH_MAX_OUTPUT_TOKENS", "400")
+)
 TITAN_CHAT_DIAGNOSTICS = (
     os.getenv("TITAN_CHAT_DIAGNOSTICS", "true").lower() == "true"
 )

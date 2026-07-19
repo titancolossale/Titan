@@ -15,8 +15,12 @@ const RECONNECT_BASE_MS = 1500;
 const RECONNECT_MAX_MS = 30000;
 const RECONNECT_AUTH_FAIL_MAX = 2;
 const RECONNECT_HARD_MAX = 12;
-/** Client-side chat deadline — must stay below typical proxy idle limits. */
-export const CHAT_CLIENT_TIMEOUT_MS = 55000;
+/**
+ * Client-side chat deadline (Phase 11.4).
+ * Slightly above server TITAN_CHAT_DEADLINE_SECONDS (30s) so structured
+ * brain_timeout can arrive before AbortController fires.
+ */
+export const CHAT_CLIENT_TIMEOUT_MS = 35000;
 
 /** Thrown when the session cookie/token is no longer valid. */
 export class SessionExpiredError extends Error {
@@ -303,6 +307,8 @@ export class BackendBridge {
 
     let responseText = "";
     let orchestrationPayload = null;
+    /** @type {string | null} */
+    let finishedErrorCode = null;
     /** @type {ChatRequestError | null} */
     let streamError = null;
 
@@ -415,6 +421,7 @@ export class BackendBridge {
             if (frame.data.request_id) {
               saveRequestId(frame.data.request_id);
             }
+            finishedErrorCode = frame.data.error_code ?? null;
             orchestrationPayload = frame.data.orchestration ?? frame.data;
             this._applyOrchestrationMeta(frame.data);
             if (frame.data.error_code || frame.data.ok === false) {
@@ -452,7 +459,7 @@ export class BackendBridge {
         duration_ms: Math.round(performance.now() - startedAt),
       });
 
-      if (streamError && !responseText) {
+      if (streamError) {
         throw streamError;
       }
 
@@ -462,25 +469,29 @@ export class BackendBridge {
         conversation_id: conversationId,
         request_id: requestId,
         client_request_id: requestId,
+        error_code: finishedErrorCode,
         ...options,
       };
     } catch (error) {
       const isTimeout =
         error?.code === "provider_timeout" ||
+        error?.code === "brain_timeout" ||
         (error?.name === "AbortError" &&
           (String(error?.message || "").includes("timed out") ||
             performance.now() - startedAt >= CHAT_CLIENT_TIMEOUT_MS - 50));
 
       if (isTimeout) {
+        const code = error?.code === "brain_timeout" ? "brain_timeout" : "brain_timeout";
         chatDiag("CHAT_ERROR", {
           request_id: requestId,
-          code: "provider_timeout",
+          code,
           duration_ms: Math.round(performance.now() - startedAt),
         });
         throw new ChatRequestError(
-          "Titan n’a pas pu répondre dans le délai prévu. Réessaie.",
+          error?.message
+            || "Titan n’a pas pu terminer sa réponse dans le délai prévu.",
           {
-            code: "provider_timeout",
+            code,
             retryable: true,
             requestId,
           },

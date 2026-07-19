@@ -10,9 +10,11 @@ import logging
 from typing import TYPE_CHECKING
 
 from agents.agent_context import AgentContext
+from brain.chat_fast_path import is_simple_conversational_request
 from brain.pipeline.context_bundle import ThinkContext
 from brain.prompt_builder import PromptBuilder
-from config.settings import DEBUG_BRAIN
+from brain.request_deadline import check_deadline, get_request_deadline
+from config.settings import DEBUG_BRAIN, TITAN_MAX_AGENT_HANDOFFS
 from memory.learning_memory import LearningOutcome
 
 if TYPE_CHECKING:
@@ -124,7 +126,11 @@ class ThinkPipeline:
         """Execute all pipeline stages in canonical order."""
         self._stage_log = []
         self._stream = stream
+        # Safety net: conversational greetings never need agent/tool orchestration.
+        if is_simple_conversational_request(ctx.user_message):
+            ctx.skip_agents = True
         for stage_name in STAGE_ORDER:
+            check_deadline(stage_name)
             if ctx.skip_llm and stage_name in (
                 "execution_coordinate",
                 "assemble_prompt",
@@ -134,6 +140,9 @@ class ThinkPipeline:
             stage_fn = getattr(self, f"_stage_{stage_name}")
             self._stage_log.append(stage_name)
             stage_fn(ctx)
+            deadline = get_request_deadline()
+            if deadline is not None:
+                deadline.mark_stage(stage_name)
         self._stream = None
         return ctx
 
@@ -390,18 +399,36 @@ class ThinkPipeline:
         """Run agents and tools via ExecutionCoordinator (P8-063)."""
         if ctx.skip_llm:
             return
+        # Phase 11.4 — skip agent/tool orchestration for light conversation.
+        if getattr(ctx, "skip_agents", False):
+            self._debug("Execution coordinate skipped (conversational fast safety).")
+            return
         from brain.tool_execution_bridge import dispatch_context_from_think
 
         agent_context = AgentContext.from_think_context(ctx, task=ctx.user_message)
         dispatch_context = dispatch_context_from_think(ctx)
         tool_override = ctx.confirmed_tool_requests if ctx.confirmed_tool_requests else None
-        result = self.execution_coordinator.execute(
-            ctx.user_message,
-            agent_context=agent_context,
-            dispatch_context=dispatch_context,
-            tool_requests_override=tool_override,
-            stream=self._stream,
-        )
+        # Cap agent handoffs by global complex-path limit.
+        prior_max = getattr(self.execution_coordinator.policy, "max_agents", None)
+        result = None
+        try:
+            if prior_max is not None:
+                self.execution_coordinator.policy.max_agents = min(
+                    int(prior_max),
+                    int(TITAN_MAX_AGENT_HANDOFFS),
+                )
+            result = self.execution_coordinator.execute(
+                ctx.user_message,
+                agent_context=agent_context,
+                dispatch_context=dispatch_context,
+                tool_requests_override=tool_override,
+                stream=self._stream,
+            )
+        finally:
+            if prior_max is not None:
+                self.execution_coordinator.policy.max_agents = prior_max
+        if result is None:
+            return
         ctx.agent_results = result.agent_results
         ctx.agent_results_text = result.agent_results_text
         ctx.tool_results = result.tool_results

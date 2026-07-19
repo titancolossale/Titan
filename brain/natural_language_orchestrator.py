@@ -31,6 +31,14 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
+from brain.chat_fast_path import is_simple_conversational_request, run_fast_path
+from brain.request_deadline import (
+    BrainTimeoutError,
+    RequestCancelledError,
+    check_deadline,
+    get_request_deadline,
+)
+
 if TYPE_CHECKING:
     from brain.brain import Brain
 
@@ -487,6 +495,8 @@ class NaturalLanguageOrchestrator:
         decision = self._build_pipeline(intent, analysis, intent_reason)
         systems_used = SystemsUsed(planned=decision.systems)
         self._active_stream = stream
+        deadline = get_request_deadline()
+        request_id = deadline.request_id if deadline else "-"
 
         logger.info(
             "NLO request=%r intent=%s confidence=%.3f systems=%s",
@@ -497,20 +507,156 @@ class NaturalLanguageOrchestrator:
         )
 
         artifacts: dict[str, Any] = {"awareness": {}}
-        reasoning_result = self._run_reasoning(
-            analysis,
-            systems_used,
-            artifacts,
+        reasoning_result = None
+
+        # Phase 11.4 — simple conversational fast path (real LLM, no agents/tools).
+        if is_simple_conversational_request(request):
+            logger.info(
+                "CHAT_FAST_PATH_SELECTED request_id=%s elapsed_ms=%s "
+                "remaining_budget_ms=%s stage=fast_path model=%s attempt=1",
+                request_id,
+                deadline.elapsed_ms() if deadline else 0,
+                deadline.remaining_ms() if deadline else None,
+                getattr(getattr(self._brain, "llm", None), "model", None),
+            )
+            # Skip awareness/reasoning/planner systems explicitly.
+            for system in decision.systems:
+                if system != SystemName.BRAIN_THINK:
+                    systems_used.mark_skipped(system, "fast_path")
+            systems_used.mark_invoked(SystemName.BRAIN_THINK)
+            try:
+                check_deadline("fast_path")
+                fast = run_fast_path(self._brain, request)
+                response = fast["response"]
+                artifacts["fast_path"] = {
+                    "selected": True,
+                    "planner_skipped": True,
+                    "tools_skipped": True,
+                    "agents_skipped": True,
+                    "prompt_chars": fast.get("prompt_chars"),
+                    "prompt_tokens_est": fast.get("prompt_tokens_est"),
+                    "model": fast.get("model"),
+                }
+                artifacts["awareness"] = {
+                    "user": analysis.user,
+                    "fast_path": True,
+                }
+                if deadline is not None:
+                    deadline.mark_stage("provider_end")
+            except BrainTimeoutError as exc:
+                response = (
+                    "Titan n’a pas pu terminer sa réponse dans le délai prévu."
+                )
+                artifacts["error"] = "brain_timeout"
+                artifacts["last_completed_stage"] = exc.last_completed_stage
+                logger.warning(
+                    "CHAT_TIMEOUT request_id=%s elapsed_ms=%s "
+                    "remaining_budget_ms=0 stage=%s code=brain_timeout",
+                    request_id,
+                    deadline.elapsed_ms() if deadline else 0,
+                    exc.last_completed_stage or "fast_path",
+                )
+            except RequestCancelledError as exc:
+                response = "Requête annulée."
+                artifacts["error"] = "cancelled"
+                artifacts["last_completed_stage"] = exc.last_completed_stage
+                logger.info(
+                    "CHAT_CANCELLED request_id=%s elapsed_ms=%s stage=%s",
+                    request_id,
+                    deadline.elapsed_ms() if deadline else 0,
+                    exc.last_completed_stage or "fast_path",
+                )
+            except Exception as exc:
+                logger.exception("NLO fast-path failure")
+                response = (
+                    "Désolé, une erreur interne s'est produite pendant "
+                    f"l'orchestration ({type(exc).__name__}). On peut réessayer."
+                )
+                artifacts["error"] = str(exc)
+
+            duration = time.perf_counter() - started
+            reasoning = (
+                "Fast path conversationnel : planner/outils/agents ignorés; "
+                "appel modèle principal uniquement."
+            )
+            result = OrchestrationResult(
+                request_analysis=analysis,
+                detected_intent=DetectedIntent.CONVERSATION,
+                pipeline_decision=PipelineDecision(
+                    intent=DetectedIntent.CONVERSATION,
+                    systems=(SystemName.BRAIN_THINK,),
+                    awareness_systems=(),
+                    developer_mode=False,
+                    rationale="simple conversational fast path",
+                ),
+                systems_used=systems_used,
+                reasoning_summary=reasoning,
+                confidence=max(confidence, 0.9),
+                final_response=response,
+                artifacts=artifacts,
+                duration_seconds=duration,
+            )
+            self._active_stream = None
+            return result
+
+        logger.info(
+            "CHAT_COMPLEX_PATH_SELECTED request_id=%s elapsed_ms=%s "
+            "remaining_budget_ms=%s stage=complex intent=%s attempt=1",
+            request_id,
+            deadline.elapsed_ms() if deadline else 0,
+            deadline.remaining_ms() if deadline else None,
+            intent.value,
         )
-        awareness = self._run_awareness(
-            analysis,
-            systems_used,
-            artifacts,
-            reasoning_result=reasoning_result,
-        )
-        artifacts["awareness"] = awareness
 
         try:
+            check_deadline("reasoning")
+            logger.info(
+                "CHAT_PLANNER_START request_id=%s elapsed_ms=%s "
+                "remaining_budget_ms=%s stage=reasoning attempt=1",
+                request_id,
+                deadline.elapsed_ms() if deadline else 0,
+                deadline.remaining_ms() if deadline else None,
+            )
+            reasoning_result = self._run_reasoning(
+                analysis,
+                systems_used,
+                artifacts,
+            )
+            if deadline is not None:
+                deadline.mark_stage("reasoning")
+            logger.info(
+                "CHAT_PLANNER_END request_id=%s elapsed_ms=%s "
+                "remaining_budget_ms=%s stage=reasoning attempt=1",
+                request_id,
+                deadline.elapsed_ms() if deadline else 0,
+                deadline.remaining_ms() if deadline else None,
+            )
+            check_deadline("context")
+            logger.info(
+                "CHAT_CONTEXT_START request_id=%s elapsed_ms=%s "
+                "remaining_budget_ms=%s stage=context attempt=1",
+                request_id,
+                deadline.elapsed_ms() if deadline else 0,
+                deadline.remaining_ms() if deadline else None,
+            )
+            awareness = self._run_awareness(
+                analysis,
+                systems_used,
+                artifacts,
+                reasoning_result=reasoning_result,
+            )
+            artifacts["awareness"] = awareness
+            if deadline is not None:
+                deadline.mark_stage("context")
+            logger.info(
+                "CHAT_CONTEXT_END request_id=%s elapsed_ms=%s "
+                "remaining_budget_ms=%s stage=context attempt=1",
+                request_id,
+                deadline.elapsed_ms() if deadline else 0,
+                deadline.remaining_ms() if deadline else None,
+            )
+
+            check_deadline("pipeline")
             response = self._run_pipeline(
                 request,
                 analysis,
@@ -519,6 +665,29 @@ class NaturalLanguageOrchestrator:
                 systems_used,
                 artifacts,
                 stream=stream,
+            )
+        except BrainTimeoutError as exc:
+            response = (
+                "Titan n’a pas pu terminer sa réponse dans le délai prévu."
+            )
+            artifacts["error"] = "brain_timeout"
+            artifacts["last_completed_stage"] = exc.last_completed_stage
+            logger.warning(
+                "CHAT_TIMEOUT request_id=%s elapsed_ms=%s "
+                "remaining_budget_ms=0 stage=%s code=brain_timeout",
+                request_id,
+                deadline.elapsed_ms() if deadline else 0,
+                exc.last_completed_stage or "pipeline",
+            )
+        except RequestCancelledError as exc:
+            response = "Requête annulée."
+            artifacts["error"] = "cancelled"
+            artifacts["last_completed_stage"] = exc.last_completed_stage
+            logger.info(
+                "CHAT_CANCELLED request_id=%s elapsed_ms=%s stage=%s",
+                request_id,
+                deadline.elapsed_ms() if deadline else 0,
+                exc.last_completed_stage or "pipeline",
             )
         except Exception as exc:
             logger.exception("NLO pipeline failure intent=%s", intent.value)
@@ -578,25 +747,32 @@ class NaturalLanguageOrchestrator:
         except Exception:
             logger.debug("NLO mission awareness failed", exc_info=True)
         has_dev_session = self._brain.get_development_session() is not None
-        developer_mode = has_dev_session or any(
-            t in tokens
-            for t in (
-                "code",
-                "class",
-                "function",
-                "module",
-                "patch",
-                "refactor",
-                "implement",
-                "sprint",
-                "test",
-                "architecture",
-                "workspace",
-                "titan",
-                "dev",
-                "development",
-            )
+        # "titan" alone (e.g. "Bonjour Titan") must not force developer mode.
+        developer_tokens = (
+            "code",
+            "class",
+            "function",
+            "module",
+            "patch",
+            "refactor",
+            "implement",
+            "sprint",
+            "test",
+            "architecture",
+            "workspace",
+            "dev",
+            "development",
         )
+        developer_mode = has_dev_session or any(t in tokens for t in developer_tokens)
+        if (
+            not developer_mode
+            and "titan" in tokens
+            and any(
+                t in tokens
+                for t in ("continue", "reprendre", "resume", "code", "dev")
+            )
+        ):
+            developer_mode = True
         return RequestAnalysis(
             request=request,
             normalized=normalized,

@@ -61,13 +61,16 @@ def test_llm_uses_configured_model(prompts_dir: Path) -> None:
     llm.client = MagicMock()
     response = MagicMock()
     response.output_text = "ok"
-    llm.client.responses.create.return_value = response
+    scoped = MagicMock()
+    scoped.responses.create.return_value = response
+    llm.client.with_options.return_value = scoped
 
     llm.ask("hello")
 
-    call_kwargs = llm.client.responses.create.call_args.kwargs
+    call_kwargs = scoped.responses.create.call_args.kwargs
     assert call_kwargs["model"] == "test-model-42"
     assert "Nolan Hassing" in call_kwargs["instructions"]
+    llm.client.with_options.assert_called()
 
 
 def test_llm_system_instructions_property(prompts_dir: Path) -> None:

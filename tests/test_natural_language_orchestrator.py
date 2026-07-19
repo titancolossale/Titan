@@ -195,11 +195,12 @@ def test_developer_mode_enrichment(
 # ---------------------------------------------------------------------------
 
 
-def test_conversation_routes_to_think(brain: Brain) -> None:
+def test_conversation_routes_to_fast_path(brain: Brain) -> None:
     result = brain.process_request("Bonjour")
     assert result.detected_intent == DetectedIntent.CONVERSATION
     assert SystemName.BRAIN_THINK.value in result.systems_used.invoked
     assert "Réponse de test" in result.final_response
+    assert (result.artifacts or {}).get("fast_path", {}).get("selected") is True
     assert brain.last_orchestration_result is result
 
 

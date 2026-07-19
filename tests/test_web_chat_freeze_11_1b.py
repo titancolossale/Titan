@@ -183,7 +183,7 @@ def test_node_double_submit_guard() -> None:
     script = r"""
 import { parseSseBuffer, CHAT_CLIENT_TIMEOUT_MS } from './web/v2/core/backend-bridge.js';
 import { createClientRequestId } from './web/v2/core/conversation-session.js';
-if (!(CHAT_CLIENT_TIMEOUT_MS >= 45000 && CHAT_CLIENT_TIMEOUT_MS <= 60000)) {
+if (!(CHAT_CLIENT_TIMEOUT_MS >= 30000 && CHAT_CLIENT_TIMEOUT_MS <= 45000)) {
   throw new Error('timeout out of range');
 }
 const a = createClientRequestId();
