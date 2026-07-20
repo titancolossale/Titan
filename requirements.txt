@@ -10,5 +10,5 @@ httpx>=0.27  # Phase 17.1 — FastAPI TestClient / API tests
 argon2-cffi>=23.1  # Phase 10.3 — Argon2id password hashing
 bcrypt>=4.0  # Phase 10.3 — bcrypt fallback password verification
 sqlalchemy>=2.0  # Phase 12.1 — Durable conversation store
-psycopg[binary]>=3.1  # Phase 12.1 — PostgreSQL driver (Railway DATABASE_URL)
+psycopg2-binary>=2.9  # Phase 12.1 — PostgreSQL DBAPI for SQLAlchemy postgresql:// (Railway)
 pytest>=8.0  # test runner for CI and local dev

@@ -97,7 +97,8 @@ def resolve_database_url(
 
     raw = (database_url if database_url is not None else TITAN_DATABASE_URL or "").strip()
     if raw:
-        # Railway sometimes provides postgres:// — SQLAlchemy wants postgresql://
+        # Railway sometimes provides postgres:// — SQLAlchemy wants postgresql://.
+        # Default dialect is psycopg2 (requires psycopg2-binary in requirements.txt).
         if raw.startswith("postgres://"):
             raw = "postgresql://" + raw[len("postgres://") :]
         return raw

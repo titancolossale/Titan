@@ -17,9 +17,12 @@ from sqlalchemy.engine import Engine
 from core.web_conversations.context import select_recent_messages, estimate_tokens
 from core.web_conversations.db import (
     apply_migrations,
+    backend_name,
     create_conversation_engine,
+    resolve_database_url,
     reset_engine,
 )
+from config.settings import PROJECT_ROOT
 from core.web_conversations.models import MessageRecord, MessageStatus, utc_now
 from core.web_conversations.repository import ConversationRepository
 from core.web_conversations.service import (
@@ -52,6 +55,66 @@ def repo(conv_engine: Engine) -> ConversationRepository:
 @pytest.fixture()
 def service(repo: ConversationRepository) -> ConversationService:
     return ConversationService(repository=repo)
+
+
+def test_postgresql_driver_declared_in_requirements() -> None:
+    """Production images install requirements.txt; SQLAlchemy postgresql:// needs psycopg2."""
+    requirements = (PROJECT_ROOT / "requirements.txt").read_text(encoding="utf-8")
+    pkg_lines = [
+        line.split("#", 1)[0].strip()
+        for line in requirements.splitlines()
+        if line.split("#", 1)[0].strip()
+    ]
+    assert any(line.startswith("psycopg2-binary") for line in pkg_lines)
+    # psycopg v3 alone is the wrong driver for default postgresql:// (needs +psycopg).
+    assert not any(
+        line.startswith("psycopg[")
+        or line.startswith("psycopg>")
+        or line.startswith("psycopg=")
+        or line == "psycopg"
+        for line in pkg_lines
+    )
+
+
+def test_postgresql_url_loads_psycopg2_dialect() -> None:
+    """Engine construction for Railway-style URLs must resolve the psycopg2 dialect."""
+    import psycopg2  # noqa: F401 — production DBAPI required by sqlalchemy postgresql dialect
+
+    url = resolve_database_url(
+        database_url="postgresql://titan:secret@127.0.0.1:5432/titan",
+    )
+    assert backend_name(url) == "postgresql"
+    assert url.startswith("postgresql://")
+    # create_engine loads the dialect (imports psycopg2) without opening a socket.
+    engine = create_conversation_engine(database_url=url)
+    assert engine.dialect.name == "postgresql"
+    assert engine.dialect.driver == "psycopg2"
+    # Never assert on password material from the URL string in tests/logs.
+    rendered = engine.url.render_as_string(hide_password=True)
+    assert "secret" not in rendered
+    engine.dispose()
+
+
+def test_postgres_scheme_alias_normalized() -> None:
+    url = resolve_database_url(database_url="postgres://user:pass@host/db")
+    assert url.startswith("postgresql://")
+    assert backend_name(url) == "postgresql"
+
+
+def test_sqlite_default_when_database_url_empty(tmp_path: Path) -> None:
+    url = resolve_database_url(database_url="", sqlite_path=tmp_path / "local.db")
+    assert backend_name(url) == "sqlite"
+    engine = create_conversation_engine(
+        force_sqlite=True,
+        sqlite_path=tmp_path / "local.db",
+    )
+    applied = apply_migrations(engine)
+    assert "001_web_conversations" in applied or applied == []
+    with engine.connect() as conn:
+        from sqlalchemy import text
+
+        conn.execute(text("SELECT 1"))
+    engine.dispose()
 
 
 def test_create_conversation(service: ConversationService) -> None:
