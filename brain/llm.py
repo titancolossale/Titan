@@ -10,6 +10,7 @@ import logging
 import os
 import time
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 from dotenv import load_dotenv
@@ -24,7 +25,13 @@ from brain.request_deadline import (
     get_request_deadline,
 )
 from config.settings import LLM_MODEL, PROMPTS_DIR
-from config.settings import TITAN_LLM_MAX_RETRIES, TITAN_LLM_TIMEOUT_SECONDS
+from config.settings import (
+    TITAN_CONVERSATION_STREAM_ENABLED,
+    TITAN_LLM_MAX_RETRIES,
+    TITAN_LLM_TIMEOUT_SECONDS,
+)
+
+TextDeltaCallback = Callable[[str], None]
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +89,8 @@ class LLM(LLMProvider):
         self.last_prompt_chars: int = 0
         self.last_prompt_tokens_est: int = 0
         self.last_provider_calls: int = 0
+        self.last_ttft_ms: int | None = None
+        self.last_delta_count: int = 0
 
     @property
     def system_instructions(self) -> str:
@@ -111,6 +120,7 @@ class LLM(LLMProvider):
         *,
         max_output_tokens: int | None = None,
         request_id: str | None = None,
+        on_text_delta: TextDeltaCallback | None = None,
     ) -> str:
         """Conversational ask honoring the global deadline and optional output cap."""
         return self.ask_scoped(
@@ -118,6 +128,7 @@ class LLM(LLMProvider):
             self._system_instructions,
             request_id=request_id,
             max_output_tokens=max_output_tokens,
+            on_text_delta=on_text_delta,
         )
 
     def ask_scoped(
@@ -128,6 +139,7 @@ class LLM(LLMProvider):
         model: str | None = None,
         request_id: str | None = None,
         max_output_tokens: int | None = None,
+        on_text_delta: TextDeltaCallback | None = None,
     ) -> str:
         """Send a prompt with custom system instructions (agent-scoped calls — P5-030)."""
         model_name = model if model is not None else self.model
@@ -136,19 +148,23 @@ class LLM(LLMProvider):
         self.last_prompt_chars = len(prompt or "") + len(instructions or "")
         self.last_prompt_tokens_est = max(1, (self.last_prompt_chars + 3) // 4)
         self.last_provider_calls = 0
+        self.last_ttft_ms: int | None = None
+        self.last_delta_count: int = 0
         corr_id = request_id or getattr(self, "_active_request_id", None) or "-"
         deadline = get_request_deadline()
+        use_stream = bool(on_text_delta) and TITAN_CONVERSATION_STREAM_ENABLED
 
         logger.info(
             "CHAT_PROVIDER_START request_id=%s model=%s elapsed_ms=%s "
             "remaining_budget_ms=%s stage=provider prompt_chars=%d "
-            "prompt_tokens_est=%d attempt=1",
+            "prompt_tokens_est=%d attempt=1 stream=%s",
             corr_id,
             model_name,
             deadline.elapsed_ms() if deadline else 0,
             deadline.remaining_ms() if deadline else None,
             self.last_prompt_chars,
             self.last_prompt_tokens_est,
+            use_stream,
         )
 
         max_attempts = self._max_retries + 1
@@ -172,27 +188,42 @@ class LLM(LLMProvider):
                 return LLM_TIMEOUT_MESSAGE
 
             try:
-                response = self._create_scoped_response(
-                    prompt,
-                    instructions,
-                    model_name,
-                    max_output_tokens=max_output_tokens,
-                    timeout_seconds=self._resolve_timeout(),
-                )
+                if use_stream:
+                    text = self._stream_scoped_response(
+                        prompt,
+                        instructions,
+                        model_name,
+                        max_output_tokens=max_output_tokens,
+                        timeout_seconds=self._resolve_timeout(),
+                        on_text_delta=on_text_delta,
+                        started=started,
+                        request_id=corr_id,
+                    )
+                else:
+                    response = self._create_scoped_response(
+                        prompt,
+                        instructions,
+                        model_name,
+                        max_output_tokens=max_output_tokens,
+                        timeout_seconds=self._resolve_timeout(),
+                    )
+                    text = response.output_text
                 self.last_provider_calls += 1
                 duration_ms = int((time.perf_counter() - started) * 1000)
                 logger.info(
                     "CHAT_PROVIDER_END request_id=%s status=ok duration_ms=%d "
                     "elapsed_ms=%s remaining_budget_ms=%s stage=provider model=%s "
-                    "attempt=%d",
+                    "attempt=%d ttft_ms=%s deltas=%d",
                     corr_id,
                     duration_ms,
                     deadline.elapsed_ms() if deadline else duration_ms,
                     deadline.remaining_ms() if deadline else None,
                     model_name,
                     attempt + 1,
+                    self.last_ttft_ms,
+                    self.last_delta_count,
                 )
-                return response.output_text
+                return text
             except Exception as exc:
                 self.last_provider_calls += 1
                 duration_ms = int((time.perf_counter() - started) * 1000)
@@ -270,6 +301,7 @@ class LLM(LLMProvider):
         *,
         max_output_tokens: int | None = None,
         timeout_seconds: float | None = None,
+        stream: bool = False,
     ) -> Any:
         """Call the OpenAI Responses API with custom instructions and model."""
         kwargs: dict[str, Any] = {
@@ -279,6 +311,65 @@ class LLM(LLMProvider):
         }
         if max_output_tokens is not None:
             kwargs["max_output_tokens"] = int(max_output_tokens)
+        if stream:
+            kwargs["stream"] = True
         # Per-call timeout via request options — never stack beyond global deadline.
         timeout = timeout_seconds if timeout_seconds is not None else self._resolve_timeout()
         return self.client.with_options(timeout=timeout).responses.create(**kwargs)
+
+    def _stream_scoped_response(
+        self,
+        prompt: str,
+        instructions: str,
+        model: str,
+        *,
+        max_output_tokens: int | None = None,
+        timeout_seconds: float | None = None,
+        on_text_delta: TextDeltaCallback | None = None,
+        started: float | None = None,
+        request_id: str = "-",
+    ) -> str:
+        """Stream Responses API text deltas; return the full assembled text."""
+        started_at = started if started is not None else time.perf_counter()
+        chunks: list[str] = []
+        first_delta = True
+        stream = self._create_scoped_response(
+            prompt,
+            instructions,
+            model,
+            max_output_tokens=max_output_tokens,
+            timeout_seconds=timeout_seconds,
+            stream=True,
+        )
+        try:
+            for event in stream:
+                check_deadline("provider_stream")
+                event_type = getattr(event, "type", None) or ""
+                delta = ""
+                if event_type == "response.output_text.delta":
+                    delta = getattr(event, "delta", "") or ""
+                elif event_type == "response.text.delta":
+                    delta = getattr(event, "delta", "") or ""
+                if not delta:
+                    continue
+                chunks.append(delta)
+                self.last_delta_count += 1
+                if first_delta:
+                    first_delta = False
+                    self.last_ttft_ms = int((time.perf_counter() - started_at) * 1000)
+                    logger.info(
+                        "CHAT_FIRST_DELTA request_id=%s ttft_ms=%d",
+                        request_id,
+                        self.last_ttft_ms,
+                    )
+                if on_text_delta is not None:
+                    on_text_delta(delta)
+        finally:
+            close = getattr(stream, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except Exception:
+                    logger.debug("Stream close failed", exc_info=True)
+
+        return "".join(chunks)

@@ -105,7 +105,10 @@ Use either the `TITAN_*` name or the shorter alias — both work.
 | `TITAN_BROWSER_ENABLED` | `false` | Playwright is heavy; keep off initially |
 | `TITAN_VOICE_ENABLED` | `true` | Browser STT/TTS (client-side) |
 | `TITAN_TRADING_ENABLED` | `true` | Mock/paper defaults — no live broker setup in this step |
-| `TITAN_DATABASE_URL` | leave empty | Not used yet (JSON persistence) |
+| `TITAN_DATABASE_URL` | Railway Postgres `DATABASE_URL` | Phase 12.1 conversation store (alias `DATABASE_URL`) |
+| `TITAN_CONVERSATION_PERSISTENCE_ENABLED` | `true` | Durable web conversations |
+| `TITAN_CONVERSATION_PERSISTENCE_REQUIRED` | `true` in production | `/ready` fails if DB unreachable |
+| `TITAN_CONVERSATION_STREAM_ENABLED` | `true` | Provider token streaming |
 
 ### 4.4 Generate a strong secret (Windows PowerShell)
 
@@ -425,11 +428,39 @@ It only packages and documents Railway deployment around the existing `web-prod`
 
 ---
 
+## 8.5 Phase 12.1 — PostgreSQL conversations (manual)
+
+Do **not** automate these steps from the coding agent.
+
+1. In the Railway project, check whether a **PostgreSQL** service already exists.
+2. If absent: **New** → **Database** → **PostgreSQL**.
+3. On the Titan web service → **Variables** → add reference:
+   - `DATABASE_URL=${{Postgres.DATABASE_URL}}`
+   - or `TITAN_DATABASE_URL=${{Postgres.DATABASE_URL}}`
+4. Also set:
+   - `TITAN_CONVERSATION_PERSISTENCE_ENABLED=true`
+   - `TITAN_CONVERSATION_PERSISTENCE_REQUIRED=true`
+5. Deploy the Phase 12.1 code. Startup runs `bootstrap_conversation_store()`; you can also run one-off:
+   ```text
+   python scripts/migrate_web_conversations.py
+   ```
+   (via Railway shell / one-off job — never print the full URL with password).
+6. Wait until Active. Verify:
+   - `GET /health` → 200
+   - `GET /ready` → `checks.conversation_store.ok` true
+7. Incognito login → create conversation → two related messages → confirm progressive tokens → refresh → redeploy → confirm history remains.
+8. Search logs by `request_id` / shortened `conversation_id` (never expect full message bodies).
+
+**Honesty rule:** do not claim production persistence until the redeploy/restart test succeeds.
+
+---
+
 ## 9. Related documents
 
 | Document | Role |
 |----------|------|
 | [`CLOUD_DEPLOYMENT_READINESS.md`](CLOUD_DEPLOYMENT_READINESS.md) | Phase 10.1 provider-neutral audit |
+| [`WEB_APP_CONVERSATIONS.md`](WEB_APP_CONVERSATIONS.md) | Phase 12.1 durable chat history |
 | [`REMOTE_ACCESS.md`](REMOTE_ACCESS.md) | Local Cloudflare Tunnel (alternative to cloud host) |
 | [`WEB_APP.md`](WEB_APP.md) | API surface |
 | `.env.example` | Full local env template |
@@ -443,7 +474,8 @@ It only packages and documents Railway deployment around the existing `web-prod`
 1. Push the latest Titan commit (including `railway.json` and this guide) to GitHub.  
 2. Open https://railway.com → **New Project** → **Deploy from GitHub repo** → select Titan.  
 3. Add the variables in §4.5 plus `OPENAI_API_KEY` and `TITAN_WEB_SECRET_KEY`.  
-4. Generate a public domain.  
-5. Verify `/health`, `/ready`, and `/app/`.
+4. Add PostgreSQL (§8.5) before relying on conversation persistence across restarts.  
+5. Generate a public domain.  
+6. Verify `/health`, `/ready`, and `/app/`.
 
 **Do not ask the coding agent to deploy for you** — Railway requires your GitHub login and your secrets.

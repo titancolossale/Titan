@@ -40,6 +40,19 @@ function createChatPanel() {
 
   panel.innerHTML = `
     <div class="tdl-v2-conversation">
+      <header class="tdl-v2-conversation__toolbar">
+        <div class="tdl-v2-conversation__title-wrap">
+          <h2 class="tdl-v2-conversation__title" id="tdl-v2-conversation-title">Nouvelle conversation</h2>
+          <button type="button" class="tdl-v2-btn tdl-v2-btn--ghost tdl-v2-conversation__rename" id="tdl-v2-rename-conversation" title="Renommer">✎</button>
+        </div>
+        <div class="tdl-v2-conversation__actions">
+          <button type="button" class="tdl-v2-btn tdl-v2-btn--ghost" id="tdl-v2-new-conversation">Nouvelle</button>
+          <details class="tdl-v2-conversation__history">
+            <summary>Récentes</summary>
+            <ul class="tdl-v2-conversation__history-list" id="tdl-v2-conversation-list"></ul>
+          </details>
+        </div>
+      </header>
       <div class="tdl-v2-conversation__scroll" aria-live="polite">
         <div class="tdl-v2-conversation__inner" id="tdl-v2-chat-messages">
           <div class="tdl-v2-conversation__welcome" data-welcome="ambient" aria-hidden="true"></div>

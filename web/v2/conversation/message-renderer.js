@@ -123,10 +123,43 @@ export class MessageRenderer {
   /**
    * @param {HTMLElement} bubble
    * @param {string} text
+   * @param {{ forceScroll?: boolean }} [options]
    */
-  setBubbleText(bubble, text) {
+  setBubbleText(bubble, text, options = {}) {
     bubble.textContent = text;
-    this.scrollToBottom(true);
+    this.scrollToBottom(false, { force: Boolean(options.forceScroll) });
+  }
+
+  /**
+   * Clear all rendered messages and restore empty welcome state.
+   */
+  clearMessages() {
+    const container = this.ensureContainer();
+    container.replaceChildren();
+    const welcome = document.createElement("div");
+    welcome.className = "tdl-v2-conversation__welcome";
+    welcome.dataset.welcome = "ambient";
+    welcome.setAttribute("aria-hidden", "true");
+    container.appendChild(welcome);
+  }
+
+  /**
+   * Hydrate from durable history (user/assistant only).
+   * @param {Array<{ role: string, content: string, status?: string }>} messages
+   */
+  hydrateMessages(messages) {
+    this.clearMessages();
+    for (const msg of messages || []) {
+      if (!msg?.content) continue;
+      if (msg.role === "user") {
+        this.appendMessage(msg.content, "user");
+      } else if (msg.role === "assistant") {
+        const row = this.appendMessage(msg.content, "titan");
+        if (msg.status === "failed" || msg.status === "cancelled") {
+          row.dataset.status = msg.status;
+        }
+      }
+    }
   }
 
   /**
@@ -217,8 +250,8 @@ export class MessageRenderer {
     return JSON.stringify(safe, null, 2);
   }
 
-  /** @param {boolean} [smooth] */
-  scrollToBottom(smooth = false) {
+  /** @param {boolean} [smooth] @param {{ force?: boolean }} [options] */
+  scrollToBottom(smooth = false, options = {}) {
     try {
       this.ensureContainer();
     } catch {
@@ -226,6 +259,11 @@ export class MessageRenderer {
     }
     const scroll = this._container?.closest(".tdl-v2-conversation__scroll");
     if (!scroll) return;
+    const distance = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight;
+    const nearBottom = distance < 96;
+    if (!options.force && !nearBottom) {
+      return;
+    }
     scroll.scrollTo({
       top: scroll.scrollHeight,
       behavior: smooth ? "smooth" : "auto",

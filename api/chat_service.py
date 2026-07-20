@@ -34,8 +34,12 @@ from config.settings import (
     LLM_MODEL,
     TITAN_CHAT_DEADLINE_SECONDS,
     TITAN_CHAT_DIAGNOSTICS,
+    TITAN_CONVERSATION_PERSISTENCE_ENABLED,
     TITAN_WEB_MAX_MESSAGE_LENGTH,
 )
+from core.web_conversations.db import ConversationStoreUnavailable
+from core.web_conversations.models import MessageStatus
+from core.web_conversations.service import get_conversation_service
 
 logger = logging.getLogger(__name__)
 
@@ -673,7 +677,37 @@ def process_chat_message(
         )
 
     titan = get_titan()
-    conv_id = _resolve_conversation_id(titan, conversation_id)
+    speaker_hint = (user or "").strip() or getattr(
+        getattr(titan, "context", None),
+        "current_user",
+        None,
+    ) or "Nolan"
+    conv_service = None
+    durable_conv_id = _resolve_conversation_id(titan, conversation_id)
+    assistant_message_id: str | None = None
+    user_message_id: str | None = None
+    persist = TITAN_CONVERSATION_PERSISTENCE_ENABLED
+
+    if persist:
+        try:
+            conv_service = get_conversation_service()
+            conv_service.ensure_ready()
+            record = conv_service.get_or_create_conversation(speaker_hint, conversation_id)
+            durable_conv_id = record.id
+        except ConversationStoreUnavailable:
+            logger.exception(
+                "CHAT_STREAM_ERROR request_id=%s code=conversation_store_unavailable",
+                req_id,
+            )
+            raise
+        except Exception:
+            logger.exception(
+                "Conversation resolve failed request_id=%s — continuing without durable store",
+                req_id,
+            )
+            conv_service = None
+            persist = False
+
     message_id = _new_message_id()
     llm = getattr(getattr(titan, "brain", None), "llm", None)
     model_name = getattr(llm, "model", None) or LLM_MODEL
@@ -684,6 +718,46 @@ def process_chat_message(
                 titan.context.session.set_user(user)
 
             speaker = titan.context.current_user
+
+            # Hydrate in-process history from durable conversation (follow-ups).
+            if conv_service is not None:
+                try:
+                    engine = getattr(titan, "conversation", None)
+                    conv_service.hydrate_engine_history(
+                        durable_conv_id,
+                        speaker,
+                        engine,
+                        request_id=req_id,
+                    )
+                    user_msg = conv_service.persist_user_message(
+                        conversation_id=durable_conv_id,
+                        user_id=speaker,
+                        content=text,
+                        request_id=req_id,
+                        allow_duplicate=False,
+                    )
+                    user_message_id = user_msg.id
+                    pending = conv_service.begin_assistant_message(
+                        conversation_id=durable_conv_id,
+                        user_id=speaker,
+                        request_id=req_id,
+                        model=model_name,
+                    )
+                    assistant_message_id = pending.id
+                    message_id = pending.id
+                    conv_service.maybe_generate_title(
+                        conversation_id=durable_conv_id,
+                        user_id=speaker,
+                        first_message=text,
+                        llm_ask=None,  # never block response on title LLM
+                    )
+                except Exception:
+                    logger.exception(
+                        "Conversation hydrate/persist failed request_id=%s",
+                        req_id,
+                    )
+
+            # Keep in-process engine in sync for this turn.
             titan.conversation.add_message(speaker, text)
 
             audit_start = _audit_start_index(titan)
@@ -695,13 +769,31 @@ def process_chat_message(
             _chat_log(
                 "CHAT_BRAIN_START",
                 request_id=req_id,
-                conversation_id=conv_id,
+                conversation_id=durable_conv_id,
                 elapsed_ms=deadline.elapsed_ms(),
                 remaining_budget_ms=deadline.remaining_ms(),
                 stage="brain",
                 model=model_name,
                 attempt=1,
             )
+            if stream is not None:
+                try:
+                    stream.emit(
+                        "acknowledged",
+                        {
+                            "request_id": req_id,
+                            "conversation_id": durable_conv_id,
+                            "label": "Requête reçue",
+                        },
+                    )
+                except Exception:
+                    logger.debug("acknowledged emit failed", exc_info=True)
+                _chat_log(
+                    "CHAT_STREAM_STARTED",
+                    request_id=req_id,
+                    conversation_id=durable_conv_id[:16],
+                )
+
             brain_error = False
             try:
                 deadline.check("brain")
@@ -877,6 +969,53 @@ def process_chat_message(
             if not _is_cancelled(result):
                 titan.conversation.add_message("Titan", response_text)
 
+            # Finalize durable assistant message.
+            if conv_service is not None and assistant_message_id:
+                try:
+                    if _is_cancelled(result):
+                        status = MessageStatus.CANCELLED.value
+                        err = CANCELLED_CODE
+                        _chat_log(
+                            "CHAT_STREAM_CANCELLED",
+                            request_id=req_id,
+                            conversation_id=durable_conv_id[:16],
+                        )
+                    elif _is_provider_failure(result) or brain_error:
+                        status = MessageStatus.FAILED.value
+                        err = (
+                            (result.artifacts or {}).get("error")
+                            or PROVIDER_UNAVAILABLE_CODE
+                        )
+                        _chat_log(
+                            "CHAT_STREAM_ERROR",
+                            request_id=req_id,
+                            conversation_id=durable_conv_id[:16],
+                            code=err,
+                        )
+                    else:
+                        status = MessageStatus.COMPLETED.value
+                        err = None
+                        _chat_log(
+                            "CHAT_STREAM_COMPLETED",
+                            request_id=req_id,
+                            conversation_id=durable_conv_id[:16],
+                            chars=len(response_text or ""),
+                        )
+                    conv_service.finalize_assistant_message(
+                        message_id=assistant_message_id,
+                        conversation_id=durable_conv_id,
+                        user_id=speaker,
+                        content=response_text if not _is_cancelled(result) else "",
+                        status=status,
+                        error_code=err,
+                        model=model_name,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Assistant finalize failed request_id=%s",
+                        req_id,
+                    )
+
             tool_activity, memory_activity, orchestrator_progress = _collect_activity(
                 titan,
                 audit_start,
@@ -886,12 +1025,22 @@ def process_chat_message(
             result=result,
             titan=titan,
             request_id=req_id,
-            conversation_id=conv_id,
+            conversation_id=durable_conv_id,
             tool_activity=tool_activity,
             memory_activity=memory_activity,
             orchestrator_progress=orchestrator_progress,
             message_id=message_id,
         )
+        if user_message_id:
+            payload["user_message_id"] = user_message_id
+        if assistant_message_id:
+            payload["assistant_message_id"] = assistant_message_id
+        ttft = getattr(llm, "last_ttft_ms", None) if llm is not None else None
+        if ttft is not None:
+            payload["ttft_ms"] = ttft
+        delta_count = getattr(llm, "last_delta_count", None) if llm is not None else None
+        if delta_count is not None:
+            payload["delta_count"] = delta_count
 
         duration_ms = deadline.elapsed_ms()
         _chat_log(

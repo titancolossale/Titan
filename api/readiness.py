@@ -119,6 +119,28 @@ def build_readiness_payload(*, include_subsystems: bool = True) -> dict[str, Any
     status = "ready" if core_ready else "not_ready"
     http_status = 200 if core_ready else 503
 
+    # Phase 12.1 — conversation DB readiness (required in production by default).
+    try:
+        from core.web_conversations.service import get_conversation_service
+
+        conv_ok, conv_message, conv_details = get_conversation_service().readiness()
+        checks["conversation_store"] = {
+            "ok": conv_ok,
+            "required": bool(conv_details.get("required")),
+            "message": conv_message,
+            "backend": conv_details.get("backend"),
+        }
+        if conv_details.get("required") and not conv_ok:
+            core_ready = False
+            status = "not_ready"
+            http_status = 503
+    except Exception as exc:
+        checks["conversation_store"] = {
+            "ok": False,
+            "required": False,
+            "message": f"Conversation readiness check failed: {type(exc).__name__}",
+        }
+
     return {
         "status": status,
         "http_status": http_status,

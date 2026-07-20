@@ -151,7 +151,7 @@ def create_app() -> FastAPI:
             CORSMiddleware,
             allow_origins=cors_origins,
             allow_credentials=True,
-            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
             allow_headers=[
                 "Authorization",
                 "Content-Type",
@@ -168,6 +168,17 @@ def create_app() -> FastAPI:
     app.add_middleware(PrivateAuthMiddleware)
 
     app.include_router(auth_router)
+    from api.conversation_routes import router as conversation_router
+
+    app.include_router(conversation_router)
+
+    # Apply conversation migrations at startup when persistence is enabled.
+    try:
+        from core.web_conversations.service import bootstrap_conversation_store
+
+        bootstrap_conversation_store()
+    except Exception:
+        logger.exception("Conversation store bootstrap failed at startup")
 
     if STATIC_DIR.is_dir():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -501,7 +512,7 @@ def create_app() -> FastAPI:
         )
 
     @app.post("/chat/stream", dependencies=[Depends(require_web_auth)])
-    async def chat_stream(body: ChatRequest) -> StreamingResponse:
+    async def chat_stream(request: Request, body: ChatRequest) -> StreamingResponse:
         """Stream sanitized cognitive events during Brain.process_request() via SSE."""
         request_id = body.resolved_request_id()
         _trace_request_received("chat_stream:/chat/stream", request_id)
@@ -523,6 +534,10 @@ def create_app() -> FastAPI:
             )
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+        from api.conversation_routes import resolve_authenticated_user
+
+        owner_user = resolve_authenticated_user(request) or body.user
+
         queue: asyncio.Queue[str | None] = asyncio.Queue()
         loop = asyncio.get_running_loop()
 
@@ -534,7 +549,7 @@ def create_app() -> FastAPI:
             try:
                 handle_chat_stream(
                     body.message,
-                    user=body.user,
+                    user=owner_user,
                     conversation_id=body.conversation_id,
                     request_id=request_id,
                     client_metadata=body.client_metadata,

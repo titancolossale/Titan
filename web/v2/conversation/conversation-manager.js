@@ -1,14 +1,26 @@
-/** Titan Frontend V2 — Conversation Manager (Phase E7 + E8 + Web Runtime V1 + 11.1B). */
+/** Titan Frontend V2 — Conversation Manager (Phase E7 + E8 + Web Runtime V1 + 11.1B + 12.1). */
 
 import { MessageRenderer } from "./message-renderer.js";
 import { CONVERSATION_ACTIVITY_EVENTS } from "./conversation-activity-engine.js";
 import {
+  clearConversationSession,
   createClientRequestId,
   getStoredConversationId,
+  saveConversationId,
 } from "../core/conversation-session.js";
 import { SessionExpiredError, ChatRequestError } from "../core/backend-bridge.js";
 import { authHeaders } from "../core/web-auth.js";
 import { chatDiag } from "../core/chat-diagnostics.js";
+import {
+  archiveConversation,
+  createConversation,
+  listConversations,
+  loadConversation,
+  renameConversation,
+} from "../core/conversation-api.js";
+
+/** Max UI text updates per second while streaming tokens. */
+const STREAM_UI_HZ = 24;
 
 /**
  * Yield to the browser so optimistic DOM updates paint before network work.
@@ -62,14 +74,20 @@ export class ConversationManager {
     this._thinkingTimer = null;
     /** @type {number} */
     this._thinkingStartedAt = 0;
+    /** Live token stream state (Phase 12.1). */
+    this._liveStream = null;
+    /** @type {number | null} */
+    this._liveRaf = null;
+    /** @type {string} */
+    this._liveBuffer = "";
+    /** @type {string} */
+    this._liveDisplayed = "";
+    /** @type {number} */
+    this._lastLivePaint = 0;
+    /** @type {boolean} */
+    this._receivedLiveDelta = false;
     /** @type {(event: Event) => void} */
     this._onSendClick = () => {
-      // TEMP production path trace — remove after Railway confirmation.
-      console.info("SEND_CLICK", {
-        busy: this._busy,
-        hasInput: Boolean(this._input),
-        hasEmit: typeof this._brain?.emit === "function",
-      });
       void this.send();
     };
     /** @type {(event: Event) => void} */
@@ -82,14 +100,14 @@ export class ConversationManager {
     this._onInputKeydown = (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
-        // TEMP production path trace — remove after Railway confirmation.
-        console.info("SEND_CLICK", {
-          source: "keydown_enter",
-          busy: this._busy,
-          hasEmit: typeof this._brain?.emit === "function",
-        });
         void this.send();
       }
+    };
+    this._onNewConversation = () => {
+      void this.startNewConversation();
+    };
+    this._onRenameConversation = () => {
+      void this.renameActiveConversation();
     };
   }
 
@@ -124,15 +142,31 @@ export class ConversationManager {
     this._stopBtn?.addEventListener("click", this._onStopClick);
     this._retryBtn?.addEventListener("click", this._onRetryClick);
     this._input?.addEventListener("keydown", this._onInputKeydown);
+    document.getElementById("tdl-v2-new-conversation")?.addEventListener(
+      "click",
+      this._onNewConversation,
+    );
+    document.getElementById("tdl-v2-rename-conversation")?.addEventListener(
+      "click",
+      this._onRenameConversation,
+    );
 
     this._brain.conversation.onActivity((event) => {
       this._onConversationActivity(event);
     });
 
     this._brain.on?.("response", (data) => {
-      if (data.text && !this._streamTimer) {
+      if (data.text && !this._streamTimer && !this._receivedLiveDelta) {
         this._streamResponse(data.text, data.metadata ?? null);
       }
+    });
+
+    // Progressive provider deltas from BackendBridge.
+    this._brain.on?.("text_delta", (data) => {
+      this._onTextDelta(data?.text ?? "");
+    });
+    this._brain.on?.("response_started", () => {
+      this._ensureLiveBubble();
     });
 
     this._brain.on?.("approval_required", (data) => {
@@ -145,6 +179,8 @@ export class ConversationManager {
         this._store.setState({ conversationId });
       }
     }
+
+    void this.restoreActiveConversation();
   }
 
   /** Re-resolve DOM nodes after delayed panel mount (boot race). */
@@ -179,6 +215,7 @@ export class ConversationManager {
     this._setComposerBusy(true);
     this._setChatPending(true);
     this._neural?.notifyInteractive?.(4000);
+    this._resetLiveStream();
 
     const startedAt = performance.now();
     let requestId = null;
@@ -213,15 +250,6 @@ export class ConversationManager {
         conversation_id: this._store?.getState().conversationId ?? getStoredConversationId(),
       });
 
-      // TEMP production path trace — remove after Railway confirmation.
-      if (typeof this._brain?.emit !== "function") {
-        console.info("FETCH_ERROR", {
-          stage: "pre_fetch",
-          code: "emit_missing",
-          request_id: requestId,
-        });
-      }
-
       let result;
       try {
         result = await this._brain.emit?.("send_message", {
@@ -231,14 +259,6 @@ export class ConversationManager {
           conversation_id: this._store?.getState().conversationId ?? getStoredConversationId(),
         });
       } catch (emitErr) {
-        // Surfaces exceptions thrown before fetch() or during stream handling.
-        console.info("FETCH_ERROR", {
-          stage: "emit_or_stream",
-          request_id: requestId,
-          name: emitErr?.name ?? null,
-          code: emitErr?.code ?? null,
-          message: String(emitErr?.message ?? emitErr),
-        });
         throw emitErr;
       }
 
@@ -254,6 +274,10 @@ export class ConversationManager {
 
       requestId = result?.request_id ?? requestId;
       this._activeRequestId = requestId;
+      if (result?.conversation_id) {
+        saveConversationId(result.conversation_id);
+        this._store?.setState({ conversationId: result.conversation_id });
+      }
       this._store?.setState({
         lastRequestId: requestId,
         chatStage: "response_received",
@@ -284,15 +308,24 @@ export class ConversationManager {
       }
 
       const response = result?.response ?? "";
-      if (response && !this._streamTimer) {
+      if (this._receivedLiveDelta) {
+        this._finalizeLiveStream(response, result?.orchestration ?? null);
+        chatDiag("CHAT_UI_RENDERED", {
+          request_id: requestId,
+          response_length: response.length,
+          duration_ms: Math.round(performance.now() - startedAt),
+          streamed: true,
+          ttft_ms: result?.ttft_ms ?? null,
+        });
+      } else if (response && !this._streamTimer) {
         this._streamResponse(response, result?.orchestration ?? null);
         chatDiag("CHAT_UI_RENDERED", {
           request_id: requestId,
           response_length: response.length,
           duration_ms: Math.round(performance.now() - startedAt),
+          streamed: false,
         });
       } else if (!response && !this._streamTimer) {
-        // Empty success — clear pending without inventing content.
         this._clearBusyState();
       }
 
@@ -302,6 +335,7 @@ export class ConversationManager {
           result,
         );
       }
+      void this.refreshConversationList();
     } catch (error) {
       if (error instanceof SessionExpiredError || error?.name === "SessionExpiredError") {
         chatDiag("CHAT_ERROR", {
@@ -410,6 +444,7 @@ export class ConversationManager {
       window.clearInterval(this._streamTimer);
       this._streamTimer = null;
     }
+    this._resetLiveStream({ keepBubble: true });
     const requestId = this._activeRequestId;
     this._brain._backendBridge?._chatAbort?.abort();
     this._brain.conversation.cancel?.();
@@ -455,7 +490,7 @@ export class ConversationManager {
     };
 
     if (reduced || fullText.length <= chunkSize) {
-      this._renderer.setBubbleText(bubble, fullText);
+      this._renderer.setBubbleText(bubble, fullText, { forceScroll: true });
       finish();
       return;
     }
@@ -477,12 +512,235 @@ export class ConversationManager {
     }, 22);
   }
 
+  _ensureLiveBubble() {
+    if (this._liveStream) return;
+    this._showThinking(false);
+    const started = this._renderer.beginTitanMessage();
+    this._liveStream = started;
+    this._liveBuffer = "";
+    this._liveDisplayed = "";
+    this._receivedLiveDelta = true;
+  }
+
+  /** @param {string} text */
+  _onTextDelta(text) {
+    if (!text || this._activeGeneration < 0) return;
+    this._ensureLiveBubble();
+    this._liveBuffer += text;
+    this._scheduleLivePaint();
+  }
+
+  _scheduleLivePaint() {
+    const minInterval = 1000 / STREAM_UI_HZ;
+    const now = performance.now();
+    if (this._liveRaf != null) return;
+    const delay = Math.max(0, minInterval - (now - this._lastLivePaint));
+    this._liveRaf = window.setTimeout(() => {
+      this._liveRaf = null;
+      this._paintLiveBuffer();
+    }, delay);
+  }
+
+  _paintLiveBuffer() {
+    if (!this._liveStream) return;
+    if (this._liveDisplayed === this._liveBuffer) return;
+    this._liveDisplayed = this._liveBuffer;
+    this._lastLivePaint = performance.now();
+    this._renderer.setBubbleText(this._liveStream.bubble, this._liveDisplayed);
+  }
+
+  /**
+   * @param {string} finalText
+   * @param {object | null} [metadata]
+   */
+  _finalizeLiveStream(finalText, metadata = null) {
+    this._ensureLiveBubble();
+    const text = finalText || this._liveBuffer;
+    this._liveBuffer = text;
+    this._paintLiveBuffer();
+    if (this._liveRaf != null) {
+      window.clearTimeout(this._liveRaf);
+      this._liveRaf = null;
+    }
+    if (this._liveStream) {
+      this._renderer.finishStreaming(this._liveStream.row);
+      if (metadata) {
+        this._renderer.attachDevMetadata(this._liveStream.row, metadata);
+      }
+    }
+    this._liveStream = null;
+    this._receivedLiveDelta = false;
+    this._clearBusyState();
+    this._lastFailedMessage = null;
+    this._hideRetry();
+    this._input?.focus();
+  }
+
+  /** @param {{ keepBubble?: boolean }} [options] */
+  _resetLiveStream(options = {}) {
+    if (this._liveRaf != null) {
+      window.clearTimeout(this._liveRaf);
+      this._liveRaf = null;
+    }
+    if (this._liveStream && !options.keepBubble) {
+      this._liveStream.row.remove();
+    } else if (this._liveStream) {
+      this._renderer.finishStreaming(this._liveStream.row);
+    }
+    this._liveStream = null;
+    this._liveBuffer = "";
+    this._liveDisplayed = "";
+    this._receivedLiveDelta = false;
+  }
+
+  async restoreActiveConversation() {
+    const conversationId = this._store?.getState().conversationId ?? getStoredConversationId();
+    await this.refreshConversationList();
+    if (!conversationId) {
+      this._setTitle("Nouvelle conversation");
+      return;
+    }
+    try {
+      const { conversation, messages } = await loadConversation(conversationId);
+      saveConversationId(conversation.id);
+      this._store?.setState({ conversationId: conversation.id });
+      this._setTitle(conversation.title || "Conversation");
+      this._renderer.hydrateMessages(messages);
+    } catch {
+      // Stale id — leave empty state; next send creates a new conversation.
+      clearConversationSession();
+      this._store?.setState({ conversationId: null });
+      this._setTitle("Nouvelle conversation");
+    }
+  }
+
+  async startNewConversation() {
+    this.interrupt();
+    try {
+      const created = await createConversation();
+      const conversation = created.conversation ?? created;
+      clearConversationSession();
+      saveConversationId(conversation.id);
+      this._store?.setState({ conversationId: conversation.id });
+      this._renderer.clearMessages();
+      this._setTitle(conversation.title || "Nouvelle conversation");
+      await this.refreshConversationList();
+      this._input?.focus();
+    } catch (error) {
+      this._renderer.appendErrorCard(
+        error?.message || "Impossible de créer une conversation.",
+        { code: error?.code },
+      );
+    }
+  }
+
+  async renameActiveConversation() {
+    const conversationId = this._store?.getState().conversationId ?? getStoredConversationId();
+    if (!conversationId) return;
+    const current = document.getElementById("tdl-v2-conversation-title")?.textContent || "";
+    const next = window.prompt("Nouveau titre", current);
+    if (!next || !next.trim()) return;
+    try {
+      const renamed = await renameConversation(conversationId, next.trim());
+      this._setTitle(renamed.conversation?.title || next.trim());
+      await this.refreshConversationList();
+    } catch (error) {
+      this._renderer.appendErrorCard(
+        error?.message || "Impossible de renommer.",
+        { code: error?.code },
+      );
+    }
+  }
+
+  async refreshConversationList() {
+    const list = document.getElementById("tdl-v2-conversation-list");
+    if (!list) return;
+    try {
+      const { conversations } = await listConversations(12);
+      list.replaceChildren();
+      const activeId = this._store?.getState().conversationId ?? getStoredConversationId();
+      for (const conv of conversations) {
+        const li = document.createElement("li");
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "tdl-v2-conversation__history-item";
+        if (conv.id === activeId) {
+          btn.dataset.active = "true";
+        }
+        btn.textContent = conv.title || "Sans titre";
+        btn.addEventListener("click", () => {
+          void this.switchConversation(conv.id);
+        });
+        const archiveBtn = document.createElement("button");
+        archiveBtn.type = "button";
+        archiveBtn.className = "tdl-v2-conversation__archive";
+        archiveBtn.title = "Archiver";
+        archiveBtn.textContent = "×";
+        archiveBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          void this.archiveAndRefresh(conv.id);
+        });
+        li.append(btn, archiveBtn);
+        list.appendChild(li);
+      }
+    } catch {
+      /* list is optional on boot */
+    }
+  }
+
+  /** @param {string} conversationId */
+  async switchConversation(conversationId) {
+    if (!conversationId || this._busy) return;
+    this.interrupt();
+    try {
+      const { conversation, messages } = await loadConversation(conversationId);
+      saveConversationId(conversation.id);
+      this._store?.setState({ conversationId: conversation.id });
+      this._setTitle(conversation.title || "Conversation");
+      this._renderer.hydrateMessages(messages);
+      await this.refreshConversationList();
+    } catch (error) {
+      this._renderer.appendErrorCard(
+        error?.message || "Impossible de charger la conversation.",
+        { code: error?.code },
+      );
+    }
+  }
+
+  /** @param {string} conversationId */
+  async archiveAndRefresh(conversationId) {
+    try {
+      await archiveConversation(conversationId, true);
+      const active = this._store?.getState().conversationId ?? getStoredConversationId();
+      if (active === conversationId) {
+        await this.startNewConversation();
+      } else {
+        await this.refreshConversationList();
+      }
+    } catch (error) {
+      this._renderer.appendErrorCard(
+        error?.message || "Impossible d’archiver.",
+        { code: error?.code },
+      );
+    }
+  }
+
+  /** @param {string} title */
+  _setTitle(title) {
+    const el = document.getElementById("tdl-v2-conversation-title");
+    if (el) el.textContent = title || "Nouvelle conversation";
+  }
+
   /** @param {object} event */
   _onConversationActivity(event) {
     if (event.type === CONVERSATION_ACTIVITY_EVENTS.FINISHED) {
-      // Do not clear busy while typewriter is still running, or while
+      // Do not clear busy while typewriter/live stream is still running, or while
       // send() is still awaiting the HTTP result (response dispatch follows).
-      if (!this._streamTimer && !this._brain?._backendBridge?._submitting) {
+      if (
+        !this._streamTimer
+        && !this._receivedLiveDelta
+        && !this._brain?._backendBridge?._submitting
+      ) {
         this._clearBusyState();
       }
     }

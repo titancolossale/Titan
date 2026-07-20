@@ -233,6 +233,21 @@ export function routeBackendEvent(brain, store, type, data) {
         brain.setState(mapped, { source: "backend", force: true });
       }
       break;
+    case "text_delta":
+    case "token":
+      // Progressive tokens — do not rebuild neural/conversation stage caches.
+      break;
+    case "response_started":
+      if (data.neural_state) {
+        const mapped = NEURAL_TO_COGNITIVE[data.neural_state] ?? data.neural_state;
+        brain.setState(mapped, { source: "backend", force: true });
+      }
+      break;
+    case "response_completed":
+    case "acknowledged":
+    case "structured_error":
+    case "cancelled":
+      break;
     case "conversation_finished":
       brain.getConversationEngine().finishFromBackend(data);
       if (data.pipeline) {

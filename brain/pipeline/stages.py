@@ -474,7 +474,29 @@ class ThinkPipeline:
         if ctx.skip_llm:
             return
         logger.info("Calling LLM")
-        ctx.response = self.llm.ask(ctx.prompt)
+        on_delta = None
+        stream = self._stream
+        if stream is not None and hasattr(stream, "emit_text_delta"):
+            started_flag = {"done": False}
+
+            def on_delta(text: str) -> None:
+                if not started_flag["done"]:
+                    started_flag["done"] = True
+                    if hasattr(stream, "emit_response_started"):
+                        stream.emit_response_started()
+                stream.emit_text_delta(text)
+
+        ask_scoped = getattr(self.llm, "ask_scoped", None)
+        if callable(ask_scoped) and on_delta is not None:
+            # Prefer streaming when a cognitive stream is attached (Phase 12.1).
+            instructions = getattr(self.llm, "system_instructions", "")
+            ctx.response = ask_scoped(
+                ctx.prompt,
+                instructions,
+                on_text_delta=on_delta,
+            )
+        else:
+            ctx.response = self.llm.ask(ctx.prompt)
         self._emit_stream(
             "response_ready",
             {

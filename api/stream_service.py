@@ -260,6 +260,15 @@ def handle_chat_stream(
 
     def cognitive_callback(event_type: str, data: dict[str, Any]) -> None:
         label = data.get("label", event_type)
+        # Progressive token deltas must never be deduplicated.
+        if event_type in {"text_delta", "token", "response_started", "acknowledged"}:
+            publisher(event_type, data)
+            if event_type == "response_started":
+                _emit_legacy_alias(publisher, event_type, data)
+                neural = data.get("neural_state")
+                if neural:
+                    publisher("brain_state", {"state": neural})
+            return
         if label in seen_labels and event_type not in {
             "tool_execution",
             "memory_hit",
@@ -482,6 +491,8 @@ def handle_chat_stream(
         "conversation_id": payload.get("conversation_id"),
         "request_id": payload.get("request_id"),
         "message_id": payload.get("message_id"),
+        "assistant_message_id": payload.get("assistant_message_id"),
+        "user_message_id": payload.get("user_message_id"),
         "ok": payload.get("ok", True),
         "orchestrator_progress": orchestrator_progress,
         "tool_activity": tool_activity,
@@ -499,7 +510,29 @@ def handle_chat_stream(
         "duration_seconds": payload.get("duration_seconds"),
         "retryable": payload.get("retryable", False),
         "error_code": payload.get("error_code"),
+        "ttft_ms": payload.get("ttft_ms"),
+        "delta_count": payload.get("delta_count"),
     })
+    if payload.get("error_code"):
+        publisher("structured_error", {
+            "code": payload.get("error_code"),
+            "message": response,
+            "request_id": payload.get("request_id"),
+            "conversation_id": payload.get("conversation_id"),
+            "retryable": payload.get("retryable", False),
+        })
+    elif payload.get("ok", True):
+        publisher("response_completed", {
+            "request_id": payload.get("request_id"),
+            "conversation_id": payload.get("conversation_id"),
+            "message_id": payload.get("message_id"),
+            "chars": len(response or ""),
+        })
+    if payload.get("error_code") == "cancelled":
+        publisher("cancelled", {
+            "request_id": payload.get("request_id"),
+            "conversation_id": payload.get("conversation_id"),
+        })
     _emit_presence(publisher, "idle")
     publisher("brain_state", {"state": "idle"})
     publisher("telemetry", _build_telemetry(titan))

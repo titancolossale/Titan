@@ -526,7 +526,29 @@ class NaturalLanguageOrchestrator:
             systems_used.mark_invoked(SystemName.BRAIN_THINK)
             try:
                 check_deadline("fast_path")
-                fast = run_fast_path(self._brain, request)
+                on_delta = None
+                if stream is not None and hasattr(stream, "emit_text_delta"):
+                    started_flag = {"done": False}
+
+                    def on_delta(text: str) -> None:
+                        if not started_flag["done"]:
+                            started_flag["done"] = True
+                            if hasattr(stream, "emit_response_started"):
+                                stream.emit_response_started()
+                        stream.emit_text_delta(text)
+
+                history_text = ""
+                engine = getattr(self._brain, "conversation_engine", None)
+                if engine is not None and hasattr(engine, "get_prompt_window"):
+                    history_text = "\n".join(
+                        engine.get_prompt_window(current_message=request)
+                    )
+                fast = run_fast_path(
+                    self._brain,
+                    request,
+                    on_text_delta=on_delta,
+                    conversation_context=history_text,
+                )
                 response = fast["response"]
                 artifacts["fast_path"] = {
                     "selected": True,
@@ -536,6 +558,8 @@ class NaturalLanguageOrchestrator:
                     "prompt_chars": fast.get("prompt_chars"),
                     "prompt_tokens_est": fast.get("prompt_tokens_est"),
                     "model": fast.get("model"),
+                    "ttft_ms": fast.get("ttft_ms"),
+                    "delta_count": fast.get("delta_count"),
                 }
                 artifacts["awareness"] = {
                     "user": analysis.user,

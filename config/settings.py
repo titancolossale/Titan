@@ -30,7 +30,7 @@ MEMORY_DIR = _resolve_runtime_path(
 load_dotenv(ENV_FILE_PATH)
 
 TITAN_NAME = "Titan"
-VERSION = "0.43.1"
+VERSION = "0.44.0"
 CREATOR = "Nolan Hassing"
 
 LOG_LEVEL = os.getenv("TITAN_LOG_LEVEL", "INFO")
@@ -498,6 +498,25 @@ TITAN_COOKIE_SECURE = (
     os.getenv("TITAN_COOKIE_SECURE", os.getenv("COOKIE_SECURE", "false")).lower() == "true"
 )
 TITAN_DATABASE_URL = os.getenv("TITAN_DATABASE_URL", os.getenv("DATABASE_URL", "")).strip()
+
+# Phase 12.1 — Durable web conversation history (not long-term memory / not Obsidian)
+TITAN_CONVERSATION_PERSISTENCE_ENABLED = (
+    os.getenv("TITAN_CONVERSATION_PERSISTENCE_ENABLED", "true").lower() == "true"
+)
+# When true, /ready fails if the conversation DB cannot be reached or migrated.
+TITAN_CONVERSATION_PERSISTENCE_REQUIRED = (
+    os.getenv(
+        "TITAN_CONVERSATION_PERSISTENCE_REQUIRED",
+        "true" if TITAN_APP_ENV in {"production", "prod", "staging"} else "false",
+    ).lower()
+    == "true"
+)
+TITAN_CONVERSATION_CONTEXT_MAX_TOKENS = int(
+    os.getenv("TITAN_CONVERSATION_CONTEXT_MAX_TOKENS", "3000")
+)
+TITAN_CONVERSATION_STREAM_ENABLED = (
+    os.getenv("TITAN_CONVERSATION_STREAM_ENABLED", "true").lower() == "true"
+)
 
 # Phase 10.3 — Private production authentication (session cookies)
 # Never put plaintext passwords here. Use TITAN_AUTH_PASSWORD_HASH only.

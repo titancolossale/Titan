@@ -132,7 +132,13 @@ def _compact_context(brain: Brain) -> str:
         return ""
 
 
-def run_fast_path(brain: Brain, message: str) -> dict[str, Any]:
+def run_fast_path(
+    brain: Brain,
+    message: str,
+    *,
+    on_text_delta: Any | None = None,
+    conversation_context: str = "",
+) -> dict[str, Any]:
     """Call the primary conversational model with a compact prompt.
 
     Returns a dict with response text and safe telemetry. Does not run
@@ -141,6 +147,11 @@ def run_fast_path(brain: Brain, message: str) -> dict[str, Any]:
     check_deadline("fast_path_start")
     user = getattr(brain.context_manager, "current_user", None)
     compact = _compact_context(brain)
+    if conversation_context:
+        clipped_history = conversation_context.strip()[:TITAN_FAST_PATH_MAX_CONTEXT_CHARS * 4]
+        compact = f"{compact}\nHistorique récent:\n{clipped_history}".strip() if compact else (
+            f"Historique récent:\n{clipped_history}"
+        )
     prompt = build_fast_path_prompt(message, user=user, compact_context=compact)
     prompt_chars = len(prompt)
     prompt_tokens = estimate_tokens(prompt)
@@ -152,12 +163,13 @@ def run_fast_path(brain: Brain, message: str) -> dict[str, Any]:
 
     logger.info(
         "CHAT_FAST_PATH_PROVIDER request_id=%s model=%s prompt_chars=%d "
-        "prompt_tokens_est=%d max_output_tokens=%d",
+        "prompt_tokens_est=%d max_output_tokens=%d stream=%s",
         request_id or "-",
         model_name,
         prompt_chars,
         prompt_tokens,
         TITAN_FAST_PATH_MAX_OUTPUT_TOKENS,
+        bool(on_text_delta),
     )
 
     check_deadline("provider_start")
@@ -169,6 +181,7 @@ def run_fast_path(brain: Brain, message: str) -> dict[str, Any]:
             prompt,
             max_output_tokens=TITAN_FAST_PATH_MAX_OUTPUT_TOKENS,
             request_id=request_id,
+            on_text_delta=on_text_delta,
         )
     else:
         response = llm.ask(prompt)
@@ -185,4 +198,6 @@ def run_fast_path(brain: Brain, message: str) -> dict[str, Any]:
         "agents_skipped": True,
         "oversized_context_skipped": True,
         "max_output_tokens": TITAN_FAST_PATH_MAX_OUTPUT_TOKENS,
+        "ttft_ms": getattr(llm, "last_ttft_ms", None),
+        "delta_count": getattr(llm, "last_delta_count", 0),
     }

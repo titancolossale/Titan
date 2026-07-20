@@ -391,6 +391,12 @@ export function wireSettingsAuthControls() {
       /* ignore */
     }
     await logoutSession();
+    try {
+      const { clearConversationSession } = await import("./conversation-session.js");
+      clearConversationSession();
+    } catch {
+      /* ignore */
+    }
     if (input) input.value = "";
     if (statusEl) statusEl.textContent = "Déconnecté.";
     window.location.assign("/login");

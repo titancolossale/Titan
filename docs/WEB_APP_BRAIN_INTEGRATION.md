@@ -232,26 +232,38 @@ After redeploy:
 | Memory retrieval | Wired in `Brain.think()` for conversation intents |
 | Tools | Wired via think pipeline / NLO tool intents; confirmation gates enforced |
 | Obsidian on Railway | Not available (no local vault) |
-| LLM token streaming | Not in V1 — full response then typewriter UI |
-| Conversation history REST | Not yet — in-process + client `conversation_id` |
+| LLM token streaming | **Phase 12.1** — real `text_delta` SSE when provider streams |
+| Conversation history REST | **Phase 12.1** — `/api/conversations*` + durable DB |
 | Approval submit API | Banner only; submit endpoint deferred |
 | Voice / Trading / Gmail | Not part of Step 11.1 chat path |
 
 ---
 
-## Next recommended step (11.2)
+## Phase 12.1 — conversation continuity
 
-**Persistent conversation continuity + streaming tokens**
+See `docs/WEB_APP_CONVERSATIONS.md` for:
 
-- Durable conversation history API keyed by `conversation_id`
-- Optional true token SSE from the LLM gateway
-- Approval action endpoint for gated tool/patch flows
-- Production smoke checklist automated against Railway staging
+- Durable conversation + message schema
+- Context hydration into `ConversationEngine`
+- Progressive token streaming (`text_delta`)
+- Refresh / logout / reconnect behavior
+
+---
+
+## Next recommended step (12.2)
+
+**Sanitized Markdown + multi-worker session hardening**
+
+- Optional sanitized Markdown rendering for assistant bubbles
+- Stronger title refine with a cheap model (still non-blocking)
+- Sticky session or shared session store if multi-replica Railway is required
+- Automated Railway smoke for restart persistence
 
 ---
 
 ## Related docs
 
-- `docs/WEB_RUNTIME.md` — Web Runtime V1 architecture
+- `docs/WEB_APP_CONVERSATIONS.md` — Phase 12.1 conversations
+- `docs/WEB_RUNTIME.md` — Web Runtime architecture
 - `docs/TITAN_PRIVATE_AUTHENTICATION.md` — session auth
-- `docs/RAILWAY_DEPLOYMENT.md` — deploy / health
+- `docs/RAILWAY_DEPLOYMENT.md` — deploy / health / Postgres

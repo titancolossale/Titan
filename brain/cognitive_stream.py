@@ -149,6 +149,31 @@ class CognitiveStreamEmitter:
         self._thinking = False
         self._current_stage = None
 
+    def emit_text_delta(self, text: str) -> None:
+        """Emit a progressive response token/text delta without bloating stage history."""
+        if not text:
+            return
+        payload = {
+            "text": text,
+            "stage": "text_delta",
+            "sequence": self._sequence,
+            "timestamp": time.time(),
+        }
+        self._sequence += 1
+        if self._callback is not None:
+            self._callback("text_delta", payload)
+
+    def emit_response_started(self) -> None:
+        """Mark that the model has begun producing visible response text."""
+        self.emit(
+            "response_started",
+            {
+                "label": "Réponse en cours…",
+                "neural_state": "thinking",
+                "phase": "writing",
+            },
+        )
+
     def snapshot(self) -> dict[str, Any]:
         """Return pipeline state for conversation_finished payload."""
         return {

@@ -508,10 +508,14 @@ export class BackendBridge {
       return {
         response: responseText,
         orchestration: orchestrationPayload,
-        conversation_id: conversationId,
+        conversation_id:
+          orchestrationPayload?.conversation_id
+          || conversationId,
         request_id: requestId,
         client_request_id: requestId,
         error_code: finishedErrorCode,
+        ttft_ms: orchestrationPayload?.ttft_ms ?? null,
+        delta_count: orchestrationPayload?.delta_count ?? null,
         ...options,
       };
     } catch (error) {

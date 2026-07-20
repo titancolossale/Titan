@@ -120,20 +120,21 @@ See `docs/WEB_APP_BRAIN_INTEGRATION.md` for the full contract, error codes, and 
 
 ## Session handling
 
-- `conversation_id` is echoed from the client or defaults to `context.session.session_id`.
-- Client persistence: `web/v2/core/conversation-session.js` (`localStorage`).
-- Conversation turns recorded via existing `Conversation` / `ConversationEngine` — the web layer is **not** a second memory system.
-- No REST history API in V1; persistence uses in-process conversation engine (optional disk via `TITAN_CONVERSATION_PERSIST`).
+- `conversation_id` is a durable server conversation key (Phase 12.1).
+- Client cache: `web/v2/core/conversation-session.js` (`localStorage`) stores the **active** id only — not message bodies.
+- Durable history: PostgreSQL / SQLite via `core/web_conversations/` (see `docs/WEB_APP_CONVERSATIONS.md`).
+- Per-turn: durable messages hydrate `ConversationEngine` for Brain prompt context.
+- REST: `GET/POST/PATCH /api/conversations*` (authenticated).
 
 ---
 
-## Streaming (V1)
+## Streaming
 
-- **Production path:** `POST /chat/stream` — SSE stage events + orchestration metadata.
-- **Persistent hub:** `GET /events/stream` — status, brain_state, telemetry.
-- Conversation intents forward `CognitiveStreamEmitter` into `think()` via NLO.
-- Non-conversation intents emit synthetic orchestration stages.
-- **Not in V1:** LLM token streaming, WebSocket (see Web Runtime V2).
+- **Production path:** `POST /chat/stream` — SSE cognitive stages + **real** `text_delta` tokens when the provider streams.
+- **Persistent hub:** `GET /events/stream` — status, brain_state, telemetry (not message text).
+- Conversation intents forward `CognitiveStreamEmitter` into `think()` / fast path.
+- Compatibility: `conversation_finished` still carries the full response.
+- UI paints deltas at a throttled cadence; typewriter is fallback only when no deltas arrive.
 
 ---
 
@@ -214,10 +215,11 @@ pytest tests/test_web_runtime.py tests/test_web_v2_frontend.py tests/test_web_ap
 ## Web Runtime V2 roadmap
 
 - Approval submission endpoint wired to Permission Manager
-- Conversation history REST API
-- LLM token streaming (optional)
+- ~~Conversation history REST API~~ — **done Phase 12.1**
+- ~~LLM token streaming~~ — **done Phase 12.1** (`text_delta`)
+- Sanitized Markdown rendering (Step 12.2)
 - WebSocket alternative to SSE (only if justified)
-- Per-user session tokens (beyond shared secret)
+- Shared auth session store for multi-replica
 - Connection status telemetry wired in status region
 
 ---
