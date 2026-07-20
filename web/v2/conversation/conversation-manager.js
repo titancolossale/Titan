@@ -64,6 +64,12 @@ export class ConversationManager {
     this._thinkingStartedAt = 0;
     /** @type {(event: Event) => void} */
     this._onSendClick = () => {
+      // TEMP production path trace — remove after Railway confirmation.
+      console.info("SEND_CLICK", {
+        busy: this._busy,
+        hasInput: Boolean(this._input),
+        hasEmit: typeof this._brain?.emit === "function",
+      });
       void this.send();
     };
     /** @type {(event: Event) => void} */
@@ -76,6 +82,12 @@ export class ConversationManager {
     this._onInputKeydown = (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
+        // TEMP production path trace — remove after Railway confirmation.
+        console.info("SEND_CLICK", {
+          source: "keydown_enter",
+          busy: this._busy,
+          hasEmit: typeof this._brain?.emit === "function",
+        });
         void this.send();
       }
     };
@@ -201,12 +213,34 @@ export class ConversationManager {
         conversation_id: this._store?.getState().conversationId ?? getStoredConversationId(),
       });
 
-      const result = await this._brain.emit?.("send_message", {
-        message: text,
-        request_id: requestId,
-        client_request_id: requestId,
-        conversation_id: this._store?.getState().conversationId ?? getStoredConversationId(),
-      });
+      // TEMP production path trace — remove after Railway confirmation.
+      if (typeof this._brain?.emit !== "function") {
+        console.info("FETCH_ERROR", {
+          stage: "pre_fetch",
+          code: "emit_missing",
+          request_id: requestId,
+        });
+      }
+
+      let result;
+      try {
+        result = await this._brain.emit?.("send_message", {
+          message: text,
+          request_id: requestId,
+          client_request_id: requestId,
+          conversation_id: this._store?.getState().conversationId ?? getStoredConversationId(),
+        });
+      } catch (emitErr) {
+        // Surfaces exceptions thrown before fetch() or during stream handling.
+        console.info("FETCH_ERROR", {
+          stage: "emit_or_stream",
+          request_id: requestId,
+          name: emitErr?.name ?? null,
+          code: emitErr?.code ?? null,
+          message: String(emitErr?.message ?? emitErr),
+        });
+        throw emitErr;
+      }
 
       // Abandoned after Stop / newer send — never render late results.
       if (generation !== this._activeGeneration) {

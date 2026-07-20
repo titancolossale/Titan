@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from urllib.parse import quote, urlparse
 
+import logging
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse, Response
@@ -19,6 +21,8 @@ from api.session_manager import (
     SESSION_COOKIE_NAME,
     get_session_manager,
 )
+
+logger = logging.getLogger(__name__)
 
 # Exact public paths (no authentication).
 _PUBLIC_EXACT = frozenset(
@@ -134,10 +138,21 @@ class PrivateAuthMiddleware(BaseHTTPMiddleware):
     """Enforce session authentication when private auth is enabled."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        path = request.url.path
+
+        # TEMP production path trace — remove after Railway confirmation.
+        if request.method == "POST" and (
+            path.startswith("/chat") or path.startswith("/api/chat")
+        ):
+            logger.info(
+                "REQUEST_RECEIVED ROUTE_NAME=PrivateAuthMiddleware REQUEST_ID=- "
+                "method=%s path=%s",
+                request.method,
+                path,
+            )
+
         if not is_session_auth_enabled():
             return await call_next(request)
-
-        path = request.url.path
 
         # CORS preflight must remain reachable.
         if request.method == "OPTIONS":
@@ -149,6 +164,14 @@ class PrivateAuthMiddleware(BaseHTTPMiddleware):
         session_id = request.cookies.get(SESSION_COOKIE_NAME)
         session = get_session_manager().get_session(session_id)
         if session is None:
+            if request.method == "POST" and (
+                path.startswith("/chat") or path.startswith("/api/chat")
+            ):
+                logger.info(
+                    "ROUTE_EXIT ROUTE_NAME=PrivateAuthMiddleware REQUEST_ID=- "
+                    "status=unauthenticated path=%s",
+                    path,
+                )
             return self._reject_unauthenticated(request)
 
         request.state.titan_session = session
@@ -157,6 +180,12 @@ class PrivateAuthMiddleware(BaseHTTPMiddleware):
         # CSRF protection for cookie-authenticated state changes.
         if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
             if not _origin_allowed(request):
+                if path.startswith("/chat") or path.startswith("/api/chat"):
+                    logger.info(
+                        "ROUTE_EXIT ROUTE_NAME=PrivateAuthMiddleware REQUEST_ID=- "
+                        "status=origin_forbidden path=%s",
+                        path,
+                    )
                 return JSONResponse(
                     status_code=403,
                     content={"detail": "Forbidden"},
@@ -165,6 +194,12 @@ class PrivateAuthMiddleware(BaseHTTPMiddleware):
             csrf_cookie = request.cookies.get(CSRF_COOKIE_NAME)
             token = csrf_header or csrf_cookie
             if not get_session_manager().validate_csrf(session, token):
+                if path.startswith("/chat") or path.startswith("/api/chat"):
+                    logger.info(
+                        "ROUTE_EXIT ROUTE_NAME=PrivateAuthMiddleware REQUEST_ID=- "
+                        "status=csrf_invalid path=%s",
+                        path,
+                    )
                 return JSONResponse(
                     status_code=403,
                     content={"detail": "CSRF token invalide."},

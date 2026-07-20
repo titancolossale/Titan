@@ -319,22 +319,64 @@ export class BackendBridge {
         conversation_id: conversationId,
       });
 
-      const httpResponse = await fetch("/chat/stream", {
+      const fetchUrl = "/chat/stream";
+      const fetchHeaders = {
+        "Content-Type": "application/json",
+        ...authHeaders(),
+      };
+      const fetchBody = JSON.stringify({
+        message: text,
+        user: options.user ?? null,
+        conversation_id: conversationId,
+        request_id: requestId,
+        client_request_id: requestId,
+        client_metadata: options.client_metadata ?? null,
+      });
+
+      // TEMP production path trace — remove after Railway confirmation.
+      console.info("FETCH_BEGIN", {
         method: "POST",
-        signal: this._chatAbort.signal,
-        credentials: "same-origin",
-        headers: {
-          "Content-Type": "application/json",
-          ...authHeaders(),
-        },
-        body: JSON.stringify({
-          message: text,
-          user: options.user ?? null,
-          conversation_id: conversationId,
+        request_id: requestId,
+        submitting: this._submitting,
+      });
+      console.info("FETCH_URL", { url: fetchUrl, method: "POST" });
+      console.info("FETCH_HEADERS", {
+        keys: Object.keys(fetchHeaders),
+        has_csrf: Boolean(fetchHeaders["X-CSRF-Token"]),
+        has_authorization: Boolean(fetchHeaders.Authorization),
+      });
+      console.info("FETCH_BODY", {
+        message_length: text.length,
+        conversation_id: conversationId,
+        request_id: requestId,
+        client_request_id: requestId,
+        body_chars: fetchBody.length,
+      });
+
+      let httpResponse;
+      try {
+        httpResponse = await fetch(fetchUrl, {
+          method: "POST",
+          signal: this._chatAbort.signal,
+          credentials: "same-origin",
+          headers: fetchHeaders,
+          body: fetchBody,
+        });
+      } catch (fetchErr) {
+        console.info("FETCH_ERROR", {
           request_id: requestId,
-          client_request_id: requestId,
-          client_metadata: options.client_metadata ?? null,
-        }),
+          name: fetchErr?.name ?? null,
+          code: fetchErr?.code ?? null,
+          message: String(fetchErr?.message ?? fetchErr),
+        });
+        throw fetchErr;
+      }
+
+      console.info("FETCH_END", {
+        request_id: requestId,
+        status: httpResponse.status,
+        ok: httpResponse.ok,
+        content_type: httpResponse.headers.get("content-type"),
       });
 
       if (!httpResponse.ok) {

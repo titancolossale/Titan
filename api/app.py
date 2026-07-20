@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -63,12 +64,34 @@ from config.settings import (
 )
 from voice.voice_manager import VoiceManager
 
+logger = logging.getLogger(__name__)
+
 # Canonical production frontend: web/v2/ (approved final Titan Web App).
 # Legacy V1 UI remains under web/static/ for compatibility only — never the default.
 WEB_ROOT = Path(__file__).resolve().parent.parent / "web"
 STATIC_DIR = WEB_ROOT / "static"
 V2_DIR = WEB_ROOT / "v2"
 CANONICAL_APP_PATH = "/app/"
+
+
+def _trace_request_received(route_name: str, request_id: str | None) -> None:
+    """TEMP production path trace — remove after Railway confirmation."""
+    logger.info(
+        "REQUEST_RECEIVED ROUTE_NAME=%s REQUEST_ID=%s",
+        route_name,
+        request_id or "-",
+    )
+
+
+def _trace_route_exit(route_name: str, request_id: str | None, **extra: Any) -> None:
+    """TEMP production path trace — remove after Railway confirmation."""
+    extras = " ".join(f"{k}={v}" for k, v in extra.items())
+    logger.info(
+        "ROUTE_EXIT ROUTE_NAME=%s REQUEST_ID=%s %s",
+        route_name,
+        request_id or "-",
+        extras.strip(),
+    )
 
 
 class ChatRequest(BaseModel):
@@ -230,6 +253,8 @@ def create_app() -> FastAPI:
     )
     def chat_contract(body: ChatMessageRequest) -> dict[str, Any] | JSONResponse:
         """Phase 11.1 production chat contract — Brain.process_request()."""
+        req_id = body.request_id
+        _trace_request_received("chat_contract:/api/chat", req_id)
         try:
             payload = process_chat_message(
                 body.message,
@@ -239,6 +264,11 @@ def create_app() -> FastAPI:
                 client_metadata=body.client_metadata,
             )
         except ValueError as exc:
+            _trace_route_exit(
+                "chat_contract:/api/chat",
+                req_id,
+                status="invalid_request",
+            )
             return _chat_contract_error(
                 code="invalid_request",
                 message=str(exc),
@@ -248,6 +278,11 @@ def create_app() -> FastAPI:
                 http_status=400,
             )
         except Exception:
+            _trace_route_exit(
+                "chat_contract:/api/chat",
+                req_id,
+                status="internal_error",
+            )
             return _chat_contract_error(
                 code="internal_error",
                 message="Erreur interne pendant le traitement du message.",
@@ -261,6 +296,11 @@ def create_app() -> FastAPI:
             not payload.get("ok", True)
             and PROVIDER_UNAVAILABLE_CODE in (payload.get("errors") or [])
         ):
+            _trace_route_exit(
+                "chat_contract:/api/chat",
+                payload.get("request_id") or req_id,
+                status=PROVIDER_UNAVAILABLE_CODE,
+            )
             return _chat_contract_error(
                 code=PROVIDER_UNAVAILABLE_CODE,
                 message=PROVIDER_UNAVAILABLE_MESSAGE,
@@ -275,6 +315,11 @@ def create_app() -> FastAPI:
             not payload.get("ok", True)
             and BRAIN_TIMEOUT_CODE in (payload.get("errors") or [])
         ):
+            _trace_route_exit(
+                "chat_contract:/api/chat",
+                payload.get("request_id") or req_id,
+                status=BRAIN_TIMEOUT_CODE,
+            )
             return _chat_contract_error(
                 code=BRAIN_TIMEOUT_CODE,
                 message=BRAIN_TIMEOUT_MESSAGE,
@@ -290,6 +335,11 @@ def create_app() -> FastAPI:
             not payload.get("ok", True)
             and PROVIDER_TIMEOUT_CODE in (payload.get("errors") or [])
         ):
+            _trace_route_exit(
+                "chat_contract:/api/chat",
+                payload.get("request_id") or req_id,
+                status=PROVIDER_TIMEOUT_CODE,
+            )
             return _chat_contract_error(
                 code=PROVIDER_TIMEOUT_CODE,
                 message=PROVIDER_TIMEOUT_MESSAGE,
@@ -302,6 +352,11 @@ def create_app() -> FastAPI:
             )
 
         if BRAIN_FAILURE_CODE in (payload.get("errors") or []):
+            _trace_route_exit(
+                "chat_contract:/api/chat",
+                payload.get("request_id") or req_id,
+                status=BRAIN_FAILURE_CODE,
+            )
             return _chat_contract_error(
                 code=BRAIN_FAILURE_CODE,
                 message=payload.get("response")
@@ -313,6 +368,11 @@ def create_app() -> FastAPI:
                 http_status=500,
             )
 
+        _trace_route_exit(
+            "chat_contract:/api/chat",
+            payload.get("request_id") or req_id,
+            status="ok",
+        )
         return payload
 
     @app.post(
@@ -322,6 +382,8 @@ def create_app() -> FastAPI:
     )
     def chat_message(body: ChatMessageRequest) -> ChatMessageResponse | JSONResponse:
         """Authenticated chat endpoint — Brain.process_request() (Web Runtime V1)."""
+        req_id = body.request_id
+        _trace_request_received("chat_message:/api/chat/message", req_id)
         try:
             payload = process_chat_message(
                 body.message,
@@ -332,8 +394,18 @@ def create_app() -> FastAPI:
             )
             model_fields = set(ChatMessageResponse.model_fields)
             trimmed = {k: v for k, v in payload.items() if k in model_fields}
+            _trace_route_exit(
+                "chat_message:/api/chat/message",
+                payload.get("request_id") or req_id,
+                status="ok",
+            )
             return ChatMessageResponse(**trimmed)
         except ValueError as exc:
+            _trace_route_exit(
+                "chat_message:/api/chat/message",
+                req_id,
+                status="invalid_request",
+            )
             return JSONResponse(
                 status_code=400,
                 content=ChatErrorResponse.from_parts(
@@ -345,6 +417,11 @@ def create_app() -> FastAPI:
                 ).model_dump(),
             )
         except Exception:
+            _trace_route_exit(
+                "chat_message:/api/chat/message",
+                req_id,
+                status="internal_error",
+            )
             return JSONResponse(
                 status_code=500,
                 content=ChatErrorResponse.from_parts(
@@ -359,17 +436,25 @@ def create_app() -> FastAPI:
     @app.post("/chat", dependencies=[Depends(require_web_auth)])
     def chat(body: ChatRequest) -> ChatResponse:
         """Legacy sync chat — delegates to Brain.process_request()."""
+        req_id = body.resolved_request_id()
+        _trace_request_received("chat:/chat", req_id)
         try:
             validate_message_size(body.message)
         except ValueError as exc:
+            _trace_route_exit("chat:/chat", req_id, status="invalid_request")
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         response, tool_activity, memory_activity, orchestrator_progress, payload = handle_chat(
             body.message,
             user=body.user,
             conversation_id=body.conversation_id,
-            request_id=body.resolved_request_id(),
+            request_id=req_id,
             client_metadata=body.client_metadata,
+        )
+        _trace_route_exit(
+            "chat:/chat",
+            payload.get("request_id") or req_id,
+            status="ok",
         )
         return ChatResponse(
             response=response,
@@ -418,16 +503,28 @@ def create_app() -> FastAPI:
     @app.post("/chat/stream", dependencies=[Depends(require_web_auth)])
     async def chat_stream(body: ChatRequest) -> StreamingResponse:
         """Stream sanitized cognitive events during Brain.process_request() via SSE."""
+        request_id = body.resolved_request_id()
+        _trace_request_received("chat_stream:/chat/stream", request_id)
+
         if not (body.message or "").strip():
+            _trace_route_exit(
+                "chat_stream:/chat/stream",
+                request_id,
+                status="empty_message",
+            )
             raise HTTPException(status_code=400, detail="Message cannot be empty.")
         try:
             validate_message_size(body.message)
         except ValueError as exc:
+            _trace_route_exit(
+                "chat_stream:/chat/stream",
+                request_id,
+                status="invalid_request",
+            )
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         queue: asyncio.Queue[str | None] = asyncio.Queue()
         loop = asyncio.get_running_loop()
-        request_id = body.resolved_request_id()
 
         def emit(event_type: str, data: dict) -> None:
             frame = format_sse_event(event_type, data)
@@ -475,7 +572,17 @@ def create_app() -> FastAPI:
                 cancel_chat_request(request_id)
                 if not task.done():
                     task.cancel()
+                _trace_route_exit(
+                    "chat_stream:/chat/stream",
+                    request_id,
+                    status="stream_closed",
+                )
 
+        _trace_route_exit(
+            "chat_stream:/chat/stream",
+            request_id,
+            status="streaming_response_returned",
+        )
         return StreamingResponse(
             generate(),
             media_type="text/event-stream",
