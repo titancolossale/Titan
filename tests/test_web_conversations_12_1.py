@@ -18,7 +18,9 @@ from core.web_conversations.context import select_recent_messages, estimate_toke
 from core.web_conversations.db import (
     apply_migrations,
     backend_name,
+    conversations_table,
     create_conversation_engine,
+    messages_table,
     resolve_database_url,
     reset_engine,
 )
@@ -99,6 +101,100 @@ def test_postgres_scheme_alias_normalized() -> None:
     url = resolve_database_url(database_url="postgres://user:pass@host/db")
     assert url.startswith("postgresql://")
     assert backend_name(url) == "postgresql"
+
+
+def test_postgresql_boolean_defaults_compile_to_false_not_integer() -> None:
+    """Boolean server defaults must emit FALSE/true for PostgreSQL, never 0/1."""
+    from sqlalchemy.dialects import postgresql
+    from sqlalchemy.schema import CreateTable
+
+    ddl = str(
+        CreateTable(conversations_table).compile(dialect=postgresql.dialect())
+    ).lower()
+    assert "archived" in ddl
+    assert "boolean" in ddl
+    assert "default false" in ddl or "default true" in ddl
+    # Integer literals are invalid Boolean defaults on PostgreSQL.
+    assert "default 0" not in ddl
+    assert "default 1" not in ddl
+
+
+def test_sqlite_boolean_defaults_remain_compatible() -> None:
+    """sql.false() must still compile to a SQLite-accepted Boolean default."""
+    from sqlalchemy.dialects import sqlite
+    from sqlalchemy.schema import CreateTable
+
+    ddl = str(CreateTable(conversations_table).compile(dialect=sqlite.dialect())).lower()
+    assert "archived" in ddl
+    # SQLite accepts 0/1 for BOOLEAN; SQLAlchemy emits 0 for sql.false().
+    assert "default 0" in ddl or "default false" in ddl
+
+
+def test_no_boolean_columns_use_integer_server_default_text() -> None:
+    """Guard every Boolean column — integer text('0') breaks PostgreSQL DDL."""
+    from sqlalchemy import Boolean
+    from sqlalchemy.dialects import postgresql
+    from sqlalchemy.schema import CreateTable
+    from sqlalchemy.sql.elements import False_, True_
+
+    found_boolean = 0
+    for table in (conversations_table, messages_table):
+        for col in table.columns:
+            if not isinstance(col.type, Boolean):
+                continue
+            found_boolean += 1
+            default = col.server_default
+            assert default is not None, f"{table.name}.{col.name} missing server_default"
+            arg = getattr(default, "arg", None)
+            assert isinstance(arg, (False_, True_)), (
+                f"{table.name}.{col.name} must use sql.false()/sql.true(), got {type(arg)!r}"
+            )
+        # Full-table DDL must not emit integer Boolean defaults on PostgreSQL.
+        ddl = str(CreateTable(table).compile(dialect=postgresql.dialect())).lower()
+        # Only assert against Boolean columns present in this table.
+        if any(isinstance(c.type, Boolean) for c in table.columns):
+            assert "default 0" not in ddl
+            assert "default 1" not in ddl
+
+    assert found_boolean >= 1, "expected at least archived Boolean column"
+
+
+def test_apply_migrations_idempotent_on_sqlite(tmp_path: Path) -> None:
+    """Repeated migration calls must not fail or re-apply the same version."""
+    engine = create_conversation_engine(
+        force_sqlite=True,
+        sqlite_path=tmp_path / "idempotent.db",
+    )
+    first = apply_migrations(engine)
+    second = apply_migrations(engine)
+    third = apply_migrations(engine)
+    assert "001_web_conversations" in first
+    assert second == []
+    assert third == []
+    with engine.connect() as conn:
+        from sqlalchemy import text
+
+        versions = [
+            row[0]
+            for row in conn.execute(
+                text("SELECT version FROM web_conversation_schema_migrations")
+            )
+        ]
+        assert versions.count("001_web_conversations") == 1
+        # Boolean default works at insert time on SQLite.
+        conn.execute(
+            text(
+                "INSERT INTO web_conversations "
+                "(id, user_id, title, created_at, updated_at) "
+                "VALUES ('c1', 'Nolan', 'T', '2026-01-01', '2026-01-01')"
+            )
+        )
+        archived = conn.execute(
+            text("SELECT archived FROM web_conversations WHERE id = 'c1'")
+        ).scalar()
+        assert archived in (0, False)
+        conn.commit()
+    engine.dispose()
 
 
 def test_sqlite_default_when_database_url_empty(tmp_path: Path) -> None:

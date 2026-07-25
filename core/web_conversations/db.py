@@ -24,6 +24,7 @@ from sqlalchemy import (
     create_engine,
     event,
     inspect,
+    sql,
     text,
 )
 from sqlalchemy.engine import Engine
@@ -42,7 +43,8 @@ conversations_table = Table(
     Column("title", String(200), nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
-    Column("archived", Boolean, nullable=False, server_default=text("0")),
+    # Portable Boolean default: PostgreSQL → FALSE, SQLite → 0 (not integer literal on PG).
+    Column("archived", Boolean, nullable=False, server_default=sql.false()),
     Column("metadata_json", Text, nullable=False, server_default=text("'{}'")),
 )
 
@@ -186,8 +188,46 @@ def reset_engine() -> None:
         _engine_url = None
 
 
+def _ensure_conversation_indexes(conn: Any) -> None:
+    """Create ownership/ordering indexes idempotently (never DROP)."""
+    conn.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_web_conversations_user_updated "
+            "ON web_conversations (user_id, updated_at)"
+        )
+    )
+    conn.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_web_messages_conv_seq "
+            "ON web_messages (conversation_id, sequence, created_at)"
+        )
+    )
+    # Idempotent assistant finalization key (SQLite/Postgres compatible unique)
+    try:
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS "
+                "ux_web_messages_assistant_request "
+                "ON web_messages (conversation_id, request_id, role) "
+                "WHERE request_id IS NOT NULL AND role = 'assistant'"
+            )
+        )
+    except Exception:
+        # Some SQLite builds reject partial indexes in older modes — app-level guard remains.
+        logger.debug(
+            "Partial unique index unavailable; relying on app-level idempotency",
+            exc_info=True,
+        )
+
+
 def apply_migrations(engine: Engine | None = None) -> list[str]:
-    """Apply explicit, idempotent schema migrations. Never drops production tables."""
+    """Apply explicit, idempotent schema migrations. Never drops production tables.
+
+    Failed runs roll back within the transaction (PostgreSQL transactional DDL), so a
+    prior Boolean-default failure leaves no half-applied migration marker. Re-running
+    after a schema fix is safe. If a migration version row exists but base tables are
+    missing, tables/indexes are recreated without DROP.
+    """
     eng = engine or get_engine()
     applied: list[str] = []
     with eng.begin() as conn:
@@ -205,35 +245,7 @@ def apply_migrations(engine: Engine | None = None) -> list[str]:
                 conn,
                 tables=[conversations_table, messages_table],
             )
-            # Indexes for ownership + ordering
-            conn.execute(
-                text(
-                    "CREATE INDEX IF NOT EXISTS ix_web_conversations_user_updated "
-                    "ON web_conversations (user_id, updated_at)"
-                )
-            )
-            conn.execute(
-                text(
-                    "CREATE INDEX IF NOT EXISTS ix_web_messages_conv_seq "
-                    "ON web_messages (conversation_id, sequence, created_at)"
-                )
-            )
-            # Idempotent assistant finalization key (SQLite/Postgres compatible unique)
-            try:
-                conn.execute(
-                    text(
-                        "CREATE UNIQUE INDEX IF NOT EXISTS "
-                        "ux_web_messages_assistant_request "
-                        "ON web_messages (conversation_id, request_id, role) "
-                        "WHERE request_id IS NOT NULL AND role = 'assistant'"
-                    )
-                )
-            except Exception:
-                # Some SQLite builds reject partial indexes in older modes — app-level guard remains.
-                logger.debug(
-                    "Partial unique index unavailable; relying on app-level idempotency",
-                    exc_info=True,
-                )
+            _ensure_conversation_indexes(conn)
             from core.web_conversations.models import utc_now
 
             conn.execute(
@@ -246,7 +258,7 @@ def apply_migrations(engine: Engine | None = None) -> list[str]:
             applied.append(version)
             logger.info("CONVERSATION_MIGRATION_APPLIED version=%s", version)
 
-        # Ensure base tables exist even if migration row was present but tables missing
+        # Recover partial state: migration marker without tables (never DROP).
         inspector = inspect(conn)
         names = set(inspector.get_table_names())
         if "web_conversations" not in names or "web_messages" not in names:
@@ -254,6 +266,10 @@ def apply_migrations(engine: Engine | None = None) -> list[str]:
                 conn,
                 tables=[conversations_table, messages_table],
             )
+            _ensure_conversation_indexes(conn)
+        elif version in existing:
+            # Marker + tables present: still ensure indexes (idempotent IF NOT EXISTS).
+            _ensure_conversation_indexes(conn)
 
     return applied
 
