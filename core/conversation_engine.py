@@ -44,6 +44,7 @@ class ConversationEngine:
         self._turns: list[ConversationTurn] = []
         self._archived_summary: str | None = None
         self._archived_turn_count: int = 0
+        self._pinned_facts_payload: dict[str, Any] = {}
 
     @property
     def session_id(self) -> str:
@@ -133,6 +134,7 @@ class ConversationEngine:
         self._turns.clear()
         self._archived_summary = None
         self._archived_turn_count = 0
+        self._pinned_facts_payload = {}
         if self._persist_sessions:
             self._delete_session_file()
 
@@ -193,6 +195,26 @@ class ConversationEngine:
     def show_history(self) -> None:
         """Print formatted history (backward-compatible REPL helper)."""
         print(self.format_history())
+
+    def set_continuity_context(
+        self,
+        *,
+        archived_summary: str | None = None,
+        archived_turn_count: int | None = None,
+        pinned_facts: dict[str, Any] | None = None,
+    ) -> None:
+        """Apply durable conversation summary without discarding stored turns (Phase 12.2)."""
+        if archived_summary is not None:
+            text = archived_summary.strip()
+            self._archived_summary = text or None
+        if archived_turn_count is not None:
+            self._archived_turn_count = max(0, int(archived_turn_count))
+        if pinned_facts is not None:
+            self._pinned_facts_payload = dict(pinned_facts)
+
+    def get_pinned_facts_payload(self) -> dict[str, Any]:
+        """Return pinned continuity facts hydrated from durable conversation metadata."""
+        return dict(self._pinned_facts_payload)
 
     def get_session_summary_for_memory(self, max_chars: int = 500) -> str | None:
         """Extractive session summary for MemoryService promotion path (P7-050)."""

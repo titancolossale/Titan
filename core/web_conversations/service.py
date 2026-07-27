@@ -15,7 +15,13 @@ from config.settings import (
     TITAN_CONVERSATION_PERSISTENCE_ENABLED,
     TITAN_CONVERSATION_PERSISTENCE_REQUIRED,
 )
-from core.web_conversations.context import build_context_summary, format_messages_for_engine
+from core.web_conversations.context import (
+    ConversationContextBuilder,
+    PinnedFacts,
+    format_messages_for_engine,
+    load_intelligence_metadata,
+    merge_intelligence_metadata,
+)
 from core.web_conversations.db import (
     ConversationStoreUnavailable,
     apply_migrations,
@@ -205,8 +211,10 @@ class ConversationService:
         user_id: str,
         *,
         request_id: str | None = None,
+        current_message: str | None = None,
+        active_project: str | None = None,
     ) -> dict[str, Any]:
-        """DB-only history load/trim — safe outside the Brain lock."""
+        """DB-only history load/trim/summarize — safe outside the Brain lock."""
         self.ensure_ready()
         started = time.perf_counter()
         messages, _total = self._repo.list_messages(
@@ -215,12 +223,47 @@ class ConversationService:
             limit=500,
             offset=0,
         )
-        summary = build_context_summary(
+        conversation = self._repo.get_conversation(
+            conversation_id,
+            user_id,
+            include_archived=True,
+        )
+        intel = load_intelligence_metadata(
+            conversation.metadata if conversation is not None else None
+        )
+        existing_pinned = PinnedFacts.from_dict(intel.get("pinned_facts"))
+        builder = ConversationContextBuilder()
+        bundle = builder.build(
             messages,
+            current_message=current_message,
+            existing_summary=(intel.get("summary") or None),
+            existing_pinned=existing_pinned,
+            archived_message_count=int(intel.get("archived_message_count") or 0),
+            active_project=active_project,
             conversation_id=conversation_id,
             request_id=request_id,
         )
+        summary = bundle.to_hydration_dict()
         summary["duration_ms"] = int((time.perf_counter() - started) * 1000)
+
+        # Persist rolling summary + pinned facts in conversation metadata (not Obsidian).
+        if conversation is not None and (
+            bundle.summary_created
+            or bundle.pinned_facts_loaded
+            or bundle.summary
+        ):
+            try:
+                merged = merge_intelligence_metadata(conversation.metadata, bundle)
+                self._repo.update_conversation_metadata(
+                    conversation_id,
+                    user_id,
+                    merged,
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to persist conversation intelligence conversation_id=%s",
+                    conversation_id[:16],
+                )
         return summary
 
     def apply_history_to_engine(
@@ -253,6 +296,17 @@ class ConversationService:
                     )
                 else:
                     engine.add_user_turn(user_id, content)
+            summary_text = history_summary.get("summary")
+            archived_count = int(history_summary.get("archived_message_count") or 0)
+            pinned = history_summary.get("pinned_facts")
+            if hasattr(engine, "set_continuity_context") and (
+                summary_text or archived_count or pinned
+            ):
+                engine.set_continuity_context(
+                    archived_summary=summary_text,
+                    archived_turn_count=archived_count,
+                    pinned_facts=pinned if isinstance(pinned, dict) else None,
+                )
 
     def hydrate_engine_history(
         self,

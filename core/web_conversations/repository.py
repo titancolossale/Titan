@@ -254,6 +254,33 @@ class ConversationRepository:
                 .values(updated_at=now)
             )
 
+    def update_conversation_metadata(
+        self,
+        conversation_id: str,
+        user_id: str,
+        metadata: dict[str, Any],
+    ) -> ConversationRecord | None:
+        """Replace conversation metadata_json (ownership-scoped)."""
+        self.ensure_ready()
+        now = utc_now()
+        with self._lock, self.engine.begin() as conn:
+            result = conn.execute(
+                update(conversations_table)
+                .where(
+                    and_(
+                        conversations_table.c.id == conversation_id,
+                        conversations_table.c.user_id == user_id,
+                    )
+                )
+                .values(
+                    metadata_json=_dumps_meta(dict(metadata or {})),
+                    updated_at=now,
+                )
+            )
+            if result.rowcount == 0:
+                return None
+        return self.get_conversation(conversation_id, user_id, include_archived=True)
+
     def next_sequence(self, conversation_id: str) -> int:
         self.ensure_ready()
         with self.engine.connect() as conn:

@@ -66,11 +66,18 @@ Every endpoint resolves `user_id` from the authenticated session (`titan_usernam
 
 ## Context window
 
-1. Load conversation messages.
-2. Keep recent user/assistant turns (`TITAN_CONVERSATION_WINDOW`, default 10).
-3. Trim oldest first under `TITAN_CONVERSATION_CONTEXT_MAX_TOKENS` and `TITAN_MAX_PROMPT_TOKENS`.
-4. Hydrate `ConversationEngine` before Brain runs.
-5. Fast path may include a clipped recent-history snippet; full Obsidian/memory dumps are not injected for simple chat.
+1. Load conversation messages from PostgreSQL/SQLite.
+2. `ConversationContextBuilder` (Phase 12.2) layers:
+   - recent messages
+   - rolling conversation summary (older turns compressed, not discarded)
+   - pinned facts (active project, goals, decisions, unfinished tasks, topic)
+   - resolved continuity references (`continue`, `do that`, …)
+3. Enforce token budget (`TITAN_CONVERSATION_CONTEXT_MAX_TOKENS`); trim oldest recent first.
+4. Persist summary + pinned facts in `web_conversations.metadata_json` (never Obsidian).
+5. Hydrate `ConversationEngine` before Brain runs.
+6. Fast path may include a clipped recent-history snippet; full Obsidian/memory dumps are not injected for simple chat.
+
+Diagnostics (when chat/app logging is enabled): `CONTEXT_BUILD_STARTED`, `CONTEXT_BUILD_FINISHED`, `SUMMARY_CREATED`, `SUMMARY_LOADED`, `PINNED_FACTS_LOADED`, `CONTEXT_TOKEN_COUNT`, `CONTEXT_TRUNCATED`, plus legacy `CONVERSATION_CONTEXT_BUILT`.
 
 ---
 

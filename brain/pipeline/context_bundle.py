@@ -33,6 +33,9 @@ class ThinkContext:
     agent_results: list[AgentResult] = field(default_factory=list)
     agent_results_text: str = ""
     conversation_window: list[str] = field(default_factory=list)
+    conversation_summary: str = ""
+    pinned_facts_text: str = ""
+    reference_resolution: str = ""
     knowledge_hits: str | None = None
     tool_results: list[ToolResult] = field(default_factory=list)
     tool_results_text: str = ""

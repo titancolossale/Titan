@@ -124,6 +124,25 @@ def test_conversation_section_included_when_present() -> None:
     assert "Réponse précédente" in prompt
 
 
+def test_conversation_intelligence_sections_included() -> None:
+    """Phase 12.2: summary, pinned facts, and resolved references appear in prompt."""
+    ctx = ThinkContext(
+        user_message="Continue.",
+        conversation_window=["User : My project is Titan."],
+        conversation_summary="Prior discussion about Titan roadmap.",
+        pinned_facts_text="Projet actif : Titan\nDécisions importantes :\n- We decided to use Obsidian",
+        reference_resolution="Le message renvoie au projet Titan.",
+    )
+    prompt = PromptBuilder().build(ctx)
+
+    assert "CONVERSATION RÉCENTE" in prompt
+    assert "RÉSUMÉ CONVERSATION" in prompt
+    assert "FAITS ÉPINGLÉS" in prompt
+    assert "RÉFÉRENCE RÉSOLUE" in prompt
+    assert "Obsidian" in prompt
+    assert "Continue." in prompt
+
+
 def test_settings_llm_model_default() -> None:
     """P2-002: LLM_MODEL defaults to gpt-5.2 in settings."""
     from config.settings import LLM_MODEL, MAX_PROMPT_TOKENS, PROMPTS_DIR

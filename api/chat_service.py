@@ -933,6 +933,7 @@ def process_chat_message(
                 durable_conv_id,
                 speaker,
                 request_id=req_id,
+                current_message=text,
             )
             user_msg = conv_service.persist_user_message(
                 conversation_id=durable_conv_id,

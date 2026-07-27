@@ -31,7 +31,12 @@ class PromptBuilder:
         return self._truncate(sections)
 
     def _ordered_sections(self, ctx: ThinkContext) -> list[tuple[str, str]]:
-        """Return labeled sections in canonical prompt order."""
+        """Return labeled sections in canonical prompt order.
+
+        Conversation intelligence layers (Phase 12.2) appear before the user
+        message: recent → summary → pinned facts → resolved reference.
+        System instructions remain on the LLM system prompt (not duplicated here).
+        """
         sections: list[tuple[str, str]] = [
             ("CONTEXTE ACTUEL", ctx.situational_context or "Aucun contexte disponible."),
             ("MÉMOIRE PERMANENTE", ctx.retrieved_memory or "Aucune mémoire pertinente trouvée."),
@@ -49,10 +54,17 @@ class PromptBuilder:
             sections.append(("CONNAISSANCES", ctx.knowledge_hits))
         if ctx.tool_status_text:
             sections.append(("SANTÉ OUTILS ET PROVIDERS", ctx.tool_status_text))
+        # Layered conversation continuity (Phase 12.2)
         if ctx.conversation_window:
             sections.append(
                 ("CONVERSATION RÉCENTE", "\n".join(ctx.conversation_window)),
             )
+        if ctx.conversation_summary:
+            sections.append(("RÉSUMÉ CONVERSATION", ctx.conversation_summary))
+        if ctx.pinned_facts_text:
+            sections.append(("FAITS ÉPINGLÉS", ctx.pinned_facts_text))
+        if ctx.reference_resolution:
+            sections.append(("RÉFÉRENCE RÉSOLUE", ctx.reference_resolution))
         if ctx.agent_results_text:
             sections.append(("RÉSULTATS DES AGENTS", ctx.agent_results_text))
         if ctx.tool_results_text:
@@ -84,6 +96,9 @@ class PromptBuilder:
             "MISSION ACTIVE",
             "MÉMOIRE PERMANENTE",
             "CONTEXTE ACTUEL",
+            "FAITS ÉPINGLÉS",
+            "RÉFÉRENCE RÉSOLUE",
+            "RÉSUMÉ CONVERSATION",
             "RÉSULTATS DES AGENTS",
             "RÉSULTATS OUTILS",
             "SANTÉ OUTILS ET PROVIDERS",

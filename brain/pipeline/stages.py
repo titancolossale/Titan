@@ -203,19 +203,54 @@ class ThinkPipeline:
         self._debug("Contexte actuel :\n%s", ctx.situational_context)
 
     def _stage_load_conversation(self, ctx: ThinkContext) -> None:
-        """Load recent conversation window for prompt injection (P7-030)."""
+        """Load layered conversation intelligence for prompt injection (Phase 12.2)."""
         if self._conversation_engine is None:
             return
         ctx.session_id = ctx.session_id or self._conversation_engine.session_id
         ctx.turn_id = str(self._conversation_engine.total_turn_count + 1)
-        ctx.conversation_window = self._conversation_engine.get_prompt_window(
+
+        active_project = ""
+        unfinished: list[str] = []
+        goals: list[str] = []
+        if ctx.context_snapshot is not None:
+            active_project = ctx.context_snapshot.active_project or ""
+            if ctx.context_snapshot.current_goal:
+                goals.append(str(ctx.context_snapshot.current_goal))
+            if ctx.context_snapshot.current_phase:
+                unfinished.append(f"Phase: {ctx.context_snapshot.current_phase}")
+
+        from core.web_conversations.context import ConversationContextBuilder
+
+        bundle = ConversationContextBuilder().build_from_engine(
+            self._conversation_engine,
             current_message=ctx.user_message,
+            active_project=active_project or None,
+            unfinished_tasks=unfinished,
+            user_goals=goals,
         )
-        ctx.conversation_loaded = bool(ctx.conversation_window)
-        if ctx.conversation_window:
+        ctx.conversation_window = list(bundle.recent_lines)
+        ctx.conversation_summary = bundle.summary or ""
+        ctx.pinned_facts_text = bundle.pinned_facts.format_text()
+        ctx.reference_resolution = bundle.reference_resolution or ""
+        ctx.conversation_loaded = bool(
+            ctx.conversation_window
+            or ctx.conversation_summary
+            or ctx.pinned_facts_text
+            or ctx.reference_resolution
+        )
+        # Keep engine continuity aligned for fast-path / other readers.
+        if hasattr(self._conversation_engine, "set_continuity_context"):
+            self._conversation_engine.set_continuity_context(
+                archived_summary=bundle.summary,
+                archived_turn_count=bundle.archived_message_count,
+                pinned_facts=bundle.pinned_facts.to_dict(),
+            )
+        if ctx.conversation_loaded:
             self._debug(
-                "Conversation récente (%d lignes)",
+                "Conversation intelligence (recent=%d summary=%s pinned=%s)",
                 len(ctx.conversation_window),
+                "yes" if ctx.conversation_summary else "no",
+                "yes" if ctx.pinned_facts_text else "no",
             )
 
     def _stage_memory_commands(self, ctx: ThinkContext) -> None:
