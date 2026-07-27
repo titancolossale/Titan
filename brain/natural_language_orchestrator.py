@@ -633,63 +633,78 @@ class NaturalLanguageOrchestrator:
         )
 
         try:
-            check_deadline("reasoning")
-            logger.info(
-                "CHAT_PLANNER_START request_id=%s elapsed_ms=%s "
-                "remaining_budget_ms=%s stage=reasoning attempt=1",
-                request_id,
-                deadline.elapsed_ms() if deadline else 0,
-                deadline.remaining_ms() if deadline else None,
-            )
-            reasoning_result = self._run_reasoning(
-                analysis,
-                systems_used,
-                artifacts,
-            )
-            if deadline is not None:
-                deadline.mark_stage("reasoning")
-            logger.info(
-                "CHAT_PLANNER_END request_id=%s elapsed_ms=%s "
-                "remaining_budget_ms=%s stage=reasoning attempt=1",
-                request_id,
-                deadline.elapsed_ms() if deadline else 0,
-                deadline.remaining_ms() if deadline else None,
-            )
-            check_deadline("context")
-            logger.info(
-                "CHAT_CONTEXT_START request_id=%s elapsed_ms=%s "
-                "remaining_budget_ms=%s stage=context attempt=1",
-                request_id,
-                deadline.elapsed_ms() if deadline else 0,
-                deadline.remaining_ms() if deadline else None,
-            )
-            awareness = self._run_awareness(
-                analysis,
-                systems_used,
-                artifacts,
-                reasoning_result=reasoning_result,
-            )
-            artifacts["awareness"] = awareness
-            if deadline is not None:
-                deadline.mark_stage("context")
-            logger.info(
-                "CHAT_CONTEXT_END request_id=%s elapsed_ms=%s "
-                "remaining_budget_ms=%s stage=context attempt=1",
-                request_id,
-                deadline.elapsed_ms() if deadline else 0,
-                deadline.remaining_ms() if deadline else None,
-            )
+            # Normal conversation/question: skip Reasoning Engine and the
+            # project/executive/proactive loop — go to Brain.think → LLM.
+            if intent in (
+                DetectedIntent.CONVERSATION,
+                DetectedIntent.QUESTION,
+            ):
+                response = self._run_conversation_route(
+                    request,
+                    analysis,
+                    intent,
+                    systems_used,
+                    artifacts,
+                    stream=stream,
+                )
+            else:
+                check_deadline("reasoning")
+                logger.info(
+                    "CHAT_PLANNER_START request_id=%s elapsed_ms=%s "
+                    "remaining_budget_ms=%s stage=reasoning attempt=1",
+                    request_id,
+                    deadline.elapsed_ms() if deadline else 0,
+                    deadline.remaining_ms() if deadline else None,
+                )
+                reasoning_result = self._run_reasoning(
+                    analysis,
+                    systems_used,
+                    artifacts,
+                )
+                if deadline is not None:
+                    deadline.mark_stage("reasoning")
+                logger.info(
+                    "CHAT_PLANNER_END request_id=%s elapsed_ms=%s "
+                    "remaining_budget_ms=%s stage=reasoning attempt=1",
+                    request_id,
+                    deadline.elapsed_ms() if deadline else 0,
+                    deadline.remaining_ms() if deadline else None,
+                )
+                check_deadline("context")
+                logger.info(
+                    "CHAT_CONTEXT_START request_id=%s elapsed_ms=%s "
+                    "remaining_budget_ms=%s stage=context attempt=1",
+                    request_id,
+                    deadline.elapsed_ms() if deadline else 0,
+                    deadline.remaining_ms() if deadline else None,
+                )
+                awareness = self._run_awareness(
+                    analysis,
+                    systems_used,
+                    artifacts,
+                    reasoning_result=reasoning_result,
+                )
+                artifacts["awareness"] = awareness
+                if deadline is not None:
+                    deadline.mark_stage("context")
+                logger.info(
+                    "CHAT_CONTEXT_END request_id=%s elapsed_ms=%s "
+                    "remaining_budget_ms=%s stage=context attempt=1",
+                    request_id,
+                    deadline.elapsed_ms() if deadline else 0,
+                    deadline.remaining_ms() if deadline else None,
+                )
 
-            check_deadline("pipeline")
-            response = self._run_pipeline(
-                request,
-                analysis,
-                intent,
-                decision,
-                systems_used,
-                artifacts,
-                stream=stream,
-            )
+                check_deadline("pipeline")
+                response = self._run_pipeline(
+                    request,
+                    analysis,
+                    intent,
+                    decision,
+                    systems_used,
+                    artifacts,
+                    stream=stream,
+                )
         except BrainTimeoutError as exc:
             response = (
                 "Titan n’a pas pu terminer sa réponse dans le délai prévu."
@@ -921,6 +936,95 @@ class NaturalLanguageOrchestrator:
     # Awareness & pipeline execution
     # ------------------------------------------------------------------
 
+    def _run_conversation_route(
+        self,
+        request: str,
+        analysis: RequestAnalysis,
+        intent: DetectedIntent,
+        systems_used: SystemsUsed,
+        artifacts: dict[str, Any],
+        *,
+        stream: Any = None,
+    ) -> str:
+        """Lightweight route for CONVERSATION/QUESTION — no project loop.
+
+        Skips Reasoning Engine (CognitiveContextBuilder), ProjectIntelligence,
+        ExecutiveFunction, and ProactiveIntelligence. Still loads light
+        awareness (context/workspace/memory), then Brain.think → LLM.
+        """
+        deadline = get_request_deadline()
+        request_id = deadline.request_id if deadline else "-"
+
+        systems_used.mark_skipped(SystemName.REASONING_ENGINE, "conversation_route")
+        systems_used.mark_skipped(
+            SystemName.PROJECT_INTELLIGENCE,
+            "conversation_route",
+        )
+        systems_used.mark_skipped(
+            SystemName.EXECUTIVE_FUNCTION,
+            "conversation_route",
+        )
+        systems_used.mark_skipped(
+            SystemName.PROACTIVE_INTELLIGENCE,
+            "conversation_route",
+        )
+
+        check_deadline("context")
+        logger.info(
+            "CHAT_CONTEXT_START request_id=%s elapsed_ms=%s "
+            "remaining_budget_ms=%s stage=context attempt=1",
+            request_id,
+            deadline.elapsed_ms() if deadline else 0,
+            deadline.remaining_ms() if deadline else None,
+        )
+        awareness = self._run_awareness(
+            analysis,
+            systems_used,
+            artifacts,
+            reasoning_result=None,
+            skip_executive=True,
+        )
+        artifacts["awareness"] = awareness
+        if deadline is not None:
+            deadline.mark_stage("context")
+            request_id = deadline.request_id
+        logger.info(
+            "CHAT_CONTEXT_END request_id=%s elapsed_ms=%s "
+            "remaining_budget_ms=%s stage=context attempt=1",
+            request_id,
+            deadline.elapsed_ms() if deadline else 0,
+            deadline.remaining_ms() if deadline else None,
+        )
+
+        logger.info(
+            "CHAT_CONVERSATION_ROUTE request_id=%s elapsed_ms=%s intent=%s",
+            request_id,
+            deadline.elapsed_ms() if deadline else 0,
+            intent.value,
+        )
+        logger.info(
+            "CHAT_PROJECT_INTELLIGENCE_SKIPPED request_id=%s "
+            "reason=conversation_route",
+            request_id,
+        )
+        logger.info(
+            "CHAT_EXECUTION_SKIPPED request_id=%s reason=conversation_route",
+            request_id,
+        )
+        logger.info(
+            "CHAT_PROACTIVE_SKIPPED request_id=%s reason=conversation_route",
+            request_id,
+        )
+
+        check_deadline("pipeline")
+        return self._handle_conversation(
+            request,
+            analysis,
+            systems_used,
+            artifacts,
+            stream=stream,
+        )
+
     def _run_reasoning(
         self,
         analysis: RequestAnalysis,
@@ -945,6 +1049,7 @@ class NaturalLanguageOrchestrator:
         artifacts: dict[str, Any],
         *,
         reasoning_result: Any | None = None,
+        skip_executive: bool = False,
     ) -> dict[str, Any]:
         awareness: dict[str, Any] = {
             "user": analysis.user,
@@ -1013,6 +1118,10 @@ class NaturalLanguageOrchestrator:
         except Exception:
             logger.debug("NLO development session read failed", exc_info=True)
             systems_used.mark_skipped(SystemName.DEVELOPMENT_SESSION, "error")
+
+        if skip_executive:
+            awareness["executive"] = None
+            return awareness
 
         try:
             evaluation = self._brain.evaluate_missions(

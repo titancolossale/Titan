@@ -210,6 +210,110 @@ def test_question_routes_to_think(brain: Brain) -> None:
     assert SystemName.BRAIN_THINK.value in result.systems_used.invoked
 
 
+def test_conversation_bypasses_project_executive_proactive(
+    brain: Brain,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Normal conversation skips project/executive/proactive and reaches think."""
+    import logging
+
+    from brain.request_deadline import (
+        RequestDeadline,
+        reset_request_deadline,
+        set_request_deadline,
+    )
+
+    deadline = RequestDeadline.start(total_seconds=30, request_id="conv-route-1")
+    token = set_request_deadline(deadline)
+    try:
+        with (
+            patch.object(brain, "reason", wraps=brain.reason) as mock_reason,
+            patch.object(
+                brain,
+                "evaluate_missions",
+                wraps=brain.evaluate_missions,
+            ) as mock_exec,
+            patch.object(
+                brain,
+                "analyze_project",
+                wraps=brain.analyze_project,
+            ) as mock_project,
+            patch.object(
+                brain,
+                "evaluate_proactive_context",
+                wraps=brain.evaluate_proactive_context,
+            ) as mock_proactive,
+            caplog.at_level(logging.INFO),
+        ):
+            # Force complex path (not greeting fast path).
+            with patch(
+                "brain.natural_language_orchestrator.is_simple_conversational_request",
+                return_value=False,
+            ):
+                result = brain.process_request("My main project is Titan.")
+    finally:
+        reset_request_deadline(token)
+
+    assert result.detected_intent in (
+        DetectedIntent.CONVERSATION,
+        DetectedIntent.QUESTION,
+    )
+    assert SystemName.BRAIN_THINK.value in result.systems_used.invoked
+    mock_reason.assert_not_called()
+    mock_exec.assert_not_called()
+    mock_project.assert_not_called()
+    mock_proactive.assert_not_called()
+    skipped = " ".join(result.systems_used.skipped)
+    assert "project_intelligence" in skipped
+    assert "executive_function" in skipped
+    assert "proactive_intelligence" in skipped
+    joined = "\n".join(record.getMessage() for record in caplog.records)
+    assert "CHAT_CONTEXT_END" in joined
+    assert "CHAT_CONVERSATION_ROUTE" in joined
+    assert "CHAT_PROJECT_INTELLIGENCE_SKIPPED" in joined
+    assert "CHAT_EXECUTION_SKIPPED" in joined
+    assert "CHAT_PROACTIVE_SKIPPED" in joined
+    assert "CHAT_LLM_CALL_ENTER" in joined
+    assert "request_id=conv-route-1" in joined
+
+
+def test_tool_intent_still_runs_reasoning_path(brain: Brain) -> None:
+    """Non-conversation intents keep the full awareness/reasoning path available."""
+    mock_reasoning = MagicMock()
+    mock_reasoning.to_dict.return_value = {"ok": True}
+    with patch.object(brain, "reason", return_value=mock_reasoning) as mock_reason:
+        with patch.object(
+            brain,
+            "evaluate_missions",
+            return_value=MagicMock(
+                recommendation=None,
+                current_mission=None,
+                reasoning="",
+            ),
+        ):
+            with patch.object(
+                brain,
+                "execute_request",
+                return_value=MagicMock(
+                    summary_message="Tool done",
+                    to_dict=lambda: {"ok": True},
+                ),
+            ):
+                with patch.object(
+                    brain,
+                    "plan_tool_execution",
+                    return_value=MagicMock(
+                        requires_tools=True,
+                        selected_tools=(),
+                        to_dict=lambda: {},
+                    ),
+                ):
+                    result = brain.process_request("Run pytest")
+    assert result.detected_intent == DetectedIntent.TOOL_REQUEST
+    mock_reason.assert_called()
+    assert SystemName.BRAIN_THINK.value not in result.systems_used.invoked
+
+
 def test_planning_routes_to_long_term_planner(brain: Brain) -> None:
     result = brain.process_request("Plan the ORR automation")
     assert result.detected_intent == DetectedIntent.PLANNING
