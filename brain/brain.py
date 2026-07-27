@@ -2,6 +2,7 @@
 # Titan Brain
 # =====================================
 
+import logging
 from datetime import datetime
 
 from brain.decision import Decision
@@ -14,6 +15,7 @@ from brain.llm import LLM
 from brain.prompt_builder import PromptBuilder
 from brain.pipeline.stages import ThinkPipeline
 from brain.pipeline.context_bundle import ThinkContext
+from brain.request_deadline import get_request_deadline
 from context.context_manager import ContextManager
 from brain.internal_monologue import InternalMonologue
 from memory.memory_service import MemoryService
@@ -148,6 +150,8 @@ from tools.tool_manager import ToolManager
 from core.conversation_engine import ConversationEngine
 from core.mission_manager import MissionManager
 from core.mission_models import Mission, MissionPriority, MissionProgress, MissionState
+
+logger = logging.getLogger(__name__)
 
 
 class Brain:
@@ -493,12 +497,23 @@ class Brain:
         """Most recent ``process_request`` result (routing / systems used)."""
         return getattr(self, "_last_orchestration_result", None)
 
-    def think(self, message: str, *, stream=None) -> str:
+    def think(self, message: str, *, stream=None, skip_agents: bool = False) -> str:
         """Cognitive pipeline entry — delegates to the think pipeline."""
-        ctx = ThinkContext(user_message=message)
+        self._log_chat_think_enter(skip_agents)
+        ctx = ThinkContext(user_message=message, skip_agents=skip_agents)
         result = self.pipeline.run(ctx, stream=stream)
         self._last_think_context = result
         return result.response
+
+    def _log_chat_think_enter(self, skip_agents: bool) -> None:
+        """Emit CHAT_THINK_ENTER with request_id and timing only."""
+        deadline = get_request_deadline()
+        logger.info(
+            "CHAT_THINK_ENTER request_id=%s elapsed_ms=%s skip_agents=%s",
+            deadline.request_id if deadline else "-",
+            deadline.elapsed_ms() if deadline else 0,
+            skip_agents,
+        )
 
     @property
     def last_think_context(self) -> ThinkContext | None:

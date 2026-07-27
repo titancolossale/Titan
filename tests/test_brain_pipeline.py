@@ -136,8 +136,21 @@ def test_brain_think_includes_conversation_window_in_prompt(brain: Brain) -> Non
 
     prompt_sent = brain.llm.ask.call_args[0][0]
     conv_start = prompt_sent.index("CONVERSATION RÉCENTE")
-    agents_start = prompt_sent.index("RÉSULTATS DES AGENTS")
-    conv_section = prompt_sent[conv_start:agents_start]
+    # Phase 12.2 may inject FAITS ÉPINGLÉS after the recent window — bound the
+    # section to the next labeled block so pinned topic text is not confused
+    # with duplicate current-turn history.
+    next_markers = (
+        "RÉSUMÉ CONVERSATION",
+        "FAITS ÉPINGLÉS",
+        "RÉSULTATS DES AGENTS",
+        "QUESTION DE L'UTILISATEUR",
+    )
+    conv_end = min(
+        (prompt_sent.index(marker, conv_start + 1) for marker in next_markers
+         if marker in prompt_sent[conv_start + 1 :]),
+        default=len(prompt_sent),
+    )
+    conv_section = prompt_sent[conv_start:conv_end]
 
     assert prior_user in conv_section
     assert prior_titan in conv_section

@@ -1159,8 +1159,12 @@ class NaturalLanguageOrchestrator:
         *,
         stream: Any = None,
     ) -> str:
+        """Normal conversation/question turns — Brain.think without agents/tools."""
         systems_used.mark_invoked(SystemName.BRAIN_THINK)
-        response = self._brain.think(request, stream=stream)
+        # Conversation and question intents (no tool required) skip agent/tool
+        # orchestration so the turn reaches assemble_prompt + LLM promptly.
+        artifacts["skip_agents"] = True
+        response = self._brain.think(request, stream=stream, skip_agents=True)
         artifacts["think_response"] = True
         return response
 

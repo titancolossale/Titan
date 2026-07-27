@@ -129,8 +129,18 @@ class ThinkPipeline:
         # Safety net: conversational greetings never need agent/tool orchestration.
         if is_simple_conversational_request(ctx.user_message):
             ctx.skip_agents = True
+        deadline = get_request_deadline()
+        request_id = deadline.request_id if deadline else "-"
         for stage_name in STAGE_ORDER:
             check_deadline(stage_name)
+            logger.info(
+                "CHAT_THINK_STAGE_ENTER request_id=%s elapsed_ms=%s stage=%s "
+                "skip_agents=%s",
+                request_id,
+                deadline.elapsed_ms() if deadline else 0,
+                stage_name,
+                bool(getattr(ctx, "skip_agents", False)),
+            )
             if ctx.skip_llm and stage_name in (
                 "execution_coordinate",
                 "assemble_prompt",
@@ -143,6 +153,7 @@ class ThinkPipeline:
             deadline = get_request_deadline()
             if deadline is not None:
                 deadline.mark_stage(stage_name)
+                request_id = deadline.request_id
         self._stream = None
         return ctx
 
@@ -434,24 +445,36 @@ class ThinkPipeline:
         """Run agents and tools via ExecutionCoordinator (P8-063)."""
         if ctx.skip_llm:
             return
-        # Phase 11.4 — skip agent/tool orchestration for light conversation.
+        # Phase 11.4 / conversation fast-path — skip agent/tool orchestration.
         if getattr(ctx, "skip_agents", False):
-            self._debug("Execution coordinate skipped (conversational fast safety).")
+            deadline = get_request_deadline()
+            logger.info(
+                "CHAT_EXEC_COORD_SKIPPED reason=skip_agents request_id=%s "
+                "elapsed_ms=%s",
+                deadline.request_id if deadline else "-",
+                deadline.elapsed_ms() if deadline else 0,
+            )
+            self._debug("Execution coordinate skipped (skip_agents=True).")
             return
         from brain.tool_execution_bridge import dispatch_context_from_think
 
         agent_context = AgentContext.from_think_context(ctx, task=ctx.user_message)
         dispatch_context = dispatch_context_from_think(ctx)
         tool_override = ctx.confirmed_tool_requests if ctx.confirmed_tool_requests else None
-        # Cap agent handoffs by global complex-path limit.
-        prior_max = getattr(self.execution_coordinator.policy, "max_agents", None)
+        # Cap agent handoffs by global complex-path limit (policy is frozen).
+        from dataclasses import replace
+
+        prior_policy = self.execution_coordinator.policy
+        prior_max = getattr(prior_policy, "max_agents", None)
         result = None
         try:
             if prior_max is not None:
-                self.execution_coordinator.policy.max_agents = min(
-                    int(prior_max),
-                    int(TITAN_MAX_AGENT_HANDOFFS),
-                )
+                capped = min(int(prior_max), int(TITAN_MAX_AGENT_HANDOFFS))
+                if capped != int(prior_max):
+                    self.execution_coordinator.policy = replace(
+                        prior_policy,
+                        max_agents=capped,
+                    )
             result = self.execution_coordinator.execute(
                 ctx.user_message,
                 agent_context=agent_context,
@@ -461,7 +484,7 @@ class ThinkPipeline:
             )
         finally:
             if prior_max is not None:
-                self.execution_coordinator.policy.max_agents = prior_max
+                self.execution_coordinator.policy = prior_policy
         if result is None:
             return
         ctx.agent_results = result.agent_results
@@ -508,6 +531,15 @@ class ThinkPipeline:
     def _stage_llm_call(self, ctx: ThinkContext) -> None:
         if ctx.skip_llm:
             return
+        deadline = get_request_deadline()
+        logger.info(
+            "CHAT_LLM_CALL_ENTER request_id=%s elapsed_ms=%s prompt_chars=%d "
+            "skip_agents=%s",
+            deadline.request_id if deadline else "-",
+            deadline.elapsed_ms() if deadline else 0,
+            len(ctx.prompt or ""),
+            bool(getattr(ctx, "skip_agents", False)),
+        )
         logger.info("Calling LLM")
         on_delta = None
         stream = self._stream
