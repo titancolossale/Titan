@@ -22,6 +22,16 @@ const RECONNECT_HARD_MAX = 12;
  */
 export const CHAT_CLIENT_TIMEOUT_MS = 35000;
 
+/**
+ * Backend SSE events that terminate a chat turn for the client.
+ * Primary terminal event is conversation_finished (carries full response).
+ * response_completed is the success finalize signal emitted immediately after.
+ */
+export const CHAT_STREAM_TERMINAL_EVENTS = Object.freeze([
+  "conversation_finished",
+  "response_completed",
+]);
+
 /** Thrown when the session cookie/token is no longer valid. */
 export class SessionExpiredError extends Error {
   constructor(message = "Session expirée.") {
@@ -86,6 +96,25 @@ export function parseSseBuffer(buffer) {
   }
 
   return { events, remainder };
+}
+
+/**
+ * Flush a trailing SSE remainder that lacked a final blank-line delimiter.
+ * Missing final newline must not hang or drop a completed frame.
+ * @param {string} remainder
+ * @returns {Array<{ event: string, data: object, id: string | null }>}
+ */
+export function flushSseRemainder(remainder) {
+  const trimmed = (remainder ?? "").trim();
+  if (!trimmed) return [];
+  if (!/(?:^|\n)data:/m.test(trimmed)) return [];
+  const padded = remainder.endsWith("\n\n") ? remainder : `${remainder.replace(/\n$/, "")}\n\n`;
+  return parseSseBuffer(padded).events;
+}
+
+/** @param {string} eventName */
+export function isChatStreamTerminalEvent(eventName) {
+  return CHAT_STREAM_TERMINAL_EVENTS.includes(eventName);
 }
 
 /**
@@ -279,20 +308,200 @@ export class BackendBridge {
     }
 
     this._submitting = true;
+    // Stop any prior in-flight turn before arming a new controller/timer.
     this._chatAbort?.abort();
-    this._chatAbort = new AbortController();
+    const abortController = new AbortController();
+    this._chatAbort = abortController;
     const requestId = options.request_id ?? options.client_request_id ?? createClientRequestId();
     const conversationId = options.conversation_id ?? getStoredConversationId();
     const startedAt = performance.now();
 
+    let responseText = "";
+    let orchestrationPayload = null;
+    /** @type {string | null} */
+    let finishedErrorCode = null;
+    /** @type {ChatRequestError | null} */
+    let streamError = null;
+    let completionSeen = false;
+    let firstDeltaSeen = false;
+    let readerDone = false;
+    let receivedCharCount = 0;
+    let timerActive = false;
     /** @type {ReturnType<typeof setTimeout> | null} */
-    let timeoutId = window.setTimeout(() => {
+    let timeoutId = null;
+
+    const clientTrace = (event, extra = {}) => {
+      const payload = {
+        request_id: requestId,
+        conversation_id: conversationId,
+        event,
+        elapsed_ms: Math.round(performance.now() - startedAt),
+        timer_active: timerActive,
+        aborted: abortController.signal.aborted,
+        received_char_count: receivedCharCount,
+        completion_seen: completionSeen,
+        reader_done: readerDone,
+        ...extra,
+      };
+      // TEMP Phase 12.1F — structured browser trace (no message content).
+      console.info(event, payload);
+      chatDiag(event, payload);
+    };
+
+    const clearClientTimeout = (reason) => {
+      if (timeoutId === null) return;
+      window.clearTimeout(timeoutId);
+      timeoutId = null;
+      timerActive = false;
+      clientTrace("CHAT_CLIENT_TIMEOUT_CLEARED", {
+        reason: reason ?? "cleared",
+      });
+    };
+
+    const buildSuccessResult = () => ({
+      response: responseText,
+      orchestration: orchestrationPayload,
+      conversation_id:
+        orchestrationPayload?.conversation_id
+        || conversationId,
+      request_id: requestId,
+      client_request_id: requestId,
+      error_code: finishedErrorCode,
+      ttft_ms: orchestrationPayload?.ttft_ms ?? null,
+      delta_count: orchestrationPayload?.delta_count ?? null,
+      ...options,
+    });
+
+    /**
+     * @param {Array<{ event: string, data: object, id: string | null }>} frames
+     * @returns {boolean} true when the reader loop should stop
+     */
+    const ingestFrames = (frames) => {
+      let shouldStop = false;
+      for (const frame of frames) {
+        clientTrace("CHAT_CLIENT_EVENT", {
+          event_name: frame.event,
+          error_code: frame.data?.error_code ?? frame.data?.code ?? null,
+        });
+
+        if (frame.event === "text_delta" || frame.event === "token") {
+          const chunk = typeof frame.data?.text === "string" ? frame.data.text : "";
+          receivedCharCount += chunk.length;
+          if (!firstDeltaSeen && chunk) {
+            firstDeltaSeen = true;
+            clientTrace("CHAT_CLIENT_FIRST_DELTA", {
+              event_name: frame.event,
+            });
+          }
+        }
+
+        if (frame.event === "conversation_finished") {
+          if (frame.data.response) {
+            responseText = frame.data.response;
+            receivedCharCount = Math.max(receivedCharCount, responseText.length);
+          }
+          if (frame.data.conversation_id) {
+            saveConversationId(frame.data.conversation_id);
+          }
+          if (frame.data.request_id) {
+            saveRequestId(frame.data.request_id);
+          }
+          finishedErrorCode = frame.data.error_code ?? null;
+          orchestrationPayload = frame.data.orchestration ?? frame.data;
+          this._applyOrchestrationMeta(frame.data);
+          if (frame.data.error_code || frame.data.ok === false) {
+            streamError = new ChatRequestError(
+              frame.data.response
+                || frame.data.error_code
+                || "Erreur pendant le traitement Titan.",
+              {
+                code: frame.data.error_code ?? "brain_failure",
+                retryable: frame.data.retryable !== false,
+                requestId: frame.data.request_id ?? requestId,
+              },
+            );
+          }
+          completionSeen = true;
+          clientTrace("CHAT_CLIENT_COMPLETION_EVENT", {
+            event_name: frame.event,
+            has_error: Boolean(streamError),
+          });
+          clearClientTimeout("conversation_finished");
+          shouldStop = true;
+        } else if (frame.event === "response_completed") {
+          completionSeen = true;
+          clientTrace("CHAT_CLIENT_COMPLETION_EVENT", {
+            event_name: frame.event,
+          });
+          clearClientTimeout("response_completed");
+          shouldStop = true;
+        } else if (frame.event === "structured_error" && !streamError) {
+          streamError = new ChatRequestError(
+            frame.data.message ?? frame.data.code ?? "Erreur pendant le traitement Titan.",
+            {
+              code: frame.data.code ?? "unexpected_error",
+              retryable: frame.data.retryable !== false,
+              requestId: frame.data.request_id ?? requestId,
+            },
+          );
+          completionSeen = true;
+          clearClientTimeout("structured_error");
+          shouldStop = true;
+        } else if (frame.event === "cancelled") {
+          finishedErrorCode = finishedErrorCode ?? "cancelled";
+          completionSeen = true;
+          clearClientTimeout("cancelled");
+          shouldStop = true;
+        } else if (frame.event === "error" && !responseText) {
+          streamError = new ChatRequestError(
+            frame.data.message ?? "Erreur pendant le traitement Titan.",
+            {
+              code: frame.data.code ?? "unexpected_error",
+              retryable: true,
+              requestId: frame.data.request_id ?? requestId,
+            },
+          );
+        }
+
+        this._handleBackendEvent(frame.event, frame.data, frame.id);
+      }
+      return shouldStop;
+    };
+
+    timeoutId = window.setTimeout(() => {
+      // Stale timer from a replaced controller must never abort a newer request.
+      if (this._chatAbort !== abortController) {
+        clientTrace("CHAT_CLIENT_STALE_EVENT_IGNORED", {
+          reason: "stale_timeout_controller",
+          error_name: "Timeout",
+        });
+        return;
+      }
+      if (completionSeen) {
+        clientTrace("CHAT_CLIENT_STALE_EVENT_IGNORED", {
+          reason: "timeout_after_completion",
+          error_name: "Timeout",
+        });
+        return;
+      }
       const err = new DOMException("Chat request timed out", "AbortError");
       // Tag so ConversationManager can show provider_timeout, not silent abort.
       /** @type {any} */
       (err).code = "provider_timeout";
-      this._chatAbort?.abort(err);
+      clientTrace("CHAT_CLIENT_ABORT_CALLED", {
+        reason: "client_timeout",
+        error_name: "AbortError",
+        error_code: "provider_timeout",
+      });
+      abortController.abort(err);
     }, CHAT_CLIENT_TIMEOUT_MS);
+    timerActive = true;
+    clientTrace("CHAT_CLIENT_SEND_START", {
+      message_length: text.length,
+    });
+    clientTrace("CHAT_CLIENT_TIMEOUT_ARMED", {
+      timeout_ms: CHAT_CLIENT_TIMEOUT_MS,
+    });
 
     this.connection.streaming = true;
     this.connection.mode = "streaming";
@@ -304,13 +513,6 @@ export class BackendBridge {
         chatPending: true,
       });
     }
-
-    let responseText = "";
-    let orchestrationPayload = null;
-    /** @type {string | null} */
-    let finishedErrorCode = null;
-    /** @type {ChatRequestError | null} */
-    let streamError = null;
 
     try {
       chatDiag("CHAT_HTTP_SENT", {
@@ -333,49 +535,30 @@ export class BackendBridge {
         client_metadata: options.client_metadata ?? null,
       });
 
-      // TEMP production path trace — remove after Railway confirmation.
-      console.info("FETCH_BEGIN", {
-        method: "POST",
-        request_id: requestId,
-        submitting: this._submitting,
-      });
-      console.info("FETCH_URL", { url: fetchUrl, method: "POST" });
-      console.info("FETCH_HEADERS", {
-        keys: Object.keys(fetchHeaders),
-        has_csrf: Boolean(fetchHeaders["X-CSRF-Token"]),
-        has_authorization: Boolean(fetchHeaders.Authorization),
-      });
-      console.info("FETCH_BODY", {
-        message_length: text.length,
-        conversation_id: conversationId,
-        request_id: requestId,
-        client_request_id: requestId,
-        body_chars: fetchBody.length,
-      });
-
       let httpResponse;
       try {
         httpResponse = await fetch(fetchUrl, {
           method: "POST",
-          signal: this._chatAbort.signal,
+          signal: abortController.signal,
           credentials: "same-origin",
           headers: fetchHeaders,
           body: fetchBody,
         });
       } catch (fetchErr) {
-        console.info("FETCH_ERROR", {
-          request_id: requestId,
-          name: fetchErr?.name ?? null,
-          code: fetchErr?.code ?? null,
-          message: String(fetchErr?.message ?? fetchErr),
+        clientTrace("CHAT_CLIENT_CATCH", {
+          phase: "fetch",
+          error_name: fetchErr?.name ?? null,
+          error_code: fetchErr?.code ?? null,
         });
         throw fetchErr;
       }
 
-      console.info("FETCH_END", {
-        request_id: requestId,
+      clientTrace("CHAT_CLIENT_FETCH_RESOLVED", {
         status: httpResponse.status,
         ok: httpResponse.ok,
+      });
+      clientTrace("CHAT_CLIENT_HEADERS_RECEIVED", {
+        status: httpResponse.status,
         content_type: httpResponse.headers.get("content-type"),
       });
 
@@ -443,53 +626,44 @@ export class BackendBridge {
         });
       }
 
+      clientTrace("CHAT_CLIENT_READER_START");
       const decoder = new TextDecoder();
       let buffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          readerDone = true;
+          buffer += decoder.decode();
+          const flushed = flushSseRemainder(buffer);
+          buffer = "";
+          if (flushed.length) {
+            ingestFrames(flushed);
+          }
+          clientTrace("CHAT_CLIENT_READER_DONE");
+          break;
+        }
         buffer += decoder.decode(value, { stream: true });
         const parsed = parseSseBuffer(buffer);
         buffer = parsed.remainder;
-        for (const frame of parsed.events) {
-          if (frame.event === "conversation_finished") {
-            if (frame.data.response) {
-              responseText = frame.data.response;
-            }
-            if (frame.data.conversation_id) {
-              saveConversationId(frame.data.conversation_id);
-            }
-            if (frame.data.request_id) {
-              saveRequestId(frame.data.request_id);
-            }
-            finishedErrorCode = frame.data.error_code ?? null;
-            orchestrationPayload = frame.data.orchestration ?? frame.data;
-            this._applyOrchestrationMeta(frame.data);
-            if (frame.data.error_code || frame.data.ok === false) {
-              streamError = new ChatRequestError(
-                frame.data.response
-                  || frame.data.error_code
-                  || "Erreur pendant le traitement Titan.",
-                {
-                  code: frame.data.error_code ?? "brain_failure",
-                  retryable: frame.data.retryable !== false,
-                  requestId: frame.data.request_id ?? requestId,
-                },
-              );
-            }
+        const stop = ingestFrames(parsed.events);
+        if (stop) {
+          // Terminal SSE event is enough — do not wait for a delayed body close
+          // (proxy / keepalive) that would otherwise arm the 35s timeout path.
+          clearClientTimeout("terminal_event");
+          try {
+            clientTrace("CHAT_CLIENT_ABORT_CALLED", {
+              reason: "reader_cancel_after_completion",
+            });
+            await reader.cancel("chat_stream_complete");
+          } catch {
+            /* cancel is best-effort */
           }
-          if (frame.event === "error" && !responseText) {
-            streamError = new ChatRequestError(
-              frame.data.message ?? "Erreur pendant le traitement Titan.",
-              {
-                code: frame.data.code ?? "unexpected_error",
-                retryable: true,
-                requestId: frame.data.request_id ?? requestId,
-              },
-            );
-          }
-          this._handleBackendEvent(frame.event, frame.data, frame.id);
+          readerDone = true;
+          clientTrace("CHAT_CLIENT_READER_DONE", {
+            reason: "terminal_event",
+          });
+          break;
         }
       }
 
@@ -505,20 +679,33 @@ export class BackendBridge {
         throw streamError;
       }
 
-      return {
-        response: responseText,
-        orchestration: orchestrationPayload,
-        conversation_id:
-          orchestrationPayload?.conversation_id
-          || conversationId,
-        request_id: requestId,
-        client_request_id: requestId,
-        error_code: finishedErrorCode,
-        ttft_ms: orchestrationPayload?.ttft_ms ?? null,
-        delta_count: orchestrationPayload?.delta_count ?? null,
-        ...options,
-      };
+      clearClientTimeout("stream_resolved");
+      clientTrace("CHAT_CLIENT_STREAM_RESOLVED", {
+        response_length: responseText.length,
+      });
+      return buildSuccessResult();
     } catch (error) {
+      // Successful terminal event already processed — late AbortError/timeout
+      // must not discard responseText or surface a false timeout card.
+      if (completionSeen && !streamError) {
+        clientTrace("CHAT_CLIENT_STALE_EVENT_IGNORED", {
+          reason: "abort_or_error_after_completion",
+          error_name: error?.name ?? null,
+          error_code: error?.code ?? null,
+        });
+        clearClientTimeout("completion_overrides_catch");
+        clientTrace("CHAT_CLIENT_STREAM_RESOLVED", {
+          response_length: responseText.length,
+          via: "catch_after_completion",
+        });
+        return buildSuccessResult();
+      }
+
+      clientTrace("CHAT_CLIENT_CATCH", {
+        error_name: error?.name ?? null,
+        error_code: error?.code ?? null,
+      });
+
       const isTimeout =
         error?.code === "provider_timeout" ||
         error?.code === "brain_timeout" ||
@@ -571,10 +758,8 @@ export class BackendBridge {
         },
       );
     } finally {
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-        timeoutId = null;
-      }
+      clientTrace("CHAT_CLIENT_FINALLY");
+      clearClientTimeout("finally");
       this._submitting = false;
       this.connection.streaming = false;
       this.connection.mode = this.connection.connected ? "idle" : "disconnected";

@@ -317,6 +317,12 @@ export class ConversationManager {
           streamed: true,
           ttft_ms: result?.ttft_ms ?? null,
         });
+        chatDiag("CHAT_CLIENT_MESSAGE_FINALIZED", {
+          request_id: requestId,
+          conversation_id: result?.conversation_id ?? getStoredConversationId(),
+          streamed: true,
+          response_length: response.length || this._liveBuffer.length,
+        });
       } else if (response && !this._streamTimer) {
         this._streamResponse(response, result?.orchestration ?? null);
         chatDiag("CHAT_UI_RENDERED", {
@@ -324,6 +330,12 @@ export class ConversationManager {
           response_length: response.length,
           duration_ms: Math.round(performance.now() - startedAt),
           streamed: false,
+        });
+        chatDiag("CHAT_CLIENT_MESSAGE_FINALIZED", {
+          request_id: requestId,
+          conversation_id: result?.conversation_id ?? getStoredConversationId(),
+          streamed: false,
+          response_length: response.length,
         });
       } else if (!response && !this._streamTimer) {
         this._clearBusyState();
@@ -355,6 +367,12 @@ export class ConversationManager {
       }
 
       if (generation !== this._activeGeneration) {
+        chatDiag("CHAT_CLIENT_STALE_EVENT_IGNORED", {
+          request_id: requestId,
+          code: "stale_generation",
+          error_name: error?.name ?? null,
+          error_code: error?.code ?? null,
+        });
         this._clearBusyState();
         return;
       }
@@ -364,6 +382,26 @@ export class ConversationManager {
         error?.code === "provider_timeout" ||
         error?.code === "brain_timeout" ||
         (typeof error?.message === "string" && /aborted|timeout/i.test(error.message));
+
+      // Preserve already-streamed assistant text — never replace with a timeout card.
+      if (aborted && this._receivedLiveDelta && this._liveBuffer) {
+        const preservedChars = this._liveBuffer.length;
+        chatDiag("CHAT_CLIENT_STALE_EVENT_IGNORED", {
+          request_id: requestId,
+          code: "preserve_live_after_abort",
+          error_name: error?.name ?? null,
+          error_code: error?.code ?? null,
+          received_char_count: preservedChars,
+        });
+        this._finalizeLiveStream(this._liveBuffer);
+        chatDiag("CHAT_CLIENT_MESSAGE_FINALIZED", {
+          request_id: requestId,
+          streamed: true,
+          via: "catch_preserve_live",
+          response_length: preservedChars,
+        });
+        return;
+      }
 
       // User-initiated stop — not a hard failure.
       if (
@@ -446,6 +484,10 @@ export class ConversationManager {
     }
     this._resetLiveStream({ keepBubble: true });
     const requestId = this._activeRequestId;
+    chatDiag("CHAT_CLIENT_ABORT_CALLED", {
+      request_id: requestId,
+      reason: "user_stop",
+    });
     this._brain._backendBridge?._chatAbort?.abort();
     this._brain.conversation.cancel?.();
     // Best-effort server-side cancel (does not block UI clear).
