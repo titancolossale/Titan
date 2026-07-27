@@ -199,15 +199,14 @@ class ConversationService:
             raise PermissionError("Conversation not found or access denied")
         return record
 
-    def hydrate_engine_history(
+    def load_history_for_hydration(
         self,
         conversation_id: str,
         user_id: str,
-        conversation_engine: Any,
         *,
         request_id: str | None = None,
     ) -> dict[str, Any]:
-        """Replace in-process ConversationEngine turns with durable recent history."""
+        """DB-only history load/trim — safe outside the Brain lock."""
         self.ensure_ready()
         started = time.perf_counter()
         messages, _total = self._repo.list_messages(
@@ -221,9 +220,17 @@ class ConversationService:
             conversation_id=conversation_id,
             request_id=request_id,
         )
-        selected: list[MessageRecord] = summary["messages"]
+        summary["duration_ms"] = int((time.perf_counter() - started) * 1000)
+        return summary
 
-        # Reset in-process window so follow-ups use this conversation only.
+    def apply_history_to_engine(
+        self,
+        history_summary: dict[str, Any],
+        conversation_engine: Any,
+        user_id: str,
+    ) -> None:
+        """Apply preloaded history to the in-process engine (call under Brain lock)."""
+        selected: list[MessageRecord] = list(history_summary.get("messages") or [])
         engine = conversation_engine
         # Accept Conversation facade from titan.conversation (has .engine, no .clear).
         if (
@@ -247,7 +254,21 @@ class ConversationService:
                 else:
                     engine.add_user_turn(user_id, content)
 
-        summary["duration_ms"] = int((time.perf_counter() - started) * 1000)
+    def hydrate_engine_history(
+        self,
+        conversation_id: str,
+        user_id: str,
+        conversation_engine: Any,
+        *,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Replace in-process ConversationEngine turns with durable recent history."""
+        summary = self.load_history_for_hydration(
+            conversation_id,
+            user_id,
+            request_id=request_id,
+        )
+        self.apply_history_to_engine(summary, conversation_engine, user_id)
         return summary
 
     def persist_user_message(

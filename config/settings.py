@@ -437,6 +437,17 @@ TITAN_FAST_PATH_MAX_OUTPUT_TOKENS = int(
 TITAN_CHAT_DIAGNOSTICS = (
     os.getenv("TITAN_CHAT_DIAGNOSTICS", "true").lower() == "true"
 )
+# Bounded wait for the process-global Brain lock (must stay below chat deadline).
+TITAN_BRAIN_LOCK_TIMEOUT_SECONDS = float(
+    os.getenv("TITAN_BRAIN_LOCK_TIMEOUT_SECONDS", "5")
+)
+# Conversation DB connect / statement budgets (Postgres); SQLite ignores these.
+TITAN_DB_CONNECT_TIMEOUT_SECONDS = float(
+    os.getenv("TITAN_DB_CONNECT_TIMEOUT_SECONDS", "5")
+)
+TITAN_DB_STATEMENT_TIMEOUT_MS = int(
+    os.getenv("TITAN_DB_STATEMENT_TIMEOUT_MS", "15000")
+)
 
 
 def reload_env() -> Path:

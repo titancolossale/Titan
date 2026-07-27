@@ -120,6 +120,9 @@ On timeout / error:
 | Last log seen | Meaning |
 |---|---|
 | `CHAT_API_RECEIVED` only | Blocked before Brain (auth/queue/lock) |
+| `CHAT_BRAIN_LOCK_WAIT` then `CHAT_BRAIN_LOCK_TIMEOUT` | Another turn holds Brain → `brain_busy` |
+| `CHAT_BRAIN_LOCK_WAIT` then `CHAT_BRAIN_LOCK_CANCELLED` | Stop/disconnect while waiting for Brain |
+| `CHAT_BRAIN_LOCK_ACQUIRED` then silence before `CHAT_BRAIN_START` | Unexpected — should be immediate |
 | `CHAT_BRAIN_START` then silence | Inside Brain / orchestration |
 | `CHAT_PROVIDER_START` then silence | Waiting on OpenAI |
 | `CHAT_PROVIDER_END status=timeout` | Provider deadline |
@@ -184,7 +187,9 @@ python main.py web-dev
 ## Known limitations
 
 - In-memory sessions: deploy/restart invalidates cookies → re-login
-- Global `_brain_lock` serializes concurrent Brain turns
+- Global `_brain_lock` (`threading.Lock`) serializes concurrent Brain turns with a
+  bounded wait (`TITAN_BRAIN_LOCK_TIMEOUT_SECONDS`, default 5s) → structured `brain_busy`
+- Lock lifecycle logs: `CHAT_BRAIN_LOCK_WAIT|ACQUIRED|RELEASED|TIMEOUT|CANCELLED`
 - Full authenticated E2E against live OpenAI is not claimed green until manually verified on Railway
 - FPS and provider latency are independent failure modes — diagnose with the tables above
 

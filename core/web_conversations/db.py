@@ -29,7 +29,13 @@ from sqlalchemy import (
 )
 from sqlalchemy.engine import Engine
 
-from config.settings import DATA_DIR, PROJECT_ROOT, TITAN_DATABASE_URL
+from config.settings import (
+    DATA_DIR,
+    PROJECT_ROOT,
+    TITAN_DATABASE_URL,
+    TITAN_DB_CONNECT_TIMEOUT_SECONDS,
+    TITAN_DB_STATEMENT_TIMEOUT_MS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -142,10 +148,24 @@ def create_conversation_engine(
         force_sqlite=force_sqlite,
     )
     connect_args: dict[str, Any] = {}
-    if backend_name(url) == "sqlite":
+    engine_kwargs: dict[str, Any] = {"future": True, "echo": echo}
+    backend = backend_name(url)
+    if backend == "sqlite":
         connect_args["check_same_thread"] = False
-    engine = create_engine(url, future=True, echo=echo, connect_args=connect_args)
-    if backend_name(url) == "sqlite":
+    elif backend == "postgresql":
+        # Fail fast on hung Postgres — never block chat for minutes on connect.
+        connect_args["connect_timeout"] = max(
+            1, int(round(TITAN_DB_CONNECT_TIMEOUT_SECONDS))
+        )
+        # psycopg2: server-side statement budget (milliseconds).
+        stmt_ms = max(1000, int(TITAN_DB_STATEMENT_TIMEOUT_MS))
+        connect_args["options"] = f"-c statement_timeout={stmt_ms}"
+        engine_kwargs["pool_pre_ping"] = True
+        engine_kwargs["pool_timeout"] = max(
+            1, int(round(TITAN_DB_CONNECT_TIMEOUT_SECONDS))
+        )
+    engine = create_engine(url, connect_args=connect_args, **engine_kwargs)
+    if backend == "sqlite":
         _configure_sqlite(engine)
     return engine
 

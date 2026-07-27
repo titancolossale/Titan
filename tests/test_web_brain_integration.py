@@ -241,7 +241,8 @@ def test_successful_response_follows_canonical_contract(
     payload = response.json()
     assert payload["ok"] is True
     assert payload["conversation_id"] == "conv-1"
-    assert payload["message_id"].startswith("msg-")
+    # Ephemeral ids use msg-…; durable Postgres/SQLite rows use msg_….
+    assert payload["message_id"].startswith("msg")
     assert payload["request_id"] == "client-req-1"
     assert isinstance(payload["response"], str) and payload["response"]
     runtime = payload["runtime"]

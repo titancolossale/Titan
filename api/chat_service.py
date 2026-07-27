@@ -9,6 +9,7 @@ from __future__ import annotations
 import copy
 import logging
 import threading
+import time
 import uuid
 from collections import OrderedDict
 from datetime import datetime, timezone
@@ -32,6 +33,7 @@ from brain.request_deadline import (
 )
 from config.settings import (
     LLM_MODEL,
+    TITAN_BRAIN_LOCK_TIMEOUT_SECONDS,
     TITAN_CHAT_DEADLINE_SECONDS,
     TITAN_CHAT_DIAGNOSTICS,
     TITAN_CONVERSATION_PERSISTENCE_ENABLED,
@@ -43,7 +45,13 @@ from core.web_conversations.service import get_conversation_service
 
 logger = logging.getLogger(__name__)
 
+# Process-global, non-reentrant lock serializing shared Titan Brain turns.
+# Held only around unsafe shared Brain/conversation mutations + process_request.
 _brain_lock = threading.Lock()
+_brain_lock_state_lock = threading.Lock()
+_brain_lock_owner: str | None = None
+_brain_lock_acquired_monotonic: float | None = None
+_LOCK_WAIT_SLICE_SECONDS = 0.05
 
 # Idempotency: duplicate client request_id returns the cached payload (same turn).
 _IDEMPOTENCY_MAX = 256
@@ -100,6 +108,10 @@ BRAIN_FAILURE_MESSAGE = (
 )
 CANCELLED_CODE = "cancelled"
 DUPLICATE_REQUEST_CODE = "duplicate_request"
+BRAIN_BUSY_CODE = "brain_busy"
+BRAIN_BUSY_MESSAGE = (
+    "Titan traite déjà une autre requête. Réessaie dans un instant."
+)
 
 # Active deadlines for cancellation (request_id → deadline).
 _active_deadlines_lock = threading.Lock()
@@ -143,6 +155,150 @@ def register_active_deadline(deadline: RequestDeadline) -> None:
 def unregister_active_deadline(request_id: str) -> None:
     with _active_deadlines_lock:
         _active_deadlines.pop(request_id, None)
+
+
+def _brain_lock_owner_snapshot() -> str | None:
+    with _brain_lock_state_lock:
+        return _brain_lock_owner
+
+
+def _acquire_brain_lock(
+    request_id: str,
+    deadline: RequestDeadline,
+    *,
+    timeout_seconds: float | None = None,
+) -> bool:
+    """Acquire the process-global Brain lock with a bounded, cancellable wait.
+
+    Returns True when acquired by ``request_id``. Returns False on lock timeout
+    (caller should emit ``brain_busy``). Raises ``RequestCancelledError`` or
+    ``BrainTimeoutError`` when the request deadline ends during the wait.
+    """
+    global _brain_lock_owner, _brain_lock_acquired_monotonic
+
+    budget = (
+        TITAN_BRAIN_LOCK_TIMEOUT_SECONDS
+        if timeout_seconds is None
+        else float(timeout_seconds)
+    )
+    budget = max(0.05, budget)
+    wait_started = time.monotonic()
+    owner_before = _brain_lock_owner_snapshot()
+    _chat_log(
+        "CHAT_BRAIN_LOCK_WAIT",
+        request_id=request_id,
+        wait_ms=0,
+        owner=owner_before,
+        result="waiting",
+        remaining_budget_ms=deadline.remaining_ms(),
+        stage="lock_wait",
+    )
+
+    while True:
+        deadline.check("lock_wait")
+        waited = time.monotonic() - wait_started
+        remaining_lock = budget - waited
+        if remaining_lock <= 0:
+            _chat_log(
+                "CHAT_BRAIN_LOCK_TIMEOUT",
+                request_id=request_id,
+                wait_ms=int(waited * 1000),
+                owner=_brain_lock_owner_snapshot(),
+                result="timeout",
+                remaining_budget_ms=deadline.remaining_ms(),
+                stage="lock_wait",
+            )
+            return False
+
+        slice_timeout = min(
+            _LOCK_WAIT_SLICE_SECONDS,
+            remaining_lock,
+            max(deadline.remaining_seconds(), 0.01),
+        )
+        if _brain_lock.acquire(timeout=slice_timeout):
+            waited_ms = int((time.monotonic() - wait_started) * 1000)
+            with _brain_lock_state_lock:
+                _brain_lock_owner = request_id
+                _brain_lock_acquired_monotonic = time.monotonic()
+            _chat_log(
+                "CHAT_BRAIN_LOCK_ACQUIRED",
+                request_id=request_id,
+                wait_ms=waited_ms,
+                owner=request_id,
+                result="acquired",
+                remaining_budget_ms=deadline.remaining_ms(),
+                stage="lock",
+            )
+            return True
+
+
+def _release_brain_lock(request_id: str) -> None:
+    """Release the Brain lock only when owned by ``request_id``."""
+    global _brain_lock_owner, _brain_lock_acquired_monotonic
+
+    with _brain_lock_state_lock:
+        owner = _brain_lock_owner
+        acquired_at = _brain_lock_acquired_monotonic
+        if owner != request_id:
+            _chat_log(
+                "CHAT_BRAIN_LOCK_RELEASED",
+                request_id=request_id,
+                owner=owner,
+                result="skipped_not_owner",
+                held_ms=None,
+                stage="lock",
+            )
+            return
+        held_ms = (
+            int((time.monotonic() - acquired_at) * 1000)
+            if acquired_at is not None
+            else None
+        )
+        _brain_lock_owner = None
+        _brain_lock_acquired_monotonic = None
+
+    try:
+        _brain_lock.release()
+    except RuntimeError:
+        logger.exception(
+            "CHAT_BRAIN_LOCK_RELEASED request_id=%s result=release_error",
+            request_id,
+        )
+        _chat_log(
+            "CHAT_BRAIN_LOCK_RELEASED",
+            request_id=request_id,
+            owner=request_id,
+            result="release_error",
+            held_ms=held_ms,
+            stage="lock",
+        )
+        return
+
+    _chat_log(
+        "CHAT_BRAIN_LOCK_RELEASED",
+        request_id=request_id,
+        owner=request_id,
+        result="released",
+        held_ms=held_ms,
+        stage="lock",
+    )
+
+
+def reset_brain_lock_for_tests() -> None:
+    """Test helper — drop ownership metadata and ensure the lock is free."""
+    global _brain_lock_owner, _brain_lock_acquired_monotonic
+    with _brain_lock_state_lock:
+        owned = _brain_lock_owner is not None
+        _brain_lock_owner = None
+        _brain_lock_acquired_monotonic = None
+    if owned:
+        try:
+            _brain_lock.release()
+        except RuntimeError:
+            pass
+    # Drain a stuck lock without blocking tests forever.
+    if _brain_lock.acquire(timeout=0.01):
+        _brain_lock.release()
 
 
 def _elapsed_ms(started: datetime) -> int:
@@ -367,6 +523,44 @@ def _is_cancelled(result: OrchestrationResult) -> bool:
     return (result.artifacts or {}).get("error") == CANCELLED_CODE
 
 
+def _is_brain_busy(result: OrchestrationResult) -> bool:
+    return (result.artifacts or {}).get("error") == BRAIN_BUSY_CODE
+
+
+def _fallback_orchestration_result(
+    titan: Any,
+    text: str,
+    *,
+    reason: str,
+    response: str,
+    error_code: str,
+    last_stage: str | None,
+    duration_seconds: float,
+) -> OrchestrationResult:
+    from brain.natural_language_orchestrator import SystemsUsed
+
+    nlo = titan.brain.natural_language_orchestrator
+    analysis = nlo._analyze_request(text)
+    return OrchestrationResult(
+        request_analysis=analysis,
+        detected_intent=DetectedIntent.CONVERSATION,
+        pipeline_decision=nlo._build_pipeline(
+            DetectedIntent.CONVERSATION,
+            analysis,
+            reason,
+        ),
+        systems_used=SystemsUsed(),
+        reasoning_summary=response,
+        confidence=0.0,
+        final_response=response,
+        artifacts={
+            "error": error_code,
+            "last_completed_stage": last_stage,
+        },
+        duration_seconds=duration_seconds,
+    )
+
+
 def _is_provider_failure(result: OrchestrationResult) -> bool:
     """Detect LLM provider failure without inventing a successful answer."""
     if _is_provider_timeout(result) or _is_cancelled(result):
@@ -494,12 +688,13 @@ def build_chat_response(
     timed_out = _is_provider_timeout(result)
     brain_timed_out = _is_brain_timeout(result)
     cancelled = _is_cancelled(result)
+    brain_busy = _is_brain_busy(result)
     provider_failure = _is_provider_failure(result)
-    if provider_failure:
+    if provider_failure or brain_busy:
         approval["execution_status"] = "error"
 
     brain_state = _brain_state_for_result(result, think_ctx, approval)
-    if provider_failure:
+    if provider_failure or brain_busy:
         brain_state = "error"
 
     artifacts = dict(result.artifacts or {})
@@ -509,6 +704,8 @@ def build_chat_response(
         artifacts.setdefault("error", PROVIDER_TIMEOUT_CODE)
     elif cancelled:
         artifacts.setdefault("error", CANCELLED_CODE)
+    elif brain_busy:
+        artifacts.setdefault("error", BRAIN_BUSY_CODE)
     elif provider_failure:
         artifacts.setdefault("error", PROVIDER_UNAVAILABLE_CODE)
 
@@ -532,6 +729,10 @@ def build_chat_response(
         error_code = CANCELLED_CODE
         if CANCELLED_CODE not in errors:
             errors.append(CANCELLED_CODE)
+    elif brain_busy:
+        error_code = BRAIN_BUSY_CODE
+        if BRAIN_BUSY_CODE not in errors:
+            errors.append(BRAIN_BUSY_CODE)
     elif provider_failure:
         error_code = PROVIDER_UNAVAILABLE_CODE
         if PROVIDER_UNAVAILABLE_CODE not in errors:
@@ -539,7 +740,11 @@ def build_chat_response(
     elif BRAIN_FAILURE_CODE in errors:
         error_code = BRAIN_FAILURE_CODE
 
-    ok = not provider_failure and approval["execution_status"] != "error"
+    ok = (
+        not provider_failure
+        and not brain_busy
+        and approval["execution_status"] != "error"
+    )
     runtime = build_runtime_summary(
         tool_activity=tool_activity,
         memory_activity=memory_activity,
@@ -556,6 +761,8 @@ def build_chat_response(
         response_text = PROVIDER_TIMEOUT_MESSAGE
     elif cancelled:
         response_text = "Requête annulée."
+    elif brain_busy:
+        response_text = BRAIN_BUSY_MESSAGE
     elif provider_failure:
         response_text = PROVIDER_UNAVAILABLE_MESSAGE
 
@@ -591,14 +798,18 @@ def build_chat_response(
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "runtime": runtime,
         "error_code": error_code,
-        "retryable": bool(error_code) and error_code != CANCELLED_CODE,
+        "retryable": bool(error_code) and error_code not in {
+            CANCELLED_CODE,
+        },
         "last_completed_stage": last_stage,
         "fast_path": bool((artifacts.get("fast_path") or {}).get("selected")),
         "error": (
             {
                 "code": error_code,
                 "message": response_text,
-                "retryable": bool(error_code) and error_code != CANCELLED_CODE,
+                "retryable": bool(error_code) and error_code not in {
+                    CANCELLED_CODE,
+                },
                 "request_id": request_id,
                 "last_completed_stage": last_stage,
             }
@@ -711,315 +922,378 @@ def process_chat_message(
     message_id = _new_message_id()
     llm = getattr(getattr(titan, "brain", None), "llm", None)
     model_name = getattr(llm, "model", None) or LLM_MODEL
+    speaker = (user or "").strip() or speaker_hint
+    history_summary: dict[str, Any] | None = None
+
+    # Durable DB work stays outside the Brain lock (setup / persist / title).
+    if conv_service is not None:
+        try:
+            deadline.check("persist")
+            history_summary = conv_service.load_history_for_hydration(
+                durable_conv_id,
+                speaker,
+                request_id=req_id,
+            )
+            user_msg = conv_service.persist_user_message(
+                conversation_id=durable_conv_id,
+                user_id=speaker,
+                content=text,
+                request_id=req_id,
+                allow_duplicate=False,
+            )
+            user_message_id = user_msg.id
+            pending = conv_service.begin_assistant_message(
+                conversation_id=durable_conv_id,
+                user_id=speaker,
+                request_id=req_id,
+                model=model_name,
+            )
+            assistant_message_id = pending.id
+            message_id = pending.id
+            conv_service.maybe_generate_title(
+                conversation_id=durable_conv_id,
+                user_id=speaker,
+                first_message=text,
+                llm_ask=None,  # never block response on title LLM
+            )
+        except (BrainTimeoutError, RequestCancelledError):
+            raise
+        except Exception:
+            logger.exception(
+                "Conversation hydrate/persist failed request_id=%s",
+                req_id,
+            )
+
+    lock_acquired = False
+    result: OrchestrationResult | None = None
+    brain_error = False
+    tool_activity: list[dict[str, Any]] = []
+    memory_activity: list[dict[str, Any]] = []
+    orchestrator_progress: list[dict[str, Any]] = []
 
     try:
-        with _brain_lock:
-            if user:
-                titan.context.session.set_user(user)
-
-            speaker = titan.context.current_user
-
-            # Hydrate in-process history from durable conversation (follow-ups).
-            if conv_service is not None:
-                try:
-                    engine = getattr(titan, "conversation", None)
-                    conv_service.hydrate_engine_history(
-                        durable_conv_id,
-                        speaker,
-                        engine,
-                        request_id=req_id,
-                    )
-                    user_msg = conv_service.persist_user_message(
-                        conversation_id=durable_conv_id,
-                        user_id=speaker,
-                        content=text,
-                        request_id=req_id,
-                        allow_duplicate=False,
-                    )
-                    user_message_id = user_msg.id
-                    pending = conv_service.begin_assistant_message(
-                        conversation_id=durable_conv_id,
-                        user_id=speaker,
-                        request_id=req_id,
-                        model=model_name,
-                    )
-                    assistant_message_id = pending.id
-                    message_id = pending.id
-                    conv_service.maybe_generate_title(
-                        conversation_id=durable_conv_id,
-                        user_id=speaker,
-                        first_message=text,
-                        llm_ask=None,  # never block response on title LLM
-                    )
-                except Exception:
-                    logger.exception(
-                        "Conversation hydrate/persist failed request_id=%s",
-                        req_id,
-                    )
-
-            # Keep in-process engine in sync for this turn.
-            titan.conversation.add_message(speaker, text)
-
-            audit_start = _audit_start_index(titan)
-
-            # Thread request_id into LLM for CHAT_PROVIDER_* correlation.
-            if llm is not None:
-                setattr(llm, "_active_request_id", req_id)
-
+        try:
+            lock_acquired = _acquire_brain_lock(req_id, deadline)
+        except RequestCancelledError as exc:
             _chat_log(
-                "CHAT_BRAIN_START",
+                "CHAT_BRAIN_LOCK_CANCELLED",
                 request_id=req_id,
-                conversation_id=durable_conv_id,
-                elapsed_ms=deadline.elapsed_ms(),
+                wait_ms=deadline.elapsed_ms(),
+                owner=_brain_lock_owner_snapshot(),
+                result="cancelled",
                 remaining_budget_ms=deadline.remaining_ms(),
-                stage="brain",
-                model=model_name,
-                attempt=1,
+                stage=exc.last_completed_stage or "lock_wait",
             )
-            if stream is not None:
-                try:
-                    stream.emit(
-                        "acknowledged",
-                        {
-                            "request_id": req_id,
-                            "conversation_id": durable_conv_id,
-                            "label": "Requête reçue",
-                        },
-                    )
-                except Exception:
-                    logger.debug("acknowledged emit failed", exc_info=True)
-                _chat_log(
-                    "CHAT_STREAM_STARTED",
-                    request_id=req_id,
-                    conversation_id=durable_conv_id[:16],
-                )
+            _record_diag_error(CANCELLED_CODE, req_id)
+            result = _fallback_orchestration_result(
+                titan,
+                text,
+                reason="cancelled",
+                response="Requête annulée.",
+                error_code=CANCELLED_CODE,
+                last_stage=exc.last_completed_stage or "lock_wait",
+                duration_seconds=deadline.elapsed_ms() / 1000.0,
+            )
+        except BrainTimeoutError as exc:
+            _record_diag_error(BRAIN_TIMEOUT_CODE, req_id)
+            result = _fallback_orchestration_result(
+                titan,
+                text,
+                reason="timeout",
+                response=BRAIN_TIMEOUT_MESSAGE,
+                error_code=BRAIN_TIMEOUT_CODE,
+                last_stage=exc.last_completed_stage or "lock_wait",
+                duration_seconds=deadline.elapsed_ms() / 1000.0,
+            )
 
-            brain_error = False
+        if result is None and not lock_acquired:
+            _record_diag_error(BRAIN_BUSY_CODE, req_id)
+            result = _fallback_orchestration_result(
+                titan,
+                text,
+                reason="busy",
+                response=BRAIN_BUSY_MESSAGE,
+                error_code=BRAIN_BUSY_CODE,
+                last_stage="lock_wait",
+                duration_seconds=deadline.elapsed_ms() / 1000.0,
+            )
+
+        if result is None and lock_acquired:
             try:
-                deadline.check("brain")
-                # Sync Brain work must run off the FastAPI event loop.
-                result = titan.brain.process_request(text, stream=stream)
-            except BrainTimeoutError as exc:
-                brain_error = True
-                from brain.natural_language_orchestrator import SystemsUsed
+                if user:
+                    titan.context.session.set_user(user)
+                speaker = titan.context.current_user
 
-                nlo = titan.brain.natural_language_orchestrator
-                analysis = nlo._analyze_request(text)
-                result = OrchestrationResult(
-                    request_analysis=analysis,
-                    detected_intent=DetectedIntent.CONVERSATION,
-                    pipeline_decision=nlo._build_pipeline(
-                        DetectedIntent.CONVERSATION,
-                        analysis,
-                        "timeout",
-                    ),
-                    systems_used=SystemsUsed(),
-                    reasoning_summary="Délai global dépassé.",
-                    confidence=0.0,
-                    final_response=BRAIN_TIMEOUT_MESSAGE,
-                    artifacts={
-                        "error": BRAIN_TIMEOUT_CODE,
-                        "last_completed_stage": exc.last_completed_stage,
-                    },
-                    duration_seconds=deadline.elapsed_ms() / 1000.0,
-                )
-                _record_diag_error(BRAIN_TIMEOUT_CODE, req_id)
+                # Apply preloaded history under lock (no DB I/O here).
+                if conv_service is not None and history_summary is not None:
+                    try:
+                        engine = getattr(titan, "conversation", None)
+                        conv_service.apply_history_to_engine(
+                            history_summary,
+                            engine,
+                            speaker,
+                        )
+                    except Exception:
+                        logger.exception(
+                            "Conversation history apply failed request_id=%s",
+                            req_id,
+                        )
+
+                titan.conversation.add_message(speaker, text)
+                audit_start = _audit_start_index(titan)
+
+                if llm is not None:
+                    setattr(llm, "_active_request_id", req_id)
+
                 _chat_log(
-                    "CHAT_TIMEOUT",
+                    "CHAT_BRAIN_START",
                     request_id=req_id,
+                    conversation_id=durable_conv_id,
                     elapsed_ms=deadline.elapsed_ms(),
-                    remaining_budget_ms=0,
-                    stage=exc.last_completed_stage or "brain",
-                    status="timeout",
-                    code=BRAIN_TIMEOUT_CODE,
+                    remaining_budget_ms=deadline.remaining_ms(),
+                    stage="brain",
                     model=model_name,
                     attempt=1,
                 )
-            except RequestCancelledError as exc:
-                brain_error = True
-                from brain.natural_language_orchestrator import SystemsUsed
+                if stream is not None:
+                    try:
+                        stream.emit(
+                            "acknowledged",
+                            {
+                                "request_id": req_id,
+                                "conversation_id": durable_conv_id,
+                                "label": "Requête reçue",
+                            },
+                        )
+                    except Exception:
+                        logger.debug("acknowledged emit failed", exc_info=True)
+                    _chat_log(
+                        "CHAT_STREAM_STARTED",
+                        request_id=req_id,
+                        conversation_id=durable_conv_id[:16],
+                    )
 
-                nlo = titan.brain.natural_language_orchestrator
-                analysis = nlo._analyze_request(text)
-                result = OrchestrationResult(
-                    request_analysis=analysis,
-                    detected_intent=DetectedIntent.CONVERSATION,
-                    pipeline_decision=nlo._build_pipeline(
-                        DetectedIntent.CONVERSATION,
-                        analysis,
-                        "cancelled",
-                    ),
-                    systems_used=SystemsUsed(),
-                    reasoning_summary="Requête annulée par le client.",
-                    confidence=0.0,
-                    final_response="Requête annulée.",
-                    artifacts={
-                        "error": CANCELLED_CODE,
-                        "last_completed_stage": exc.last_completed_stage,
-                    },
-                    duration_seconds=deadline.elapsed_ms() / 1000.0,
-                )
-                _record_diag_error(CANCELLED_CODE, req_id)
-                _chat_log(
-                    "CHAT_CANCELLED",
-                    request_id=req_id,
-                    elapsed_ms=deadline.elapsed_ms(),
-                    remaining_budget_ms=deadline.remaining_ms(),
-                    stage=exc.last_completed_stage or "brain",
-                    code=CANCELLED_CODE,
-                    model=model_name,
-                )
-            except Exception:
-                brain_error = True
-                logger.exception("Brain.process_request failure during web chat")
-                from brain.natural_language_orchestrator import SystemsUsed
+                try:
+                    deadline.check("brain")
+                    # Shared Brain is not concurrent-safe — serialize process_request.
+                    result = titan.brain.process_request(text, stream=stream)
+                except BrainTimeoutError as exc:
+                    brain_error = True
+                    result = _fallback_orchestration_result(
+                        titan,
+                        text,
+                        reason="timeout",
+                        response=BRAIN_TIMEOUT_MESSAGE,
+                        error_code=BRAIN_TIMEOUT_CODE,
+                        last_stage=exc.last_completed_stage,
+                        duration_seconds=deadline.elapsed_ms() / 1000.0,
+                    )
+                    _record_diag_error(BRAIN_TIMEOUT_CODE, req_id)
+                    _chat_log(
+                        "CHAT_TIMEOUT",
+                        request_id=req_id,
+                        elapsed_ms=deadline.elapsed_ms(),
+                        remaining_budget_ms=0,
+                        stage=exc.last_completed_stage or "brain",
+                        status="timeout",
+                        code=BRAIN_TIMEOUT_CODE,
+                        model=model_name,
+                        attempt=1,
+                    )
+                except RequestCancelledError as exc:
+                    brain_error = True
+                    result = _fallback_orchestration_result(
+                        titan,
+                        text,
+                        reason="cancelled",
+                        response="Requête annulée.",
+                        error_code=CANCELLED_CODE,
+                        last_stage=exc.last_completed_stage,
+                        duration_seconds=deadline.elapsed_ms() / 1000.0,
+                    )
+                    _record_diag_error(CANCELLED_CODE, req_id)
+                    _chat_log(
+                        "CHAT_CANCELLED",
+                        request_id=req_id,
+                        elapsed_ms=deadline.elapsed_ms(),
+                        remaining_budget_ms=deadline.remaining_ms(),
+                        stage=exc.last_completed_stage or "brain",
+                        code=CANCELLED_CODE,
+                        model=model_name,
+                    )
+                except Exception:
+                    brain_error = True
+                    logger.exception("Brain.process_request failure during web chat")
+                    result = _fallback_orchestration_result(
+                        titan,
+                        text,
+                        reason="fallback",
+                        response=BRAIN_FAILURE_MESSAGE,
+                        error_code=BRAIN_FAILURE_CODE,
+                        last_stage="brain",
+                        duration_seconds=0.0,
+                    )
+                    _record_diag_error(BRAIN_FAILURE_CODE, req_id)
+                    _chat_log(
+                        "CHAT_ERROR",
+                        request_id=req_id,
+                        elapsed_ms=deadline.elapsed_ms(),
+                        remaining_budget_ms=deadline.remaining_ms(),
+                        stage="brain",
+                        status="error",
+                        code=BRAIN_FAILURE_CODE,
+                        model=model_name,
+                        attempt=1,
+                    )
+                finally:
+                    if llm is not None:
+                        setattr(llm, "_active_request_id", None)
 
-                nlo = titan.brain.natural_language_orchestrator
-                analysis = nlo._analyze_request(text)
-                result = OrchestrationResult(
-                    request_analysis=analysis,
-                    detected_intent=DetectedIntent.CONVERSATION,
-                    pipeline_decision=nlo._build_pipeline(
-                        DetectedIntent.CONVERSATION,
-                        analysis,
-                        "fallback",
-                    ),
-                    systems_used=SystemsUsed(),
-                    reasoning_summary="Erreur interne pendant l'orchestration.",
-                    confidence=0.0,
-                    final_response=BRAIN_FAILURE_MESSAGE,
-                    artifacts={"error": BRAIN_FAILURE_CODE},
-                    duration_seconds=0.0,
-                )
-                _record_diag_error(BRAIN_FAILURE_CODE, req_id)
+                assert result is not None
                 _chat_log(
-                    "CHAT_ERROR",
+                    "CHAT_BRAIN_END",
                     request_id=req_id,
                     elapsed_ms=deadline.elapsed_ms(),
                     remaining_budget_ms=deadline.remaining_ms(),
                     stage="brain",
-                    status="error",
-                    code=BRAIN_FAILURE_CODE,
+                    status="error" if brain_error else "ok",
                     model=model_name,
                     attempt=1,
+                )
+
+                response_text = result.final_response
+                if _is_brain_timeout(result):
+                    response_text = BRAIN_TIMEOUT_MESSAGE
+                    _record_diag_error(BRAIN_TIMEOUT_CODE, req_id)
+                    _chat_log(
+                        "CHAT_TIMEOUT",
+                        request_id=req_id,
+                        elapsed_ms=deadline.elapsed_ms(),
+                        remaining_budget_ms=0,
+                        stage=(result.artifacts or {}).get("last_completed_stage")
+                        or "provider",
+                        status="timeout",
+                        code=BRAIN_TIMEOUT_CODE,
+                        model=model_name,
+                        attempt=1,
+                    )
+                elif _is_provider_timeout(result):
+                    response_text = PROVIDER_TIMEOUT_MESSAGE
+                    _record_diag_error(PROVIDER_TIMEOUT_CODE, req_id)
+                    _chat_log(
+                        "CHAT_TIMEOUT",
+                        request_id=req_id,
+                        elapsed_ms=deadline.elapsed_ms(),
+                        remaining_budget_ms=deadline.remaining_ms(),
+                        stage="provider",
+                        status="timeout",
+                        code=PROVIDER_TIMEOUT_CODE,
+                        model=model_name,
+                        attempt=1,
+                    )
+                elif _is_cancelled(result):
+                    response_text = "Requête annulée."
+                    _record_diag_error(CANCELLED_CODE, req_id)
+                elif _is_provider_failure(result):
+                    response_text = PROVIDER_UNAVAILABLE_MESSAGE
+                    _record_diag_error(PROVIDER_UNAVAILABLE_CODE, req_id)
+                    _chat_log(
+                        "CHAT_ERROR",
+                        request_id=req_id,
+                        elapsed_ms=deadline.elapsed_ms(),
+                        remaining_budget_ms=deadline.remaining_ms(),
+                        stage="provider",
+                        status="error",
+                        code=PROVIDER_UNAVAILABLE_CODE,
+                        model=model_name,
+                        attempt=1,
+                    )
+
+                # Abandoned/cancelled/busy turns must not pollute history.
+                if not _is_cancelled(result) and not _is_brain_busy(result):
+                    titan.conversation.add_message("Titan", response_text)
+
+                tool_activity, memory_activity, orchestrator_progress = (
+                    _collect_activity(titan, audit_start)
                 )
             finally:
-                if llm is not None:
-                    setattr(llm, "_active_request_id", None)
+                if lock_acquired:
+                    _release_brain_lock(req_id)
+                    lock_acquired = False
 
-            _chat_log(
-                "CHAT_BRAIN_END",
-                request_id=req_id,
-                elapsed_ms=deadline.elapsed_ms(),
-                remaining_budget_ms=deadline.remaining_ms(),
-                stage="brain",
-                status="error" if brain_error else "ok",
-                model=model_name,
-                attempt=1,
-            )
+        assert result is not None
 
-            response_text = result.final_response
-            if _is_brain_timeout(result):
-                response_text = BRAIN_TIMEOUT_MESSAGE
-                _record_diag_error(BRAIN_TIMEOUT_CODE, req_id)
-                _chat_log(
-                    "CHAT_TIMEOUT",
-                    request_id=req_id,
-                    elapsed_ms=deadline.elapsed_ms(),
-                    remaining_budget_ms=0,
-                    stage=(result.artifacts or {}).get("last_completed_stage")
-                    or "provider",
-                    status="timeout",
-                    code=BRAIN_TIMEOUT_CODE,
-                    model=model_name,
-                    attempt=1,
-                )
-            elif _is_provider_timeout(result):
-                response_text = PROVIDER_TIMEOUT_MESSAGE
-                _record_diag_error(PROVIDER_TIMEOUT_CODE, req_id)
-                _chat_log(
-                    "CHAT_TIMEOUT",
-                    request_id=req_id,
-                    elapsed_ms=deadline.elapsed_ms(),
-                    remaining_budget_ms=deadline.remaining_ms(),
-                    stage="provider",
-                    status="timeout",
-                    code=PROVIDER_TIMEOUT_CODE,
-                    model=model_name,
-                    attempt=1,
-                )
-            elif _is_cancelled(result):
-                response_text = "Requête annulée."
-                _record_diag_error(CANCELLED_CODE, req_id)
-            elif _is_provider_failure(result):
-                response_text = PROVIDER_UNAVAILABLE_MESSAGE
-                _record_diag_error(PROVIDER_UNAVAILABLE_CODE, req_id)
-                _chat_log(
-                    "CHAT_ERROR",
-                    request_id=req_id,
-                    elapsed_ms=deadline.elapsed_ms(),
-                    remaining_budget_ms=deadline.remaining_ms(),
-                    stage="provider",
-                    status="error",
-                    code=PROVIDER_UNAVAILABLE_CODE,
-                    model=model_name,
-                    attempt=1,
-                )
-            # Abandoned/cancelled turns must not pollute conversation history.
-            if not _is_cancelled(result):
-                titan.conversation.add_message("Titan", response_text)
+        # Finalize durable assistant row outside the Brain lock.
+        response_text = result.final_response
+        if _is_brain_timeout(result):
+            response_text = BRAIN_TIMEOUT_MESSAGE
+        elif _is_provider_timeout(result):
+            response_text = PROVIDER_TIMEOUT_MESSAGE
+        elif _is_cancelled(result):
+            response_text = "Requête annulée."
+        elif _is_brain_busy(result):
+            response_text = BRAIN_BUSY_MESSAGE
+        elif _is_provider_failure(result):
+            response_text = PROVIDER_UNAVAILABLE_MESSAGE
 
-            # Finalize durable assistant message.
-            if conv_service is not None and assistant_message_id:
-                try:
-                    if _is_cancelled(result):
-                        status = MessageStatus.CANCELLED.value
-                        err = CANCELLED_CODE
-                        _chat_log(
-                            "CHAT_STREAM_CANCELLED",
-                            request_id=req_id,
-                            conversation_id=durable_conv_id[:16],
-                        )
-                    elif _is_provider_failure(result) or brain_error:
-                        status = MessageStatus.FAILED.value
-                        err = (
-                            (result.artifacts or {}).get("error")
-                            or PROVIDER_UNAVAILABLE_CODE
-                        )
-                        _chat_log(
-                            "CHAT_STREAM_ERROR",
-                            request_id=req_id,
-                            conversation_id=durable_conv_id[:16],
-                            code=err,
-                        )
-                    else:
-                        status = MessageStatus.COMPLETED.value
-                        err = None
-                        _chat_log(
-                            "CHAT_STREAM_COMPLETED",
-                            request_id=req_id,
-                            conversation_id=durable_conv_id[:16],
-                            chars=len(response_text or ""),
-                        )
-                    conv_service.finalize_assistant_message(
-                        message_id=assistant_message_id,
-                        conversation_id=durable_conv_id,
-                        user_id=speaker,
-                        content=response_text if not _is_cancelled(result) else "",
-                        status=status,
-                        error_code=err,
-                        model=model_name,
+        if conv_service is not None and assistant_message_id:
+            try:
+                if _is_cancelled(result):
+                    status = MessageStatus.CANCELLED.value
+                    err = CANCELLED_CODE
+                    _chat_log(
+                        "CHAT_STREAM_CANCELLED",
+                        request_id=req_id,
+                        conversation_id=durable_conv_id[:16],
                     )
-                except Exception:
-                    logger.exception(
-                        "Assistant finalize failed request_id=%s",
-                        req_id,
+                elif _is_brain_busy(result):
+                    status = MessageStatus.FAILED.value
+                    err = BRAIN_BUSY_CODE
+                    _chat_log(
+                        "CHAT_STREAM_ERROR",
+                        request_id=req_id,
+                        conversation_id=durable_conv_id[:16],
+                        code=err,
                     )
-
-            tool_activity, memory_activity, orchestrator_progress = _collect_activity(
-                titan,
-                audit_start,
-            )
+                elif _is_provider_failure(result) or brain_error:
+                    status = MessageStatus.FAILED.value
+                    err = (
+                        (result.artifacts or {}).get("error")
+                        or PROVIDER_UNAVAILABLE_CODE
+                    )
+                    _chat_log(
+                        "CHAT_STREAM_ERROR",
+                        request_id=req_id,
+                        conversation_id=durable_conv_id[:16],
+                        code=err,
+                    )
+                else:
+                    status = MessageStatus.COMPLETED.value
+                    err = None
+                    _chat_log(
+                        "CHAT_STREAM_COMPLETED",
+                        request_id=req_id,
+                        conversation_id=durable_conv_id[:16],
+                        chars=len(response_text or ""),
+                    )
+                conv_service.finalize_assistant_message(
+                    message_id=assistant_message_id,
+                    conversation_id=durable_conv_id,
+                    user_id=speaker,
+                    content=(
+                        response_text
+                        if not _is_cancelled(result) and not _is_brain_busy(result)
+                        else ""
+                    ),
+                    status=status,
+                    error_code=err,
+                    model=model_name,
+                )
+            except Exception:
+                logger.exception(
+                    "Assistant finalize failed request_id=%s",
+                    req_id,
+                )
 
         payload = build_chat_response(
             result=result,
@@ -1067,11 +1341,78 @@ def process_chat_message(
             attempt=1,
         )
 
-        if client_provided_id and not _is_cancelled(result):
+        if (
+            client_provided_id
+            and not _is_cancelled(result)
+            and not _is_brain_busy(result)
+        ):
             _cache_put(req_id, payload)
 
         return payload
+    except (BrainTimeoutError, RequestCancelledError) as exc:
+        # Persist/setup cancelled before lock — structured response, never hang.
+        code = (
+            CANCELLED_CODE
+            if isinstance(exc, RequestCancelledError)
+            else BRAIN_TIMEOUT_CODE
+        )
+        _record_diag_error(code, req_id)
+        if isinstance(exc, RequestCancelledError):
+            _chat_log(
+                "CHAT_BRAIN_LOCK_CANCELLED",
+                request_id=req_id,
+                wait_ms=deadline.elapsed_ms(),
+                owner=_brain_lock_owner_snapshot(),
+                result="cancelled",
+                remaining_budget_ms=deadline.remaining_ms(),
+                stage=exc.last_completed_stage or "persist",
+            )
+        fallback = _fallback_orchestration_result(
+            titan,
+            text,
+            reason="cancelled" if code == CANCELLED_CODE else "timeout",
+            response=(
+                "Requête annulée."
+                if code == CANCELLED_CODE
+                else BRAIN_TIMEOUT_MESSAGE
+            ),
+            error_code=code,
+            last_stage=exc.last_completed_stage or "persist",
+            duration_seconds=deadline.elapsed_ms() / 1000.0,
+        )
+        if conv_service is not None and assistant_message_id:
+            try:
+                conv_service.finalize_assistant_message(
+                    message_id=assistant_message_id,
+                    conversation_id=durable_conv_id,
+                    user_id=speaker,
+                    content="",
+                    status=(
+                        MessageStatus.CANCELLED.value
+                        if code == CANCELLED_CODE
+                        else MessageStatus.FAILED.value
+                    ),
+                    error_code=code,
+                    model=model_name,
+                )
+            except Exception:
+                logger.exception(
+                    "Assistant finalize failed request_id=%s",
+                    req_id,
+                )
+        return build_chat_response(
+            result=fallback,
+            titan=titan,
+            request_id=req_id,
+            conversation_id=durable_conv_id,
+            tool_activity=[],
+            memory_activity=[],
+            orchestrator_progress=[],
+            message_id=message_id,
+        )
     finally:
+        if lock_acquired:
+            _release_brain_lock(req_id)
         unregister_active_deadline(req_id)
         reset_request_deadline(deadline_token)
 

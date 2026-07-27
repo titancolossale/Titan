@@ -363,6 +363,17 @@ class LLM(LLMProvider):
                         self.last_ttft_ms,
                     )
                 if on_text_delta is not None:
+                    # Ignore late deltas after cancel / ownership handoff.
+                    active_id = getattr(self, "_active_request_id", None)
+                    stream_deadline = get_request_deadline()
+                    if stream_deadline is not None and stream_deadline.cancelled:
+                        continue
+                    if (
+                        active_id
+                        and request_id not in {"-", None}
+                        and active_id != request_id
+                    ):
+                        continue
                     on_text_delta(delta)
         finally:
             close = getattr(stream, "close", None)
