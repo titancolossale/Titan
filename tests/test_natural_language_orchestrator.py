@@ -384,6 +384,68 @@ def test_mission_routing(brain: Brain) -> None:
     assert "ORR Sprint" in result.final_response
 
 
+def test_mission_create_from_nl_named_title(brain: Brain) -> None:
+    result = brain.process_request(
+        "Crée une Mission de test isolée nommée P195-Mission-nlo dans le Project Titan."
+    )
+    assert result.detected_intent == DetectedIntent.MISSION_MANAGEMENT
+    assert "P195-Mission-nlo" in result.final_response
+    titles = [m.title for m in brain.list_active_missions()]
+    assert "P195-Mission-nlo" in titles
+
+
+def test_goal_create_from_nl_named_title(tmp_path: Path) -> None:
+    from core.goal_manager import GoalManager
+    from core.project_manager import ProjectManager
+
+    mock_llm = MagicMock(spec=LLM)
+    mock_llm.ask.return_value = "Réponse de test."
+    state = StateManager(file_path=tmp_path / "titan_state.json")
+    mission = MissionManager(file_path=tmp_path / "titan_mission.json")
+    goals = GoalManager(file_path=tmp_path / "titan_goals.json", state_manager=state)
+    projects = ProjectManager(
+        file_path=tmp_path / "titan_projects.json",
+        state_manager=state,
+        goal_manager=goals,
+    )
+    mission.bind_project_manager(projects)
+    goals.bind_project_manager(projects)
+    goals.bind_mission_manager(mission)
+    memory = MemoryService(
+        short_term=MemoryManager(),
+        long_term=LongTermMemory(file_path=tmp_path / "long_term_memory.json"),
+    )
+    brain = Brain(
+        agent_manager=AgentManager(memory_service=memory),
+        context_manager=ContextManager(state_manager=state, mission_manager=mission),
+        state_manager=state,
+        mission_manager=mission,
+        memory_service=memory,
+        tool_manager=ToolManager(project_root=tmp_path),
+        llm=mock_llm,
+        project_manager=projects,
+        goal_manager=goals,
+    )
+    result = brain.process_request(
+        "Crée un Goal de test isolé nommé P195-Goal-nlo pour la validation."
+    )
+    assert "P195-Goal-nlo" in result.final_response
+    active = brain.goal_manager.get_active_goal()
+    assert active is not None
+    assert active.name == "P195-Goal-nlo"
+
+
+def test_memory_negative_guard_skips_tool_execution(brain: Brain) -> None:
+    result = brain.process_request(
+        "Ne touche pas Obsidian. Demande seulement une confirmation avant delete_synthetic."
+    )
+    assert result.detected_intent == DetectedIntent.MEMORY
+    assert any(
+        "negative tool guard" in skipped for skipped in result.systems_used.skipped
+    ) or SystemName.TOOL_EXECUTION_ENGINE.value not in result.systems_used.invoked
+    assert "Execution failed" not in result.final_response
+
+
 def test_code_explanation_routing(brain: Brain) -> None:
     result = brain.process_request("Explain class Engine")
     assert result.detected_intent == DetectedIntent.CODE_EXPLANATION

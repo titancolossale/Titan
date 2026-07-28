@@ -509,6 +509,30 @@ class NaturalLanguageOrchestrator:
         artifacts: dict[str, Any] = {"awareness": {}}
         reasoning_result = None
 
+        # Explicit Goal / Project create — before fast-path / conversation routes.
+        hierarchy = self._maybe_create_goal_or_project(
+            request, analysis, systems_used, artifacts
+        )
+        if hierarchy is not None:
+            duration = time.perf_counter() - started
+            return OrchestrationResult(
+                request_analysis=analysis,
+                detected_intent=intent,
+                pipeline_decision=PipelineDecision(
+                    intent=intent,
+                    systems=(SystemName.BRAIN_THINK,),
+                    awareness_systems=(),
+                    developer_mode=False,
+                    rationale="explicit goal/project create",
+                ),
+                systems_used=systems_used,
+                reasoning_summary="Création Goal/Project déterministe via manager.",
+                confidence=max(confidence, 0.95),
+                final_response=hierarchy,
+                artifacts=artifacts,
+                duration_seconds=duration,
+            )
+
         # Phase 11.4 — simple conversational fast path (real LLM, no agents/tools).
         if is_simple_conversational_request(request):
             logger.info(
@@ -1207,6 +1231,51 @@ class NaturalLanguageOrchestrator:
             return handler(request, analysis, systems_used, artifacts, stream=stream)
         return handler(request, analysis, systems_used, artifacts)
 
+    def _maybe_create_goal_or_project(
+        self,
+        request: str,
+        analysis: RequestAnalysis,
+        systems_used: SystemsUsed,
+        artifacts: dict[str, Any],
+    ) -> str | None:
+        """Create Goal/Project when the user uses an explicit create phrase."""
+        goal_manager = getattr(self._brain, "goal_manager", None)
+        project_manager = getattr(self._brain, "project_manager", None)
+
+        if goal_manager is not None and goal_manager.should_create_goal_from_message(
+            request
+        ):
+            try:
+                goal = goal_manager.create_goal_from_message(request)
+                systems_used.mark_invoked(SystemName.BRAIN_THINK)
+                artifacts["created_goal"] = _safe_artifact(goal)
+                artifacts["skip_agents"] = True
+                return (
+                    f"Goal créé et activé: {goal.name} "
+                    f"(id={goal.id}). Aucun autre Goal modifié."
+                )
+            except Exception:
+                logger.exception("NLO goal create failed")
+                return None
+
+        if project_manager is not None and project_manager.should_create_project_from_message(
+            request
+        ):
+            try:
+                project = project_manager.create_project_from_message(request)
+                systems_used.mark_invoked(SystemName.BRAIN_THINK)
+                artifacts["created_project"] = _safe_artifact(project)
+                artifacts["skip_agents"] = True
+                return (
+                    f"Project créé et activé: {project.name} "
+                    f"(id={project.id}). Aucun Project réel utilisateur modifié."
+                )
+            except Exception:
+                logger.exception("NLO project create failed")
+                return None
+
+        return None
+
     def _run_developer_enrichment(
         self,
         request: str,
@@ -1481,6 +1550,69 @@ class NaturalLanguageOrchestrator:
     ) -> str:
         systems_used.mark_invoked(SystemName.MISSION_RUNTIME)
         systems_used.mark_invoked(SystemName.EXECUTIVE_FUNCTION)
+
+        # Explicit create must mutate MissionManager — list-only was a production gap.
+        if self._brain.mission_manager.should_create_mission_from_message(request):
+            try:
+                created = self._brain.mission_manager.create_mission_from_message(request)
+                artifacts["created_mission"] = created
+                title = (
+                    (created.get("title") if isinstance(created, dict) else None)
+                    or self._brain.mission_manager.extract_named_title(request)
+                    or "Mission"
+                )
+                return (
+                    f"Mission créée et activée: {title}. "
+                    "Contexte mission synchronisé dans le workspace."
+                )
+            except Exception:
+                logger.exception("NLO mission create failed")
+
+        # Activation / focus — reuse Brain auto-switch + mission resume by title.
+        lowered = analysis.normalized
+        if any(
+            token in lowered
+            for token in (
+                "active",
+                "activez",
+                "activer",
+                "switch",
+                "focus",
+                "reprend",
+                "resume",
+            )
+        ):
+            try:
+                self._brain._maybe_auto_switch_goal(request)
+            except Exception:
+                logger.debug("NLO goal switch during mission handle failed", exc_info=True)
+            try:
+                self._brain._maybe_auto_switch_project(request)
+            except Exception:
+                logger.debug(
+                    "NLO project switch during mission handle failed", exc_info=True
+                )
+            named = self._brain.mission_manager.extract_named_title(request)
+            # Also accept "Mission P195-..." without nommé.
+            if named is None:
+                match = re.search(
+                    r"\bmission\s+[\"«']?([A-Za-z0-9][\w\-.]{2,})",
+                    request,
+                    flags=re.IGNORECASE,
+                )
+                if match:
+                    named = match.group(1).strip()
+            if named:
+                try:
+                    for mission in self._brain.list_missions(include_archived=False):
+                        title = str(getattr(mission, "title", "") or "")
+                        if title.lower() == named.lower() or named.lower() in title.lower():
+                            self._brain.resume_mission(mission.id)
+                            artifacts["activated_mission"] = _safe_artifact(mission)
+                            break
+                except Exception:
+                    logger.debug("NLO mission resume by title failed", exc_info=True)
+
         missions = self._brain.list_active_missions()
         focus = self._brain.get_current_focus()
         evaluation = self._brain.evaluate_missions(request)
@@ -1534,7 +1666,24 @@ class NaturalLanguageOrchestrator:
         artifacts["tool_plan"] = _safe_artifact(plan)
 
         lower = analysis.normalized
-        should_execute = any(
+        negative_tool = any(
+            token in lower
+            for token in (
+                "ne touche pas",
+                "don't touch",
+                "do not touch",
+                "n'utilise pas",
+                "n’utilise pas",
+                "don't use",
+                "do not use",
+                "sans outils",
+                "pas d'outil",
+                "pas d’outil",
+                "no tools",
+                "without tools",
+            )
+        )
+        should_execute = (not negative_tool) and any(
             k in lower for k in ("read", "lire", "search", "cherche", "notes", "obsidian")
         )
         tool_result_text = ""
@@ -1548,7 +1697,7 @@ class NaturalLanguageOrchestrator:
         else:
             systems_used.mark_skipped(
                 SystemName.TOOL_EXECUTION_ENGINE,
-                "plan only",
+                "plan only" if not negative_tool else "negative tool guard",
             )
 
         parts = ["Mémoire / notes:"]

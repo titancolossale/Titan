@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -352,7 +353,11 @@ class MissionManager:
         )
         strong_phrases = (
             "créer une mission",
+            "cree une mission",
+            "crée une mission",
             "lancer une mission",
+            "create a mission",
+            "create mission",
         )
 
         for phrase in strong_phrases:
@@ -369,10 +374,37 @@ class MissionManager:
 
         return False
 
+    @staticmethod
+    def extract_named_title(message: str) -> str | None:
+        """Extract an explicit title from « nommé(e) X » / « named X » phrasing."""
+        patterns = (
+            r"nomm[ée]e?\s+[\"«']?([A-Za-z0-9][\w\-.]{2,})",
+            r"named\s+[\"']?([A-Za-z0-9][\w\-.]{2,})",
+            r"appel[ée]e?\s+[\"«']?([A-Za-z0-9][\w\-.]{2,})",
+            r"called\s+[\"']?([A-Za-z0-9][\w\-.]{2,})",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, message or "", flags=re.IGNORECASE)
+            if match:
+                title = match.group(1).strip().strip(" .")
+                if title:
+                    return title
+        return None
+
     def create_mission_from_message(self, message: str) -> dict:
         message_lower = message.lower()
+        named = self.extract_named_title(message)
 
-        if "trading" in message_lower or "robot" in message_lower or "bot" in message_lower:
+        if named:
+            title = named
+            objective = message
+            steps = [
+                "Comprendre la demande",
+                "Créer un plan",
+                "Exécuter la première étape",
+                "Vérifier le résultat",
+            ]
+        elif "trading" in message_lower or "robot" in message_lower or "bot" in message_lower:
             title = "Créer un robot de trading"
             objective = message
             steps = [

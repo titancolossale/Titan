@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import uuid
 from datetime import datetime
@@ -165,6 +166,45 @@ class GoalManager:
 
         self._sync_workspace_state()
         return goal
+
+    def should_create_goal_from_message(self, message: str) -> bool:
+        """Return True only for explicit goal-creation phrasing."""
+        lowered = (message or "").lower().strip()
+        phrases = (
+            "créer un goal",
+            "cree un goal",
+            "crée un goal",
+            "create a goal",
+            "create goal",
+            "new goal",
+            "créer un objectif",
+            "cree un objectif",
+            "crée un objectif",
+            "nouvel objectif",
+            "nouveau goal",
+        )
+        return any(phrase in lowered for phrase in phrases)
+
+    @staticmethod
+    def extract_named_title(message: str) -> str | None:
+        """Extract an explicit goal name from nommé(e)/named phrasing."""
+        patterns = (
+            r"nomm[ée]e?\s+[\"«']?([A-Za-z0-9][\w\-.]{2,})",
+            r"named\s+[\"']?([A-Za-z0-9][\w\-.]{2,})",
+            r"appel[ée]e?\s+[\"«']?([A-Za-z0-9][\w\-.]{2,})",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, message or "", flags=re.IGNORECASE)
+            if match:
+                title = match.group(1).strip().strip(" .")
+                if title:
+                    return title
+        return None
+
+    def create_goal_from_message(self, message: str) -> Goal:
+        """Create a goal from an explicit NL create request."""
+        name = self.extract_named_title(message) or "Goal général"
+        return self.create_goal(name, description=(message or "").strip())
 
     def get_goal(self, goal_id: str) -> Goal | None:
         """Return a goal by id, or None when missing."""

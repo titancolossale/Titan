@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import uuid
 from datetime import datetime
@@ -167,6 +168,45 @@ class ProjectManager:
         self._register_project_with_goal(project)
         self._sync_workspace_state()
         return project
+
+    def should_create_project_from_message(self, message: str) -> bool:
+        """Return True only for explicit project-creation phrasing."""
+        lowered = (message or "").lower().strip()
+        phrases = (
+            "créer un project",
+            "cree un project",
+            "crée un project",
+            "créer un projet",
+            "cree un projet",
+            "crée un projet",
+            "create a project",
+            "create project",
+            "new project",
+            "nouveau projet",
+            "nouveau project",
+        )
+        return any(phrase in lowered for phrase in phrases)
+
+    @staticmethod
+    def extract_named_title(message: str) -> str | None:
+        """Extract an explicit project name from nommé(e)/named phrasing."""
+        patterns = (
+            r"nomm[ée]e?\s+[\"«']?([A-Za-z0-9][\w\-.]{2,})",
+            r"named\s+[\"']?([A-Za-z0-9][\w\-.]{2,})",
+            r"appel[ée]e?\s+[\"«']?([A-Za-z0-9][\w\-.]{2,})",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, message or "", flags=re.IGNORECASE)
+            if match:
+                title = match.group(1).strip().strip(" .")
+                if title:
+                    return title
+        return None
+
+    def create_project_from_message(self, message: str) -> Project:
+        """Create a project from an explicit NL create request."""
+        name = self.extract_named_title(message) or "Project général"
+        return self.create_project(name, description=(message or "").strip())
 
     def get_project(self, project_id: str) -> Project | None:
         """Return a project by id, or None when missing."""

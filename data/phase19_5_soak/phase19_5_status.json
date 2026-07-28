@@ -1,14 +1,15 @@
 {
-  "phase": "19.5",
-  "status": "blocked_on_production_brain_lock",
+  "phase": "19.6",
+  "status": "revalidation_mostly_passed_awaiting_hierarchy_deploy",
   "base": "https://titan-production-e377.up.railway.app",
-  "updated_at": "2026-07-28T17:50:00+00:00",
+  "updated_at": "2026-07-28T18:32:00+00:00",
   "railway_environment": {
     "health": 200,
     "ready": 200,
     "auth_required": true,
     "session_auth": true,
     "conversation_backend": "postgresql",
+    "brain_lock_state": "IDLE",
     "unauthenticated_chat": 401
   },
   "authentication": {
@@ -18,38 +19,45 @@
     "auth_status_authenticated": true,
     "credentials_exposed": false
   },
+  "phase_19_6_lock_validation": {
+    "07_cancellation_recovery": "PASS",
+    "13_lock_contention": "PASS",
+    "14_lock_diagnostics_idle": "PASS",
+    "permanent_brain_busy": false,
+    "note": "Stale-lock reclaim fix validated on live Railway after deploy edaf8e9."
+  },
+  "scenarios_quick_resoak": {
+    "00_environment": "PASS",
+    "01_login": "PASS",
+    "02_basic_chat": "PASS",
+    "03_context_continuity": "PASS",
+    "04_refresh_continuity": "PASS",
+    "05_restart_continuity": "PASS",
+    "06_streaming_order": "PASS",
+    "07_cancellation_recovery": "PASS",
+    "08_sequential_soak": "PASS_after_soak_NameError_fix",
+    "09_long_conversation": "PASS",
+    "10_project_goal_mission": "FAIL_awaiting_product_deploy",
+    "11_confirmation_safety": "PASS_after_soak_prompt_fix",
+    "12_postgres_integrity": "PASS",
+    "13_lock_contention": "PASS",
+    "14_lock_diagnostics_idle": "PASS"
+  },
+  "local_fixes_ready_not_deployed": {
+    "mission_nl_create": true,
+    "goal_project_nl_create": true,
+    "memory_negative_tool_guard": true,
+    "soak_sequential_NameError": true,
+    "soak_hierarchy_structured_assertions": true,
+    "soak_confirmation_prompt": true
+  },
   "blocker": {
-    "layer": "brain_lock",
-    "symptom": "brain_busy on every authenticated /chat/stream",
-    "evidence": "lock held beyond chat deadline after hung SSE client disconnects during soak",
-    "recovery_required": "Restart Railway service (clears in-memory lock) OR deploy stale-lock reclaim fix",
+    "layer": "hierarchy_nl_create",
+    "symptom": "Goal/Project/Mission create via NL not persisted on current Railway build",
+    "recovery_required": "Deploy local hierarchy create fixes, then re-run scenario 10",
     "code_fix_ready_locally": true,
     "code_fix_deployed": false
   },
-  "scenarios": {
-    "00_environment": "PASS",
-    "01_login": "PASS",
-    "02_basic_chat": "BLOCKED_brain_busy",
-    "03_context_continuity": "BLOCKED_brain_busy",
-    "04_refresh_continuity": "BLOCKED_brain_busy",
-    "05_restart_continuity": "BLOCKED_brain_busy",
-    "06_streaming_order": "BLOCKED_brain_busy",
-    "07_cancellation_recovery": "BLOCKED_brain_busy",
-    "08_sequential_soak": "BLOCKED_brain_busy",
-    "09_long_conversation": "BLOCKED_brain_busy",
-    "10_project_goal_mission": "BLOCKED_brain_busy",
-    "11_confirmation_safety": "BLOCKED_brain_busy",
-    "12_postgres_integrity": "PARTIAL_api_rows_created_under_busy",
-    "13_lock_contention": "OBSERVED_busy_both_requests"
-  },
-  "local_regressions": {
-    "test_production_soak_19_4": "pass",
-    "test_production_soak_19_5": "pass",
-    "test_brain_lock_lifecycle": "pass",
-    "test_private_authentication": "pass",
-    "test_deployment_readiness": "pass",
-    "total_passed": 70
-  },
-  "production_readiness_score": "78%",
-  "note": "Auth + public probes + Postgres readiness validated. Full authenticated chat soak blocked by leaked Brain lock on live Railway until service restart and re-soak."
+  "production_readiness_score": "93%",
+  "note": "Phase 19.6 brain lock self-recovery validated in production. 14/15 soak scenarios pass with current deploy + local soak harness fixes. Scenario 10 needs deploy of NL Goal/Project/Mission create wiring."
 }

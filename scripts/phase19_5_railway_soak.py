@@ -1052,6 +1052,8 @@ class SoakRunner:
 
         loaded = self.load_conversation(cid) if cid else {"ok": False, "messages": []}
         messages = loaded.get("messages") or []
+        users = [m for m in messages if m.get("role") == "user"]
+        assts = [m for m in messages if m.get("role") == "assistant"]
         req_ids_user = [m.get("request_id") for m in users if m.get("request_id")]
         req_ids_asst = [m.get("request_id") for m in assts if m.get("request_id")]
         dup_req = len(req_ids_user) != len(set(req_ids_user)) or len(req_ids_asst) != len(
@@ -1072,6 +1074,8 @@ class SoakRunner:
                 "conversation_id": cid,
                 "request_count": len(samples),
                 "failures": failures,
+                "user_messages": len(users),
+                "assistant_messages": len(assts),
                 "p50_ms": _pct(samples, 50),
                 "p95_ms": _pct(samples, 95),
                 "slowest_ms": max(samples) if samples else None,
@@ -1171,28 +1175,77 @@ class SoakRunner:
         status_code, workspace, ws_ms = self.client.get_json("/workspace/state")
         status_code2, system, st_ms = self.client.get_json("/status")
 
-        blob = json.dumps({"workspace": workspace, "status": system}, default=str).lower()
-        has_goal = goal.lower() in blob
-        has_project = project.lower() in blob
-        has_mission = mission.lower() in blob
+        def _entity_present(payload: Any, name: str) -> bool:
+            """Match structured workspace fields — not free-text conversation echoes."""
+            if not isinstance(payload, dict):
+                return False
+            target = name.lower()
+            # Direct active_* string fields
+            for key in (
+                "active_goal",
+                "active_project",
+                "active_mission",
+                "active_mission_title",
+                "active_goal_current_mission",
+                "active_project_active_mission",
+            ):
+                value = payload.get(key)
+                if isinstance(value, str) and target in value.lower():
+                    return True
+            # Collection entries (goals / projects / missions)
+            for key in ("goals", "projects", "missions"):
+                items = payload.get(key) or []
+                if not isinstance(items, list):
+                    continue
+                for item in items:
+                    if isinstance(item, str) and target in item.lower():
+                        return True
+                    if isinstance(item, dict):
+                        blob = " ".join(
+                            str(item.get(k) or "")
+                            for k in ("name", "title", "id", "goal", "project", "mission")
+                        ).lower()
+                        if target in blob:
+                            return True
+            mission_block = payload.get("mission")
+            if isinstance(mission_block, dict):
+                title = str(mission_block.get("title") or "").lower()
+                if target in title:
+                    return True
+            return False
+
+        has_goal = _entity_present(workspace, goal) or _entity_present(system, goal)
+        has_project = _entity_present(workspace, project) or _entity_present(
+            system, project
+        )
+        has_mission = _entity_present(workspace, mission) or _entity_present(
+            system, mission
+        )
 
         # Refresh simulation: new session then re-read workspace
         fresh = RailwayClient(self.client.base, self.client._username, self.client._password)
         login = fresh.login()
         self.client = fresh
         _, workspace2, reload_ms = self.client.get_json("/workspace/state")
-        blob2 = json.dumps(workspace2, default=str).lower()
         survives = (
-            goal.lower() in blob2
-            or project.lower() in blob2
-            or mission.lower() in blob2
+            _entity_present(workspace2, goal)
+            or _entity_present(workspace2, project)
+            or _entity_present(workspace2, mission)
         )
+        turn_oks = {
+            "goal_create": bool(t1.get("ok")),
+            "project_create": bool(t2.get("ok")),
+            "mission_create": bool(t3.get("ok")),
+            "activate": bool(t4.get("ok")),
+        }
         ok = (
-            all(t.get("ok") for t in (t1, t2, t3, t4))
+            all(turn_oks.values())
             and status_code == 200
             and status_code2 == 200
             and login.get("ok")
-            and (has_goal or has_project or has_mission)
+            and has_goal
+            and has_project
+            and has_mission
             and survives
         )
         return self._record(
@@ -1201,6 +1254,7 @@ class SoakRunner:
                 "ok": ok,
                 "entities": {"goal": goal, "project": project, "mission": mission},
                 "request_id": t4.get("request_id"),
+                "turn_oks": turn_oks,
                 "workspace_ms": ws_ms,
                 "status_ms": st_ms,
                 "reload_ms": reload_ms,
@@ -1220,10 +1274,10 @@ class SoakRunner:
         turn = self.chat(
             (
                 "Action synthétique interne Phase 19.5 uniquement: "
-                "demande confirmation avant d'exécuter delete_synthetic_test_entity_p195. "
-                "Ne touche pas Obsidian, Calendar, Email, Trading, ni le système de fichiers. "
-                "Si une confirmation est requise, indique clairement qu'une approbation "
-                "est nécessaire et n'exécute rien."
+                "avant d'exécuter delete_synthetic_test_entity_p195, "
+                "demande clairement mon approbation ou ma confirmation. "
+                "N'exécute rien. N'appelle aucun outil. "
+                "Réponds seulement pour demander une validation."
             )
         )
         preview = (turn.get("assistant_preview") or "").lower()
@@ -1240,6 +1294,8 @@ class SoakRunner:
                 "validation",
                 "permission",
                 "accord",
+                "veux-tu",
+                "souhaites",
             )
         )
         approval_flag = bool(turn.get("approval_required"))

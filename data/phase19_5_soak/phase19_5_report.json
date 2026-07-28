@@ -1,10 +1,10 @@
 {
-  "phase": "19.5",
+  "phase": "19.6",
   "base": "https://titan-production-e377.up.railway.app",
-  "started_at": "2026-07-28T17:41:09.844950+00:00",
-  "finished_at": "2026-07-28T17:41:09.844964+00:00",
-  "wall_ms": 124544.5,
-  "quick": false,
+  "started_at": "2026-07-28T18:20:54.542328+00:00",
+  "finished_at": "2026-07-28T18:20:54.542358+00:00",
+  "wall_ms": 194964.2,
+  "quick": true,
   "scenarios": [
     {
       "name": "00_environment",
@@ -36,8 +36,8 @@
       "login": {
         "ok": true,
         "status": 200,
-        "auth_ms": 257.82,
-        "wall_ms": 257.99,
+        "auth_ms": 274.98,
+        "wall_ms": 275.21,
         "session_cookie": true,
         "csrf_cookie": true,
         "csrf_token_present": true,
@@ -50,72 +50,69 @@
         "auth_mode": "session",
         "session_auth": true,
         "auth_required": true,
-        "ms": 137.39
+        "ms": 137.82
       },
       "credentials_in_logs": false,
       "failing_layer": null
     },
     {
       "name": "02_basic_chat",
-      "ok": false,
-      "request_id": "p195-399b64de12c5",
-      "conversation_id": "conv_z8p29lPHkqAYDVnnMpZyRbgi",
+      "ok": true,
+      "request_id": "p195-0cfe3014ee12",
+      "conversation_id": "conv_6ANlQiq0PBDKBhJ0_NCcsZNF",
       "turn": {
         "status": 200,
-        "assistant_chars": 0,
-        "total_ms": 5553.6,
-        "ttft_ms": 878,
-        "missing_required_events": [
-          "response_started",
-          "text_delta"
-        ]
+        "assistant_chars": 68,
+        "total_ms": 3077.07,
+        "ttft_ms": 2007,
+        "missing_required_events": []
       },
       "persisted_user_messages": 1,
       "persisted_assistant_messages": 1,
       "pending_assistant": 0,
-      "reload_ms": 246.21,
-      "failing_layer": "basic_chat_persistence"
+      "reload_ms": 206.92,
+      "failing_layer": null
     },
     {
       "name": "03_context_continuity",
-      "ok": false,
-      "conversation_id": "conv_VAOnD7sBa-BP7Vs3YaETPomj",
-      "request_id": "p195-d05830b59bef",
-      "mentions_titan": false,
-      "assistant_preview": "",
-      "failing_layer": "context_continuity"
+      "ok": true,
+      "conversation_id": "conv_Nf39NYnLtk-5Br-PVb2X7tXA",
+      "request_id": "p195-0954a0aa75e8",
+      "mentions_titan": true,
+      "assistant_preview": "Ton projet principal s\u2019appelle **Titan**.",
+      "failing_layer": null
     },
     {
       "name": "04_refresh_continuity",
-      "ok": false,
-      "conversation_id": "conv_cGsO4aupCCbpMSWNt8VyeerK",
-      "request_id": "p195-ede86094d766",
+      "ok": true,
+      "conversation_id": "conv_B_1M8o43Tyf26c-dZgMG_3Zy",
+      "request_id": "p195-33ce80788f8b",
       "messages_before": 2,
       "messages_after_reload": 2,
       "duplicates": false,
-      "continued_ok": false,
-      "mentions_secret": false,
-      "reload_ms": 157.47,
-      "failing_layer": "refresh_continuity"
+      "continued_ok": true,
+      "mentions_secret": true,
+      "reload_ms": 151.96,
+      "failing_layer": null
     },
     {
       "name": "05_restart_continuity",
-      "ok": false,
-      "conversation_id": "conv_U0QgDDz3azZXMq4uuXvdVCq6",
-      "request_id": "p195-fd09bc9ba268",
+      "ok": true,
+      "conversation_id": "conv_RL8L7EEfrvd5V_v97fWqSFjk",
+      "request_id": "p195-cf975b20fb1c",
       "message_count_before": 6,
       "message_count_after_relogin": 6,
       "pending_before": 0,
       "pending_after": 0,
       "redeploy_triggered": false,
       "note": "No Railway CLI available; validated Postgres survival across fresh authenticated sessions without unsafe redeploy.",
-      "failing_layer": "restart_continuity"
+      "failing_layer": null
     },
     {
       "name": "06_streaming_order",
-      "ok": false,
-      "request_id": "p195-8ae4b1ee119a",
-      "conversation_id": "conv_Egwq-zpqcBdL35re2kd8vy3f",
+      "ok": true,
+      "request_id": "p195-ec62f71296ed",
+      "conversation_id": "conv_VaUjAst4cDJlRe7RecbOv7ML",
       "event_order": [
         "conversation_started",
         "presence",
@@ -126,6 +123,39 @@
         "brain_state",
         "orchestration_started",
         "conversation_stage",
+        "acknowledged",
+        "memory_lookup",
+        "conversation_stage",
+        "brain_state",
+        "memory_activity",
+        "memory_miss",
+        "conversation_stage",
+        "brain_state",
+        "memory_activity",
+        "response_building",
+        "conversation_stage",
+        "brain_state",
+        "response_started",
+        "brain_state",
+        "text_delta",
+        "text_delta",
+        "text_delta",
+        "text_delta",
+        "text_delta",
+        "text_delta",
+        "text_delta",
+        "text_delta",
+        "text_delta",
+        "text_delta",
+        "text_delta",
+        "text_delta",
+        "text_delta",
+        "text_delta",
+        "text_delta",
+        "text_delta",
+        "response_ready",
+        "conversation_stage",
+        "brain_state",
         "thinking_finished",
         "conversation_stage",
         "brain_state",
@@ -138,205 +168,205 @@
         "orchestration_finished",
         "conversation_stage",
         "conversation_finished",
-        "structured_error",
+        "response_completed",
         "presence",
         "brain_state",
-        "telemetry"
+        "telemetry",
+        "workspace_state"
       ],
       "required_positions": {
         "conversation_started": 0,
         "brain_state": 2,
-        "conversation_finished": 20
+        "response_started": 21,
+        "text_delta": 23,
+        "conversation_finished": 53
       },
       "deltas_after_finish": false,
-      "failing_layer": "streaming_order"
+      "failing_layer": null
     },
     {
       "name": "07_cancellation_recovery",
-      "ok": false,
-      "failing_layer": "cancel_seed",
-      "error": "seed failed",
-      "request_id": "p195-7c20100533d7"
+      "ok": true,
+      "conversation_id": "conv_4m3Hm3h90AWRhRa5ggJ_YuXi",
+      "request_id": "p195-cancel-71f6708c57",
+      "cancel_http_ok": true,
+      "cancel_body": {
+        "ok": true,
+        "cancelled": true,
+        "request_id": "p195-cancel-71f6708c57"
+      },
+      "cancelled_stream_error_code": "cancelled",
+      "recover_ok": true,
+      "recover_request_id": "p195-d70ab45a145a",
+      "pending_assistant_after": 0,
+      "cancel_wall_ms": 17891.78,
+      "recovery_ms": 1679.34,
+      "lock_idle_after": true,
+      "lock_state_after": "IDLE",
+      "stale_reclaim_count": 0,
+      "failing_layer": null
     },
     {
       "name": "08_sequential_soak",
       "ok": false,
-      "conversation_id": "conv_CpgUdkPfaloVoUg-iVfqA7Tf",
-      "request_count": 3,
-      "failures": 3,
-      "p50_ms": 5510.4,
-      "p95_ms": 5837.99,
-      "slowest_ms": 5837.99,
-      "first_third_avg_ms": 5602.69,
-      "last_third_avg_ms": 5602.69,
-      "latency_trend_ok": true,
-      "duplicate_request_ids": true,
-      "pending_assistant": 0,
-      "failing_layer": "sequential_soak"
+      "failing_layer": "scenario_exception",
+      "error": "NameError: name 'users' is not defined",
+      "request_id": "p195-10f84aef4046"
     },
     {
       "name": "09_long_conversation",
-      "ok": false,
-      "conversation_id": "conv_v53xQ78M1k7DuGGtM6JBn-Lt",
-      "request_id": "p195-d379b74d8f21",
-      "failed_at_turn": 1,
-      "failing_layer": "long_conversation_turn",
-      "error": "brain_busy"
+      "ok": true,
+      "conversation_id": "conv_zYzx2mqbM4OWJ96Ohdjdclon",
+      "request_id": "p195-485225b9ef35",
+      "turns": 8,
+      "message_count": 18,
+      "expected_min_messages": 18,
+      "duplicates": false,
+      "continuity_mentions_first_fact": true,
+      "summary_note": "Summary creation depends on server TITAN_CONVERSATION_SUMMARY_THRESHOLD; validated continuity + reloadability.",
+      "failing_layer": null
     },
     {
       "name": "10_project_goal_mission",
       "ok": false,
       "entities": {
-        "goal": "P195-Goal-ca42de11",
-        "project": "P195-Project-ca42de11",
-        "mission": "P195-Mission-ca42de11"
+        "goal": "P195-Goal-f1d38a4d",
+        "project": "P195-Project-f1d38a4d",
+        "mission": "P195-Mission-f1d38a4d"
       },
-      "request_id": "p195-16d4c7483845",
-      "workspace_ms": 153.45,
-      "status_ms": 199.48,
-      "reload_ms": 142.47,
+      "request_id": "p195-b1096ee9841e",
+      "workspace_ms": 142.85,
+      "status_ms": 170.89,
+      "reload_ms": 171.21,
       "seen_in_workspace": {
-        "goal": false,
-        "project": false,
+        "goal": true,
+        "project": true,
         "mission": false
       },
-      "survives_refresh_session": false,
+      "survives_refresh_session": true,
       "failing_layer": "hierarchy_continuity",
       "note": "Isolated P195-* entities only; no real user project edits intended."
     },
     {
       "name": "11_confirmation_safety",
       "ok": false,
-      "request_id": "p195-e12b7bfe396a",
-      "conversation_id": "conv_5nb0gdKch0LeDF1TSopa6Ft4",
+      "request_id": "p195-c2a821862afe",
+      "conversation_id": "conv_Mjjz1MPdkS9w3B7IqpDyKUYB",
       "approval_required": false,
       "confirmation_language": false,
-      "assistant_preview": "",
+      "assistant_preview": "M\u00e9moire / notes:\nAucune m\u00e9moire pertinente trouv\u00e9e.\n\nOutils (Obsidian/notes):\nExecution failed: 1 step(s) failed.",
       "external_side_effects": false,
       "failing_layer": "confirmation_safety",
       "note": "Production tools disabled/guarded; validated no-side-effect confirmation language and/or approval_required flag."
     },
     {
       "name": "12_postgres_integrity",
-      "ok": false,
-      "conversation_id": "conv_voBN5pElHgVylvQaNhfmQLI2",
-      "request_id": "p195-27b26bc9c558",
+      "ok": true,
+      "conversation_id": "conv_R1Ii49mBqANsnjKUu9srK3Cv",
+      "request_id": "p195-eeec4899ff70",
       "user_messages": 2,
       "assistant_messages": 2,
-      "completed_assistants": 0,
+      "completed_assistants": 2,
       "pending_assistants": 0,
-      "duplicate_request_ids": true,
+      "duplicate_request_ids": false,
       "conversation_list_matches": 1,
-      "list_ms": 130.18,
-      "reload_ms": 182.45,
+      "list_ms": 202.89,
+      "reload_ms": 180.92,
       "backend_from_ready": "postgresql",
       "direct_db_credentials_used": false,
-      "failing_layer": "postgres_integrity_api"
+      "failing_layer": null
     },
     {
       "name": "13_lock_contention",
-      "ok": false,
-      "success_count": 0,
+      "ok": true,
+      "success_count": 2,
       "statuses": [
         200,
         200
       ],
       "error_codes": [
-        "brain_busy",
-        "brain_busy"
+        null,
+        null
       ],
-      "busy_or_timeout_observed": true,
+      "busy_or_timeout_observed": false,
       "request_ids": [
-        "p195-1f965e663659",
-        "p195-20d88bf29feb"
+        "p195-51490a5932ea",
+        "p195-75fdcef0b25a"
       ],
-      "note": "Server CHAT_BRAIN_LOCK_TIMEOUT requires Railway log access; validated contention behavior via concurrent HTTP responses.",
-      "failing_layer": "lock_contention"
+      "lock_idle_after": true,
+      "lock_state_after": "IDLE",
+      "stale_reclaim_count": 0,
+      "note": "Server CHAT_BRAIN_LOCK_* markers require Railway log access; validated contention + post-scenario IDLE via diagnostics.",
+      "failing_layer": null
+    },
+    {
+      "name": "14_lock_diagnostics_idle",
+      "ok": true,
+      "request_id": "p195-81009cc93758",
+      "before_lock_state": "IDLE",
+      "after_lock_state": "IDLE",
+      "stale_reclaim_count": 0,
+      "generation": 41,
+      "idle": true,
+      "diag_keys": [
+        "generation",
+        "heartbeat_age_ms",
+        "heartbeat_seconds",
+        "last_error_code",
+        "last_release_reason",
+        "lock_age_ms",
+        "lock_held",
+        "lock_state",
+        "owner_present",
+        "owner_request_id",
+        "reclaim_enabled",
+        "stale_reclaim_count",
+        "stale_seconds",
+        "wait_timeout_seconds",
+        "waiters"
+      ],
+      "failing_layer": null
     }
   ],
   "failures": [
     {
-      "scenario": "02_basic_chat",
-      "request_id": "p195-399b64de12c5",
-      "layer": "basic_chat_persistence"
-    },
-    {
-      "scenario": "03_context_continuity",
-      "request_id": "p195-d05830b59bef",
-      "layer": "context_continuity"
-    },
-    {
-      "scenario": "04_refresh_continuity",
-      "request_id": "p195-ede86094d766",
-      "layer": "refresh_continuity"
-    },
-    {
-      "scenario": "05_restart_continuity",
-      "request_id": "p195-fd09bc9ba268",
-      "layer": "restart_continuity"
-    },
-    {
-      "scenario": "06_streaming_order",
-      "request_id": "p195-8ae4b1ee119a",
-      "layer": "streaming_order"
-    },
-    {
-      "scenario": "07_cancellation_recovery",
-      "request_id": "p195-7c20100533d7",
-      "layer": "cancel_seed"
-    },
-    {
       "scenario": "08_sequential_soak",
-      "request_id": null,
-      "layer": "sequential_soak"
-    },
-    {
-      "scenario": "09_long_conversation",
-      "request_id": "p195-d379b74d8f21",
-      "layer": "long_conversation_turn"
+      "request_id": "p195-10f84aef4046",
+      "layer": "scenario_exception"
     },
     {
       "scenario": "10_project_goal_mission",
-      "request_id": "p195-16d4c7483845",
+      "request_id": "p195-b1096ee9841e",
       "layer": "hierarchy_continuity"
     },
     {
       "scenario": "11_confirmation_safety",
-      "request_id": "p195-e12b7bfe396a",
+      "request_id": "p195-c2a821862afe",
       "layer": "confirmation_safety"
-    },
-    {
-      "scenario": "12_postgres_integrity",
-      "request_id": "p195-27b26bc9c558",
-      "layer": "postgres_integrity_api"
-    },
-    {
-      "scenario": "13_lock_contention",
-      "request_id": null,
-      "layer": "lock_contention"
     }
   ],
   "performance": {
-    "auth_ms": 207.61,
-    "request_count": 23,
-    "full_request_p50_ms": 5445.85,
-    "full_request_p95_ms": 5670.21,
-    "full_request_slowest_ms": 5837.99,
-    "full_request_avg_ms": 5479.22,
-    "first_token_p50_ms": 878.0,
-    "first_token_p95_ms": 878.0,
-    "provider_duration_avg_ms": 5197.65,
-    "titan_internal_avg_ms": 281.57,
-    "error_rate": 0.8571,
-    "conversation_ids_created": 16
+    "auth_ms": 272.43,
+    "request_count": 42,
+    "full_request_p50_ms": 2408.12,
+    "full_request_p95_ms": 15807.32,
+    "full_request_slowest_ms": 17888.41,
+    "full_request_avg_ms": 4638.24,
+    "first_token_p50_ms": 608.0,
+    "first_token_p95_ms": 1478.0,
+    "provider_duration_avg_ms": 4144.07,
+    "titan_internal_avg_ms": 494.17,
+    "error_rate": 0.2,
+    "conversation_ids_created": 18
   },
   "diagnostics": {
     "server_log_access": false,
     "railway_cli_available": false,
-    "client_sse_order_validated": false,
+    "client_sse_order_validated": true,
     "cancellation_path_exercised": true,
     "lock_contention_exercised": true,
-    "note": "Production CHAT_* / PIPELINE_* log markers require Railway log access (CLI not installed). Client-side SSE + API invariants validated."
+    "lock_diagnostics_exercised": true,
+    "note": "Phase 19.6: authenticated /api/chat/diagnostics used to verify Brain lock returns to IDLE; CHAT_BRAIN_LOCK_* reclaim markers require Railway log access."
   },
   "ok": false
 }

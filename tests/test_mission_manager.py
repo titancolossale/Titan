@@ -143,6 +143,8 @@ def test_create_mission_from_message_keyword_paths(
         ("New mission: build a bot", True),
         ("/mission robot trading", True),
         ("Je veux créer une mission pour Titan", True),
+        ("Crée une Mission de test isolée nommée P195-Mission-abc", True),
+        ("create a mission named SoakTest", True),
         ("lancer une mission de refactor", True),
         ("Je veux créer un robot de trading", False),
         ("On doit améliorer Titan cette semaine", False),
@@ -158,3 +160,14 @@ def test_should_create_mission_from_message_gate(
     manager = MissionManager(file_path=tmp_path / "titan_mission.json")
 
     assert manager.should_create_mission_from_message(message) is expected
+
+
+def test_create_mission_from_message_uses_named_title(tmp_path: Path) -> None:
+    manager = MissionManager(file_path=tmp_path / "titan_mission.json")
+    view = manager.create_mission_from_message(
+        "Crée une Mission de test isolée nommée P195-Mission-abc dans le Project X."
+    )
+    assert view.get("title") == "P195-Mission-abc"
+    assert manager.extract_named_title(
+        "Mission nommée Soak-1 pour validation"
+    ) == "Soak-1"
