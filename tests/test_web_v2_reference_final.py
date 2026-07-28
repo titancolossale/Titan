@@ -75,10 +75,10 @@ def test_reference_final_removes_obvious_panel_borders() -> None:
 def test_orchestrator_story_hierarchy_titles() -> None:
     orch = (V2 / "orchestrator" / "orchestrator-region.js").read_text(encoding="utf-8")
     # Phase 4.2 command-center hierarchy (supersedes Sprint 2.10 story titles).
-    assert "Current Objective" in orch
-    assert "Execution Pipeline" in orch
-    assert "Active Tools" in orch
-    assert "Neural Activity" in orch
+    assert "Objectif Actuel" in orch
+    assert "Pipeline d'Exécution" in orch
+    assert "Systèmes Connectés" in orch
+    assert "Activité Neurale" in orch
     # Previous dashboard labels must not regress into the mounted sections.
     assert '"Current State"' not in orch
     assert '"Plan in Progress"' not in orch
@@ -97,7 +97,7 @@ def test_sidebar_and_status_regions_remain_wired() -> None:
     assert "tdl-v2-sidebar-presence" in sidebar
     assert "tdl-v2-float-card" in status
     assert "tdl-v2-dock-status-cards--float" in status
-    assert "Presence" in status
+    assert "Présence" in status
 
 
 def test_no_backend_or_brain_changes_in_reference_final() -> None:
@@ -112,9 +112,9 @@ def test_no_backend_or_brain_changes_in_reference_final() -> None:
 def test_ui_version_bump_for_reference_final() -> None:
     out = _run_node(
         """
-import { TITAN_UI_VERSION, TITAN_UI_VERSION_LABEL } from './web/v2/core/version.js';
-if (!/^0\\.2[7-9]|^0\\.3|^0\\.4/.test(TITAN_UI_VERSION)) throw new Error('expected 0.27+ UI version');
-if (!TITAN_UI_VERSION_LABEL.includes(TITAN_UI_VERSION)) throw new Error('bad label');
+import { TITAN_UI_VERSION, TITAN_UI_VERSION_LABEL, TITAN_PRODUCT_VERSION } from './web/v2/core/version.js';
+if (!/^0\\.2[7-9]|^0\\.3|^0\\.4|^0\\.5/.test(TITAN_UI_VERSION)) throw new Error('expected 0.27+ UI version');
+if (!TITAN_UI_VERSION_LABEL.includes(TITAN_PRODUCT_VERSION)) throw new Error('bad label');
 console.log(JSON.stringify({ ok: true, version: TITAN_UI_VERSION }));
 """
     )

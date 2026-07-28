@@ -1,0 +1,159 @@
+{
+    "schema_version": 1,
+    "active_project_id": "619e6f23-45d5-42be-a010-992170ae776f",
+    "projects": {
+        "619e6f23-45d5-42be-a010-992170ae776f": {
+            "id": "619e6f23-45d5-42be-a010-992170ae776f",
+            "name": "Titan",
+            "description": "",
+            "status": "ACTIVE",
+            "created_at": "2026-07-28T10:38:29.923992-04:00",
+            "updated_at": "2026-07-28T10:47:40.529911-04:00",
+            "progress": 0.0,
+            "active_mission_id": "659112f8-ff10-4f07-adc4-9dbe773f622a",
+            "mission_ids": [
+                "92b08a28-2131-49dc-9f29-311b904e6bd1",
+                "103ff8a9-75aa-4cf4-910f-bf080c039722",
+                "44e9e26c-9bdd-4dd7-90df-7441493418db",
+                "659112f8-ff10-4f07-adc4-9dbe773f622a"
+            ],
+            "completed_mission_ids": [],
+            "priority": "NORMAL",
+            "aliases": [],
+            "keywords": [],
+            "goal_id": "d509dc09-cd7c-4fe7-a664-fa3ad13608fd"
+        },
+        "493032ce-cc0a-4cb3-984c-d1682cf68e26": {
+            "id": "493032ce-cc0a-4cb3-984c-d1682cf68e26",
+            "name": "Soak Alpha",
+            "description": "Isolated soak project A",
+            "status": "PAUSED",
+            "created_at": "2026-07-28T10:38:29.988344-04:00",
+            "updated_at": "2026-07-28T10:38:30.013895-04:00",
+            "progress": 0.0,
+            "active_mission_id": null,
+            "mission_ids": [],
+            "completed_mission_ids": [],
+            "priority": "NORMAL",
+            "aliases": [
+                "soak-alpha",
+                "alpha"
+            ],
+            "keywords": [
+                "alpha",
+                "soak-a"
+            ],
+            "goal_id": "d509dc09-cd7c-4fe7-a664-fa3ad13608fd"
+        },
+        "b67eee85-eb1f-484d-8800-171dbd634013": {
+            "id": "b67eee85-eb1f-484d-8800-171dbd634013",
+            "name": "Soak Beta",
+            "description": "Isolated soak project B",
+            "status": "PAUSED",
+            "created_at": "2026-07-28T10:38:29.996515-04:00",
+            "updated_at": "2026-07-28T10:39:11.850042-04:00",
+            "progress": 0.0,
+            "active_mission_id": null,
+            "mission_ids": [],
+            "completed_mission_ids": [],
+            "priority": "NORMAL",
+            "aliases": [
+                "soak-beta",
+                "beta"
+            ],
+            "keywords": [
+                "beta",
+                "soak-b"
+            ],
+            "goal_id": "d509dc09-cd7c-4fe7-a664-fa3ad13608fd"
+        },
+        "f1232b1b-9936-43e0-98a8-b7b8192488ef": {
+            "id": "f1232b1b-9936-43e0-98a8-b7b8192488ef",
+            "name": "Soak Alpha",
+            "description": "Isolated soak project A",
+            "status": "PAUSED",
+            "created_at": "2026-07-28T10:39:40.745159-04:00",
+            "updated_at": "2026-07-28T10:39:40.770305-04:00",
+            "progress": 0.0,
+            "active_mission_id": null,
+            "mission_ids": [],
+            "completed_mission_ids": [],
+            "priority": "NORMAL",
+            "aliases": [
+                "soak-alpha",
+                "alpha"
+            ],
+            "keywords": [
+                "alpha",
+                "soak-a"
+            ],
+            "goal_id": "d509dc09-cd7c-4fe7-a664-fa3ad13608fd"
+        },
+        "a1544411-4cff-4587-aaf4-177b34085355": {
+            "id": "a1544411-4cff-4587-aaf4-177b34085355",
+            "name": "Soak Beta",
+            "description": "Isolated soak project B",
+            "status": "PAUSED",
+            "created_at": "2026-07-28T10:39:40.752659-04:00",
+            "updated_at": "2026-07-28T10:39:58.519893-04:00",
+            "progress": 0.0,
+            "active_mission_id": null,
+            "mission_ids": [],
+            "completed_mission_ids": [],
+            "priority": "NORMAL",
+            "aliases": [
+                "soak-beta",
+                "beta"
+            ],
+            "keywords": [
+                "beta",
+                "soak-b"
+            ],
+            "goal_id": "d509dc09-cd7c-4fe7-a664-fa3ad13608fd"
+        },
+        "91086990-3da6-4360-959f-254b4879a05f": {
+            "id": "91086990-3da6-4360-959f-254b4879a05f",
+            "name": "Soak Alpha",
+            "description": "Isolated soak project A",
+            "status": "PAUSED",
+            "created_at": "2026-07-28T10:41:07.344285-04:00",
+            "updated_at": "2026-07-28T10:41:07.378042-04:00",
+            "progress": 0.0,
+            "active_mission_id": null,
+            "mission_ids": [],
+            "completed_mission_ids": [],
+            "priority": "NORMAL",
+            "aliases": [
+                "soak-alpha",
+                "alpha"
+            ],
+            "keywords": [
+                "alpha",
+                "soak-a"
+            ],
+            "goal_id": "d509dc09-cd7c-4fe7-a664-fa3ad13608fd"
+        },
+        "e43d86d7-1096-4442-8caf-f12be205462b": {
+            "id": "e43d86d7-1096-4442-8caf-f12be205462b",
+            "name": "Soak Beta",
+            "description": "Isolated soak project B",
+            "status": "PAUSED",
+            "created_at": "2026-07-28T10:41:07.355054-04:00",
+            "updated_at": "2026-07-28T10:41:25.773956-04:00",
+            "progress": 0.0,
+            "active_mission_id": null,
+            "mission_ids": [],
+            "completed_mission_ids": [],
+            "priority": "NORMAL",
+            "aliases": [
+                "soak-beta",
+                "beta"
+            ],
+            "keywords": [
+                "beta",
+                "soak-b"
+            ],
+            "goal_id": "d509dc09-cd7c-4fe7-a664-fa3ad13608fd"
+        }
+    }
+}

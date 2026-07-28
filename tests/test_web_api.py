@@ -276,6 +276,7 @@ def test_legacy_static_includes_phase_21_cognitive_engine(web_client: TestClient
 def test_protected_endpoints_require_auth(web_client: TestClient) -> None:
     protected_paths = [
         "/status",
+        "/workspace/state",
         "/tools",
         "/memory/status",
         "/obsidian/status",
@@ -651,6 +652,7 @@ def test_events_stream_returns_sse(
     assert "event: status" in body
     assert "event: brain_state" in body
     assert "event: telemetry" in body
+    assert "event: workspace_state" in body
 
 
 def test_chat_stream_returns_sse_events(

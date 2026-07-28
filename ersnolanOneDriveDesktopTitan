@@ -1,0 +1,435 @@
+[1mdiff --git a/.env.example b/.env.example[m
+[1mindex 39a24f5..e1d036c 100644[m
+[1m--- a/.env.example[m
+[1m+++ b/.env.example[m
+[36m@@ -126,6 +126,13 @@[m [mTITAN_CONVERSATION_PERSISTENCE_ENABLED=true[m
+ TITAN_CONVERSATION_PERSISTENCE_REQUIRED=[m
+ TITAN_CONVERSATION_CONTEXT_MAX_TOKENS=3000[m
+ TITAN_CONVERSATION_STREAM_ENABLED=true[m
+[32m+[m[32m# Phase 11.x — Brain lock / chat deadline budgets (seconds unless noted)[m
+[32m+[m[32m# Lock wait must stay comfortably below TITAN_CHAT_DEADLINE_SECONDS.[m
+[32m+[m[32mTITAN_CHAT_DEADLINE_SECONDS=30[m
+[32m+[m[32mTITAN_BRAIN_LOCK_TIMEOUT_SECONDS=5[m
+[32m+[m[32mTITAN_DB_CONNECT_TIMEOUT_SECONDS=5[m
+[32m+[m[32mTITAN_DB_STATEMENT_TIMEOUT_MS=15000[m
+[32m+[m[32mTITAN_CHAT_DIAGNOSTICS=true[m
+ TITAN_LOG_LEVEL=INFO[m
+ # Phase 10.3 — Private production authentication (session cookies)[m
+ # NEVER put a plaintext password in this file or in Git.[m
+[1mdiff --git a/api/chat_service.py b/api/chat_service.py[m
+[1mindex dbc8af7..7fce13a 100644[m
+[1m--- a/api/chat_service.py[m
+[1m+++ b/api/chat_service.py[m
+[36m@@ -9,6 +9,7 @@[m [mfrom __future__ import annotations[m
+ import copy[m
+ import logging[m
+ import threading[m
+[32m+[m[32mimport time[m
+ import uuid[m
+ from collections import OrderedDict[m
+ from datetime import datetime, timezone[m
+[36m@@ -32,6 +33,7 @@[m [mfrom brain.request_deadline import ([m
+ )[m
+ from config.settings import ([m
+     LLM_MODEL,[m
+[32m+[m[32m    TITAN_BRAIN_LOCK_TIMEOUT_SECONDS,[m
+     TITAN_CHAT_DEADLINE_SECONDS,[m
+     TITAN_CHAT_DIAGNOSTICS,[m
+     TITAN_CONVERSATION_PERSISTENCE_ENABLED,[m
+[36m@@ -43,7 +45,13 @@[m [mfrom core.web_conversations.service import get_conversation_service[m
+ [m
+ logger = logging.getLogger(__name__)[m
+ [m
+[32m+[m[32m# Process-global, non-reentrant lock serializing shared Titan Brain turns.[m
+[32m+[m[32m# Held only around unsafe shared Brain/conversation mutations + process_request.[m
+ _brain_lock = threading.Lock()[m
+[32m+[m[32m_brain_lock_state_lock = threading.Lock()[m
+[32m+[m[32m_brain_lock_owner: str | None = None[m
+[32m+[m[32m_brain_lock_acquired_monotonic: float | None = None[m
+[32m+[m[32m_LOCK_WAIT_SLICE_SECONDS = 0.05[m
+ [m
+ # Idempotency: duplicate client request_id returns the cached payload (same turn).[m
+ _IDEMPOTENCY_MAX = 256[m
+[36m@@ -100,6 +108,10 @@[m [mBRAIN_FAILURE_MESSAGE = ([m
+ )[m
+ CANCELLED_CODE = "cancelled"[m
+ DUPLICATE_REQUEST_CODE = "duplicate_request"[m
+[32m+[m[32mBRAIN_BUSY_CODE = "brain_busy"[m
+[32m+[m[32mBRAIN_BUSY_MESSAGE = ([m
+[32m+[m[32m    "Titan traite déjà une autre requête. Réessaie dans un instant."[m
+[32m+[m[32m)[m
+ [m
+ # Active deadlines for cancellation (request_id → deadline).[m
+ _active_deadlines_lock = threading.Lock()[m
+[36m@@ -145,6 +157,150 @@[m [mdef unregister_active_deadline(request_id: str) -> None:[m
+         _active_deadlines.pop(request_id, None)[m
+ [m
+ [m
+[32m+[m[32mdef _brain_lock_owner_snapshot() -> str | None:[m
+[32m+[m[32m    with _brain_lock_state_lock:[m
+[32m+[m[32m        return _brain_lock_owner[m
+[32m+[m
+[32m+[m
+[32m+[m[32mdef _acquire_brain_lock([m
+[32m+[m[32m    request_id: str,[m
+[32m+[m[32m    deadline: RequestDeadline,[m
+[32m+[m[32m    *,[m
+[32m+[m[32m    timeout_seconds: float | None = None,[m
+[32m+[m[32m) -> bool:[m
+[32m+[m[32m    """Acquire the process-global Brain lock with a bounded, cancellable wait.[m
+[32m+[m
+[32m+[m[32m    Returns True when acquired by ``request_id``. Returns False on lock timeout[m
+[32m+[m[32m    (caller should emit ``brain_busy``). Raises ``RequestCancelledError`` or[m
+[32m+[m[32m    ``BrainTimeoutError`` when the request deadline ends during the wait.[m
+[32m+[m[32m    """[m
+[32m+[m[32m    global _brain_lock_owner, _brain_lock_acquired_monotonic[m
+[32m+[m
+[32m+[m[32m    budget = ([m
+[32m+[m[32m        TITAN_BRAIN_LOCK_TIMEOUT_SECONDS[m
+[32m+[m[32m        if timeout_seconds is None[m
+[32m+[m[32m        else float(timeout_seconds)[m
+[32m+[m[32m    )[m
+[32m+[m[32m    budget = max(0.05, budget)[m
+[32m+[m[32m    wait_started = time.monotonic()[m
+[32m+[m[32m    owner_before = _brain_lock_owner_snapshot()[m
+[32m+[m[32m    _chat_log([m
+[32m+[m[32m        "CHAT_BRAIN_LOCK_WAIT",[m
+[32m+[m[32m        request_id=request_id,[m
+[32m+[m[32m        wait_ms=0,[m
+[32m+[m[32m        owner=owner_before,[m
+[32m+[m[32m        result="waiting",[m
+[32m+[m[32m        remaining_budget_ms=deadline.remaining_ms(),[m
+[32m+[m[32m        stage="lock_wait",[m
+[32m+[m[32m    )[m
+[32m+[m
+[32m+[m[32m    while True:[m
+[32m+[m[32m        deadline.check("lock_wait")[m
+[32m+[m[32m        waited = time.monotonic() - wait_started[m
+[32m+[m[32m        remaining_lock = budget - waited[m
+[32m+[m[32m        if remaining_lock <= 0:[m
+[32m+[m[32m            _chat_log([m
+[32m+[m[32m                "CHAT_BRAIN_LOCK_TIMEOUT",[m
+[32m+[m[32m                request_id=request_id,[m
+[32m+[m[32m                wait_ms=int(waited * 1000),[m
+[32m+[m[32m                owner=_brain_lock_owner_snapshot(),[m
+[32m+[m[32m                result="timeout",[m
+[32m+[m[32m                remaining_budget_ms=deadline.remaining_ms(),[m
+[32m+[m[32m                stage="lock_wait",[m
+[32m+[m[32m            )[m
+[32m+[m[32m            return False[m
+[32m+[m
+[32m+[m[32m        slice_timeout = min([m
+[32m+[m[32m            _LOCK_WAIT_SLICE_SECONDS,[m
+[32m+[m[32m            remaining_lock,[m
+[32m+[m[32m            max(deadline.remaining_seconds(), 0.01),[m
+[32m+[m[32m        )[m
+[32m+[m[32m        if _brain_lock.acquire(timeout=slice_timeout):[m
+[32m+[m[32m            waited_ms = int((time.monotonic() - wait_started) * 1000)[m
+[32m+[m[32m            with _brain_lock_state_lock:[m
+[32m+[m[32m                _brain_lock_owner = request_id[m
+[32m+[m[32m                _brain_lock_acquired_monotonic = time.monotonic()[m
+[32m+[m[32m            _chat_log([m
+[32m+[m[32m                "CHAT_BRAIN_LOCK_ACQUIRED",[m
+[32m+[m[32m                request_id=request_id,[m
+[32m+[m[32m                wait_ms=waited_ms,[m
+[32m+[m[32m                owner=request_id,[m
+[32m+[m[32m                result="acquired",[m
+[32m+[m[32m                remaining_budget_ms=deadline.remaining_ms(),[m
+[32m+[m[32m                stage="lock",[m
+[32m+[m[32m            )[m
+[32m+[m[32m            return True[m
+[32m+[m
+[32m+[m
+[32m+[m[32mdef _release_brain_lock(request_id: str) -> None:[m
+[32m+[m[32m    """Release the Brain lock only when owned by ``request_id``."""[m
+[32m+[m[32m    global _brain_lock_owner, _brain_lock_acquired_monotonic[m
+[32m+[m
+[32m+[m[32m    with _brain_lock_state_lock:[m
+[32m+[m[32m        owner = _brain_lock_owner[m
+[32m+[m[32m        acquired_at = _brain_lock_acquired_monotonic[m
+[32m+[m[32m        if owner != request_id:[m
+[32m+[m[32m            _chat_log([m
+[32m+[m[32m                "CHAT_BRAIN_LOCK_RELEASED",[m
+[32m+[m[32m                request_id=request_id,[m
+[32m+[m[32m                owner=owner,[m
+[32m+[m[32m                result="skipped_not_owner",[m
+[32m+[m[32m                held_ms=None,[m
+[32m+[m[32m                stage="lock",[m
+[32m+[m[32m            )[m
+[32m+[m[32m            return[m
+[32m+[m[32m        held_ms = ([m
+[32m+[m[32m            int((time.monotonic() - acquired_at) * 1000)[m
+[32m+[m[32m            if acquired_at is not None[m
+[32m+[m[32m            else None[m
+[32m+[m[32m        )[m
+[32m+[m[32m        _brain_lock_owner = None[m
+[32m+[m[32m        _brain_lock_acquired_monotonic = None[m
+[32m+[m
+[32m+[m[32m    try:[m
+[32m+[m[32m        _brain_lock.release()[m
+[32m+[m[32m    except RuntimeError:[m
+[32m+[m[32m        logger.exception([m
+[32m+[m[32m            "CHAT_BRAIN_LOCK_RELEASED request_id=%s result=release_error",[m
+[32m+[m[32m            request_id,[m
+[32m+[m[32m        )[m
+[32m+[m[32m        _chat_log([m
+[32m+[m[32m            "CHAT_BRAIN_LOCK_RELEASED",[m
+[32m+[m[32m            request_id=request_id,[m
+[32m+[m[32m            owner=request_id,[m
+[32m+[m[32m            result="release_error",[m
+[32m+[m[32m            held_ms=held_ms,[m
+[32m+[m[32m            stage="lock",[m
+[32m+[m[32m        )[m
+[32m+[m[32m        return[m
+[32m+[m
+[32m+[m[32m    _chat_log([m
+[32m+[m[32m        "CHAT_BRAIN_LOCK_RELEASED",[m
+[32m+[m[32m        request_id=request_id,[m
+[32m+[m[32m        owner=request_id,[m
+[32m+[m[32m        result="released",[m
+[32m+[m[32m        held_ms=held_ms,[m
+[32m+[m[32m        stage="lock",[m
+[32m+[m[32m    )[m
+[32m+[m
+[32m+[m
+[32m+[m[32mdef reset_brain_lock_for_tests() -> None:[m
+[32m+[m[32m    """Test helper — drop ownership metadata and ensure the lock is free."""[m
+[32m+[m[32m    global _brain_lock_owner, _brain_lock_acquired_monotonic[m
+[32m+[m[32m    with _brain_lock_state_lock:[m
+[32m+[m[32m        owned = _brain_lock_owner is not None[m
+[32m+[m[32m        _brain_lock_owner = None[m
+[32m+[m[32m        _brain_lock_acquired_monotonic = None[m
+[32m+[m[32m    if owned:[m
+[32m+[m[32m        try:[m
+[32m+[m[32m            _brain_lock.release()[m
+[32m+[m[32m        except RuntimeError:[m
+[32m+[m[32m            pass[m
+[32m+[m[32m    # Drain a stuck lock without blocking tests forever.[m
+[32m+[m[32m    if _brain_lock.acquire(timeout=0.01):[m
+[32m+[m[32m        _brain_lock.release()[m
+[32m+[m
+[32m+[m
+ def _elapsed_ms(started: datetime) -> int:[m
+     return int((datetime.now(timezone.utc) - started).total_seconds() * 1000)[m
+ [m
+[36m@@ -367,6 +523,44 @@[m [mdef _is_cancelled(result: OrchestrationResult) -> bool:[m
+     return (result.artifacts or {}).get("error") == CANCELLED_CODE[m
+ [m
+ [m
+[32m+[m[32mdef _is_brain_busy(result: OrchestrationResult) -> bool:[m
+[32m+[m[32m    return (result.artifacts or {}).get("error") == BRAIN_BUSY_CODE[m
+[32m+[m
+[32m+[m
+[32m+[m[32mdef _fallback_orchestration_result([m
+[32m+[m[32m    titan: Any,[m
+[32m+[m[32m    text: str,[m
+[32m+[m[32m    *,[m
+[32m+[m[32m    reason: str,[m
+[32m+[m[32m    response: str,[m
+[32m+[m[32m    error_code: str,[m
+[32m+[m[32m    last_stage: str | None,[m
+[32m+[m[32m    duration_seconds: float,[m
+[32m+[m[32m) -> OrchestrationResult:[m
+[32m+[m[32m    from brain.natural_language_orchestrator import SystemsUsed[m
+[32m+[m
+[32m+[m[32m    nlo = titan.brain.natural_language_orchestrator[m
+[32m+[m[32m    analysis = nlo._analyze_request(text)[m
+[32m+[m[32m    return OrchestrationResult([m
+[32m+[m[32m        request_analysis=analysis,[m
+[32m+[m[32m        detected_intent=DetectedIntent.CONVERSATION,[m
+[32m+[m[32m        pipeline_decision=nlo._build_pipeline([m
+[32m+[m[32m            DetectedIntent.CONVERSATION,[m
+[32m+[m[32m            analysis,[m
+[32m+[m[32m            reason,[m
+[32m+[m[32m        ),[m
+[32m+[m[32m        systems_used=SystemsUsed(),[m
+[32m+[m[32m        reasoning_summary=response,[m
+[32m+[m[32m        confidence=0.0,[m
+[32m+[m[32m        final_response=response,[m
+[32m+[m[32m        artifacts={[m
+[32m+[m[32m            "error": error_code,[m
+[32m+[m[32m            "last_completed_stage": last_stage,[m
+[32m+[m[32m        },[m
+[32m+[m[32m        duration_seconds=duration_seconds,[m
+[32m+[m[32m    )[m
+[32m+[m
+[32m+[m
+ def _is_provider_failure(result: OrchestrationResult) -> bool:[m
+     """Detect LLM provider failure without inventing a successful answer."""[m
+     if _is_provider_timeout(result) or _is_cancelled(result):[m
+[36m@@ -494,12 +688,13 @@[m [mdef build_chat_response([m
+     timed_out = _is_provider_timeout(result)[m
+     brain_timed_out = _is_brain_timeout(result)[m
+     cancelled = _is_cancelled(result)[m
+[32m+[m[32m    brain_busy = _is_brain_busy(result)[m
+     provider_failure = _is_provider_failure(result)[m
+[31m-    if provider_failure:[m
+[32m+[m[32m    if provider_failure or brain_busy:[m
+         approval["execution_status"] = "error"[m
+ [m
+     brain_state = _brain_state_for_result(result, think_ctx, approval)[m
+[31m-    if provider_failure:[m
+[32m+[m[32m    if provider_failure or brain_busy:[m
+         brain_state = "error"[m
+ [m
+     artifacts = dict(result.artifacts or {})[m
+[36m@@ -509,6 +704,8 @@[m [mdef build_chat_response([m
+         artifacts.setdefault("error", PROVIDER_TIMEOUT_CODE)[m
+     elif cancelled:[m
+         artifacts.setdefault("error", CANCELLED_CODE)[m
+[32m+[m[32m    elif brain_busy:[m
+[32m+[m[32m        artifacts.setdefault("error", BRAIN_BUSY_CODE)[m
+     elif provider_failure:[m
+         artifacts.setdefault("error", PROVIDER_UNAVAILABLE_CODE)[m
+ [m
+[36m@@ -532,6 +729,10 @@[m [mdef build_chat_response([m
+         error_code = CANCELLED_CODE[m
+         if CANCELLED_CODE not in errors:[m
+             errors.append(CANCELLED_CODE)[m
+[32m+[m[32m    elif brain_busy:[m
+[32m+[m[32m        error_code = BRAIN_BUSY_CODE[m
+[32m+[m[32m        if BRAIN_BUSY_CODE not in errors:[m
+[32m+[m[32m            errors.append(BRAIN_BUSY_CODE)[m
+     elif provider_failure:[m
+         error_code = PROVIDER_UNAVAILABLE_CODE[m
+         if PROVIDER_UNAVAILABLE_CODE not in errors:[m
+[36m@@ -539,7 +740,11 @@[m [mdef build_chat_response([m
+     elif BRAIN_FAILURE_CODE in errors:[m
+         error_code = BRAIN_FAILURE_CODE[m
+ [m
+[31m-    ok = not provider_failure and approval["execution_status"] != "error"[m
+[32m+[m[32m    ok = ([m
+[32m+[m[32m        not provider_failure[m
+[32m+[m[32m        and not brain_busy[m
+[32m+[m[32m        and approval["execution_status"] != "error"[m
+[32m+[m[32m    )[m
+     runtime = build_runtime_summary([m
+         tool_activity=tool_activity,[m
+         memory_activity=memory_activity,[m
+[36m@@ -556,6 +761,8 @@[m [mdef build_chat_response([m
+         response_text = PROVIDER_TIMEOUT_MESSAGE[m
+     elif cancelled:[m
+         response_text = "Requête annulée."[m
+[32m+[m[32m    elif brain_busy:[m
+[32m+[m[32m        response_text = BRAIN_BUSY_MESSAGE[m
+     elif provider_failure:[m
+         response_text = PROVIDER_UNAVAILABLE_MESSAGE[m
+ [m
+[36m@@ -591,14 +798,18 @@[m [mdef build_chat_response([m
+         "timestamp": datetime.now(timezone.utc).isoformat(),[m
+         "runtime": runtime,[m
+         "error_code": error_code,[m
+[31m-        "retryable": bool(error_code) and error_code != CANCELLED_CODE,[m
+[32m+[m[32m        "retryable": bool(error_code) and error_code not in {[m
+[32m+[m[32m            CANCELLED_CODE,[m
+[32m+[m[32m        },[m
+         "last_completed_stage": last_stage,[m
+         "fast_path": bool((artifacts.get("fast_path") or {}).get("selected")),[m
+         "error": ([m
+             {[m
+                 "code": error_code,[m
+                 "message": response_text,[m
+[31m-                "retryable": bool(error_code) and error_code != CANCELLED_CODE,[m
+[32m+[m[32m                "retryable": bool(error_code) and error_code not in {[m
+[32m+[m[32m                    CANCELLED_CODE,[m
+[32m+[m[32m                },[m
+                 "request_id": request_id,[m
+                 "last_completed_stage": last_stage,[m
+             }[m
+[36m@@ -711,315 +922,378 @@[m [mdef process_chat_message([m
+     message_id = _new_message_id()[m
+     llm = getattr(getattr(titan, "brain", None), "llm", None)[m
+     model_name = getattr(llm, "model", None) or LLM_MODEL[m
+[32m+[m[32m    speaker = (user or "").strip() or speaker_hint[m
+[32m+[m[32m    history_summary: dict[str, Any] | None = None[m
+ [m
+[31m-    try:[m
+[31m-        with _brain_lock:[m
+[31m-            if user:[m
+[31m-                titan.context.session.set_user(user)[m
+[31m-[m
+[31m-            speaker = titan.context.current_user[m
+[31m-[m
+[31m-            # Hydrate in-process history from durable conversation (follow-ups).[m
+[31m-            if conv_service is not None:[m
+[31m-                try:[m
+[31m-                    engine = getattr(titan, "conversation", None)[m
+[31m-                    conv_service.hydrate_engine_history([m
+[31m-                        durable_conv_id,[m
+[31m-                        speaker,[m
+[31m-                        engine,[m
+[31m-                        request_id=req_id,[m
+[31m-                    )[m
+[31m-                    user_msg = conv_service.persist_user_message([m
+[31m-                        conversation_id=durable_conv_id,[m
+[31m-                        user_id=speaker,[m
+[31m-                        content=text,[m
+[31m-                        request_id=req_id,[m
+[31m-                        allow_duplicate=False,[m
+[31m-                    )[m
+[31m-                    user_message_id = user_msg.id[m
+[31m-                    pending = conv_service.begin_assistant_message([m
+[31m-                        conversation_id=durable_conv_id,[m
+[31m-                        user_id=speaker,[m
+[31m-                        request_id=req_id,[m
+[31m-                        model=model_name,[m
+[31m-                    )[m
+[31m-                    assistant_message_id = pending.id[m
+[31m-                    message_id = pending.id[m
+[31m-                    conv_service.maybe_generate_title([m
+[31m-                        conversation_id=durable_conv_id,[m
+[31m-                        user_id=speaker,[m
+[31m-                        first_message=text,[m
+[31m-                        llm_ask=None,  # never block response on title LLM[m
+[31m-                    )[m
+[31m-                except Exception:[m
+[31m-                    logger.exception([m
+[31m-                        "Conversation hydrate/persist failed request_id=%s",[m
+[31m-                        req_id,[m
+[31m-                    )[m
+[31m-[m
+[31m-            # Keep in-process engine in sync for this turn.[m
+[31m-            titan.conversation.add_message(speaker, text)[m
+[31m-[m
+[31m-            audit_start = _audit_start_index(titan)[m
+[31m-[m
+[31m-            # Thread request_id into LLM for CHAT_PROVIDER_* correlation.[m
+[31m-            if llm is not None:[m
+[31m-                setattr(llm, "_active_request_id", req_id)[m
+[31m-[m
+[31m-            _chat_log([m
+[31m-                "CHAT_BRAIN_START",[m
+[32m+[m[32m    # Durable DB work stays outside the Brain lock (setup / persist / title).[m
+[32m+[m[32m    if conv_service is not None:[m
+[32m+[m[32m        try:[m
+[32m+[m[32m            deadline.check("persist")[m
+[32m+[m[32m            history_summary = conv_service.load_history_for_hydration([m
+[32m+[m[32m                durable_conv_id,[m
+[32m+[m[32m                speaker,[m
+                 request_id=req_id,[m
+[32m+[m[32m            )[m
+[32m+[m[32m            user_msg = conv_service.persist_user_message([m
+                 conversation_id=durable_conv_id,[m
+[31m-                elapsed_ms=deadline.elapsed_ms(),[m
+[31m-                remaining_budget_ms=deadline.remaining_ms(),[m
+[31m-                stage="brain",[m
+[32m+[m[32m                user_id=speaker,[m
+[32m+[m[32m                content=text,[m
+[32m+[m[32m                request_id=req_id,[m
+[32m+[m[32m                allow_duplicate=False,[m
+[32m+[m[32m            )[m
+[32m+[m[32m            user_message_id = user_msg.id[m
+[32m+[m[32m            pending = conv_service.begin_assistant_message([m
+[32m+[m[32m                conversation_id=durable_conv_id,[m
+[32m+[m[32m                user_id=speaker,[m
+[32m+[m[32m                request_id=req_id,[m
+                 model=model_name,[m
+[31m-                attempt=1,[m
+             )[m
+[31m-            if stream is not None:[m
+[31m-                try:[m
+[31m-                    stream.emit([m
+[31m-                        "acknowledged",[m
+[31m-                        {[m
+[31m-                            "request_id": req_id,[m
+[31m-                  

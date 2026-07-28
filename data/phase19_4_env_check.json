@@ -1,0 +1,96 @@
+{
+  "ok": true,
+  "checks": [
+    {
+      "name": "openai_api_key_loaded",
+      "ok": true,
+      "length": 164
+    },
+    {
+      "name": "configured_model",
+      "ok": true,
+      "model": "gpt-5.2"
+    },
+    {
+      "name": "streaming_enabled",
+      "ok": true,
+      "value": true
+    },
+    {
+      "name": "auth_required",
+      "ok": true,
+      "value": false,
+      "app_env": "development",
+      "production_expectation": false
+    },
+    {
+      "name": "conversation_persistence_enabled",
+      "ok": true,
+      "value": true
+    },
+    {
+      "name": "database_url",
+      "ok": true,
+      "set": false,
+      "scheme": "sqlite-fallback-expected-when-empty",
+      "is_postgres": false
+    },
+    {
+      "name": "public_base_url",
+      "ok": true,
+      "set": false,
+      "value": null
+    },
+    {
+      "name": "TITAN_AUTH_USERNAME",
+      "set": false,
+      "length": 0
+    },
+    {
+      "name": "TITAN_AUTH_PASSWORD_HASH",
+      "set": false,
+      "length": 0
+    },
+    {
+      "name": "provider_reachable_and_model_exists",
+      "ok": true,
+      "probe": "models.list_contains_model",
+      "model": "gpt-5.2",
+      "models_listed": 123
+    },
+    {
+      "name": "postgres_reachable",
+      "ok": null,
+      "skipped": true,
+      "reason": "no postgres URL in local env; Railway preferred for final validation"
+    },
+    {
+      "name": "endpoint:https://titan-production-e377.up.railway.app/health",
+      "ok": true,
+      "status": 200,
+      "body_keys": [
+        "status",
+        "name",
+        "version",
+        "web_enabled",
+        "dev_mode",
+        "auth_required",
+        "session_auth"
+      ]
+    },
+    {
+      "name": "endpoint:https://titan-production-e377.up.railway.app/ready",
+      "ok": true,
+      "status": 200,
+      "body_keys": [
+        "status",
+        "name",
+        "version",
+        "dev_mode",
+        "auth_required",
+        "checks",
+        "optional_subsystems"
+      ]
+    }
+  ]
+}

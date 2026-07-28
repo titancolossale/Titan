@@ -66,7 +66,7 @@ def test_presence_css_contains_living_contracts() -> None:
 def test_orchestrator_idle_presence_richness() -> None:
     orch = (V2 / "orchestrator" / "orchestrator-region.js").read_text(encoding="utf-8")
     assert "IDLE_PRESENCE_ROWS" in orch
-    assert "Current Objective" in orch
+    assert "Objectif Actuel" in orch
     assert "Présence" in orch
     assert "Surveillance" in orch
     assert "Disponible" in orch
@@ -74,14 +74,17 @@ def test_orchestrator_idle_presence_richness() -> None:
     assert "tdl-v2-orchestrator-presence" in orch
     assert "_syncPresenceDataset" in orch
     assert "Présence calme" in orch
-    assert "En attente d'une demande" in orch
+    assert "Comprendre et assister" in orch or "En attente d'une demande" in orch
 
 
 def test_topbar_telemetry_has_mode_and_runtime() -> None:
     topbar = (V2 / "center" / "topbar-region.js").read_text(encoding="utf-8")
+    sidebar = (V2 / "sidebar" / "sidebar-region.js").read_text(encoding="utf-8")
     assert 'this._pill("mode"' in topbar or '_pill("mode"' in topbar
     assert 'this._pill("runtime"' in topbar or '_pill("runtime"' in topbar
-    assert "TITAN_UI_VERSION_LABEL" in topbar
+    # Brand version chrome imports TITAN_UI_VERSION_LABEL (sidebar / orchestrator).
+    assert "TITAN_UI_VERSION_LABEL" in sidebar
+    assert 'from "../core/version.js"' in sidebar
     assert "Mémoire" in topbar
     assert "Réflexion" in topbar
     assert "Présence" in topbar
@@ -141,9 +144,9 @@ console.log(JSON.stringify({ ok: true, presence: IDLE_PRESENCE_ROWS.length }));
 def test_ui_version_bump_for_presence_sprint() -> None:
     out = _run_node(
         """
-import { TITAN_UI_VERSION, TITAN_UI_VERSION_LABEL } from './web/v2/core/version.js';
-if (!/^0\\.2[6-9]|^0\\.3|^0\\.4/.test(TITAN_UI_VERSION)) throw new Error('expected 0.26+ UI version');
-if (!TITAN_UI_VERSION_LABEL.includes(TITAN_UI_VERSION)) throw new Error('bad label');
+import { TITAN_UI_VERSION, TITAN_UI_VERSION_LABEL, TITAN_PRODUCT_VERSION } from './web/v2/core/version.js';
+if (!/^0\\.2[6-9]|^0\\.3|^0\\.4|^0\\.5/.test(TITAN_UI_VERSION)) throw new Error('expected 0.26+ UI version');
+if (!TITAN_UI_VERSION_LABEL.includes(TITAN_PRODUCT_VERSION)) throw new Error('bad label');
 console.log(JSON.stringify({ ok: true, version: TITAN_UI_VERSION }));
 """
     )

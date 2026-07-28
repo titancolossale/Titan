@@ -1,0 +1,44 @@
+{
+  "phase": "19.4-rerun",
+  "started_at": "2026-07-28T14:47:40.544624+00:00",
+  "scenarios": [
+    {
+      "name": "12_long_conversation_25",
+      "ok": true,
+      "turns": 25,
+      "duplicate_consecutive": 0,
+      "avg_ms": 6663.18,
+      "p95_ms": 9252.07,
+      "mission_still_active": "Phase19.4 Soak Mission",
+      "wall_ms": 166583.14
+    },
+    {
+      "name": "14_concurrent",
+      "ok": true,
+      "lock_results": [
+        {
+          "n": 0,
+          "acquired": true,
+          "busy": false,
+          "ms": 2000.24
+        },
+        {
+          "n": 2,
+          "acquired": false,
+          "busy": true,
+          "ms": 412.88
+        },
+        {
+          "n": 1,
+          "acquired": false,
+          "busy": true,
+          "ms": 414.88
+        }
+      ],
+      "acquired_count": 1,
+      "busy_count": 2
+    }
+  ],
+  "ok": true,
+  "finished_at": "2026-07-28T14:50:36.225026+00:00"
+}

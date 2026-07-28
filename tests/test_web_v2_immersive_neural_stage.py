@@ -61,7 +61,7 @@ def test_immersive_css_atmosphere_contracts() -> None:
         "tdl-v2-neural-depth-band",
         "tdl-v2-neural-vignette",
         "tdl-v2-satellite-core__tissue",
-        "tdl-v2-satellite-core__filament",
+        "tdl-v2-satellite-core__nucleus",
         "tdl-v2-satellite-core__veil",
         "tdl-imm-fog",
         "prefers-reduced-motion",
@@ -83,7 +83,10 @@ def test_immersive_core_has_no_glass_pill() -> None:
 def test_immersive_satellites_buried_core_markup() -> None:
     satellites = (V2 / "center" / "cognitive-satellites.js").read_text(encoding="utf-8")
     assert "tdl-v2-satellite-core__tissue" in satellites
-    assert "tdl-v2-satellite-core__filament" in satellites
+    assert "tdl-v2-satellite-core__embed-path" in satellites
+    assert "tdl-v2-satellite-core__embed-svg" in satellites
+    assert "tdl-v2-satellite-packet-layer" in satellites
+    assert "tdl-v2-satellite-packet" in satellites
     assert "tdl-v2-satellite-core__veil" in satellites
     assert "TITAN CORE" in satellites
 
@@ -147,10 +150,10 @@ def test_phase5_layout_still_before_immersive() -> None:
 def test_immersive_ui_version() -> None:
     out = _run_node(
         """
-import { TITAN_UI_VERSION, TITAN_UI_VERSION_LABEL } from './web/v2/core/version.js';
+import { TITAN_UI_VERSION, TITAN_UI_VERSION_LABEL, TITAN_PRODUCT_VERSION } from './web/v2/core/version.js';
 const ok = ['0.51.0','0.50.0', '0.48.0', '0.47.0', '0.46.0', '0.45.0', '0.44.0', '0.43.0', '0.42.0', '0.41.0'].includes(TITAN_UI_VERSION);
 if (!ok) throw new Error('expected 0.47.0+ UI version');
-if (!TITAN_UI_VERSION_LABEL.includes(TITAN_UI_VERSION)) throw new Error('bad label');
+if (!TITAN_UI_VERSION_LABEL.includes(TITAN_PRODUCT_VERSION)) throw new Error('bad label');
 console.log(JSON.stringify({ ok: true, version: TITAN_UI_VERSION }));
 """
     )

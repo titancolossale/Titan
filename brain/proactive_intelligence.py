@@ -344,8 +344,14 @@ class ProactiveIntelligence:
         workspace: WorkspaceSnapshot | None = None,
         cognitive_result: CognitiveLoopResult | None = None,
         reasoning_result: ReasoningResult | None = None,
+        include_reasoning: bool = True,
     ) -> ProactiveEvaluation:
-        """Analyze existing context and produce a ranked proactive digest."""
+        """Analyze existing context and produce a ranked proactive digest.
+
+        ``include_reasoning=False`` skips nested ReasoningEngine calls — required
+        when CognitiveContextBuilder loads proactive context (avoids
+        reason → context → proactive → reason recursion).
+        """
         started = time.perf_counter()
         now = _utc_now_dt()
         resolved_user = user or self._resolve_user()
@@ -374,13 +380,19 @@ class ProactiveIntelligence:
                 workspace=workspace_snapshot,
             )
 
-        if reasoning_result is None and self._reasoning_engine is not None and message.strip():
+        if (
+            include_reasoning
+            and reasoning_result is None
+            and self._reasoning_engine is not None
+            and message.strip()
+        ):
             try:
                 reasoning_result = self._reasoning_engine.reason(
                     message,
                     user=resolved_user,
                     project_id=resolved_project,
                     workspace=workspace_snapshot,
+                    executive_evaluation=evaluation,
                 )
             except Exception:
                 logger.debug("Proactive reasoning enrichment failed", exc_info=True)

@@ -49,6 +49,7 @@ from api.status_builders import (
     build_memory_status,
     build_obsidian_status,
     build_system_status,
+    build_workspace_state,
     build_tools_status,
     build_trading_status,
 )
@@ -583,10 +584,18 @@ def create_app() -> FastAPI:
                         break
                     yield item
             finally:
-                # Client disconnect / Stop — abandon in-flight Brain work.
+                # Client disconnect / Stop — abandon in-flight Brain work and
+                # wait briefly so the worker can release the Brain lock.
                 cancel_chat_request(request_id)
                 if not task.done():
-                    task.cancel()
+                    try:
+                        await asyncio.wait_for(asyncio.shield(task), timeout=2.0)
+                    except (asyncio.TimeoutError, asyncio.CancelledError):
+                        task.cancel()
+                        try:
+                            await task
+                        except (asyncio.CancelledError, Exception):
+                            pass
                 _trace_route_exit(
                     "chat_stream:/chat/stream",
                     request_id,
@@ -632,6 +641,8 @@ def create_app() -> FastAPI:
         provider_configured = bool(os.getenv("OPENAI_API_KEY"))
         model_name = getattr(llm, "model", None) or LLM_MODEL
         last = get_last_chat_diag()
+        from api.chat_service import brain_lock_diagnostics
+
         return {
             "ok": True,
             "chat_endpoint_ready": True,
@@ -645,12 +656,18 @@ def create_app() -> FastAPI:
             "last_error_code": last.get("error_code"),
             "last_request_id": last.get("request_id"),
             "last_error_at": last.get("at"),
+            "brain_lock": brain_lock_diagnostics(),
         }
 
     @app.get("/status", dependencies=[Depends(require_web_auth)])
     def status() -> dict[str, Any]:
         """Return Titan system status."""
         return build_system_status(get_titan())
+
+    @app.get("/workspace/state", dependencies=[Depends(require_web_auth)])
+    def workspace_state() -> dict[str, Any]:
+        """Return a read-only snapshot of live WorkspaceState (Phase 13.4)."""
+        return build_workspace_state(get_titan())
 
     @app.get("/tools", dependencies=[Depends(require_web_auth)])
     def tools() -> dict[str, Any]:

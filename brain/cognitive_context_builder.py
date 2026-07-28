@@ -461,15 +461,6 @@ class CognitiveContextBuilder:
             sources=sources,
         )
 
-        world_snapshot = self._load_world_model(
-            request,
-            user=resolved_user,
-            project_id=resolved_project,
-            refresh_workspace=False,
-            sources=sources,
-            workspace=workspace_snapshot,
-        )
-
         executive = executive_evaluation
         if executive is None:
             executive = self._load_executive(
@@ -479,6 +470,16 @@ class CognitiveContextBuilder:
                 workspace=workspace_snapshot,
                 sources=sources,
             )
+
+        world_snapshot = self._load_world_model(
+            request,
+            user=resolved_user,
+            project_id=resolved_project,
+            refresh_workspace=False,
+            sources=sources,
+            workspace=workspace_snapshot,
+            executive_evaluation=executive,
+        )
 
         memories = self._load_memories(
             request,
@@ -658,25 +659,19 @@ class CognitiveContextBuilder:
         refresh_workspace: bool,
         sources: dict[str, bool],
         workspace: WorkspaceSnapshot | None,
+        executive_evaluation: ExecutiveEvaluation | None = None,
     ) -> WorldModelSnapshot | None:
         if self._world_model is None:
             sources["world_model"] = False
             return None
         try:
-            if workspace is not None and not refresh_workspace:
-                snapshot = self._world_model.build_world_model(
-                    message,
-                    user=user,
-                    project_id=project_id,
-                    refresh_workspace=False,
-                )
-            else:
-                snapshot = self._world_model.build_world_model(
-                    message,
-                    user=user,
-                    project_id=project_id,
-                    refresh_workspace=refresh_workspace,
-                )
+            snapshot = self._world_model.build_world_model(
+                message,
+                user=user,
+                project_id=project_id,
+                refresh_workspace=refresh_workspace if workspace is None else False,
+                executive_evaluation=executive_evaluation,
+            )
             sources["world_model"] = True
             return snapshot
         except Exception:
@@ -798,6 +793,7 @@ class CognitiveContextBuilder:
                 project_id=project_id,
                 workspace=workspace,
                 executive_evaluation=executive,
+                include_reasoning=False,
             )
             sources["proactive_intelligence"] = True
             return evaluation

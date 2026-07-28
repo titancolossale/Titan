@@ -1,0 +1,181 @@
+{
+    "active_project": "Titan",
+    "active_project_id": "619e6f23-45d5-42be-a010-992170ae776f",
+    "active_project_status": "ACTIVE",
+    "active_project_progress": 0.0,
+    "projects": [
+        {
+            "id": "619e6f23-45d5-42be-a010-992170ae776f",
+            "name": "Titan",
+            "status": "ACTIVE",
+            "progress": 0.0
+        },
+        {
+            "id": "e43d86d7-1096-4442-8caf-f12be205462b",
+            "name": "Soak Beta",
+            "status": "PAUSED",
+            "progress": 0.0
+        },
+        {
+            "id": "91086990-3da6-4360-959f-254b4879a05f",
+            "name": "Soak Alpha",
+            "status": "PAUSED",
+            "progress": 0.0
+        },
+        {
+            "id": "a1544411-4cff-4587-aaf4-177b34085355",
+            "name": "Soak Beta",
+            "status": "PAUSED",
+            "progress": 0.0
+        },
+        {
+            "id": "f1232b1b-9936-43e0-98a8-b7b8192488ef",
+            "name": "Soak Alpha",
+            "status": "PAUSED",
+            "progress": 0.0
+        },
+        {
+            "id": "b67eee85-eb1f-484d-8800-171dbd634013",
+            "name": "Soak Beta",
+            "status": "PAUSED",
+            "progress": 0.0
+        },
+        {
+            "id": "493032ce-cc0a-4cb3-984c-d1682cf68e26",
+            "name": "Soak Alpha",
+            "status": "PAUSED",
+            "progress": 0.0
+        }
+    ],
+    "active_project_active_mission": "Phase19.4 Soak Mission",
+    "active_project_completed_missions": [],
+    "active_project_last_completed_step": null,
+    "active_project_last_summary": "Salut Nolan — que veux-tu valider exactement sur le greeting dans cette phase 19.4 (le ton, la longueur, ou le contenu) ?",
+    "active_project_progress_updated_at": "2026-07-28T14:50:36.221394+00:00",
+    "active_project_current_objective": "Validate greeting",
+    "active_goal_id": "d509dc09-cd7c-4fe7-a664-fa3ad13608fd",
+    "active_goal": "Titan",
+    "active_goal_status": "ACTIVE",
+    "active_goal_progress": 0.0,
+    "goals": [
+        {
+            "id": "d509dc09-cd7c-4fe7-a664-fa3ad13608fd",
+            "name": "Titan",
+            "status": "ACTIVE",
+            "progress": 0.0
+        },
+        {
+            "id": "17573618-42fb-42d4-95f3-8df37d3a5ddf",
+            "name": "Soak Goal Beta",
+            "status": "PAUSED",
+            "progress": 0.0
+        },
+        {
+            "id": "3e3bacb8-58f4-4144-9f6a-3c4e9a500db7",
+            "name": "Soak Goal Alpha",
+            "status": "PAUSED",
+            "progress": 0.0
+        },
+        {
+            "id": "855a5f0b-0bd6-4612-9be9-569afba53a8f",
+            "name": "Soak Goal Beta",
+            "status": "PAUSED",
+            "progress": 0.0
+        },
+        {
+            "id": "6c8b068c-8744-4308-b629-6e769fc3a62c",
+            "name": "Soak Goal Alpha",
+            "status": "PAUSED",
+            "progress": 0.0
+        },
+        {
+            "id": "251492fd-ae46-4a92-9fdb-1f8591c9dcd1",
+            "name": "Soak Goal Beta",
+            "status": "PAUSED",
+            "progress": 0.0
+        },
+        {
+            "id": "214fff6a-e66f-4c67-8741-6b7f65bd6074",
+            "name": "Soak Goal Alpha",
+            "status": "PAUSED",
+            "progress": 0.0
+        }
+    ],
+    "active_goal_completed_projects": 0,
+    "active_goal_active_projects": 1,
+    "active_goal_paused_projects": 6,
+    "active_goal_total_projects": 7,
+    "active_goal_last_activity": "2026-07-28T10:47:40.534637-04:00",
+    "active_goal_current_project": "Titan",
+    "active_goal_current_mission": "Phase19.4 Soak Mission",
+    "active_goal_last_summary": "Salut Nolan — que veux-tu valider exactement sur le greeting dans cette phase 19.4 (le ton, la longueur, ou le contenu) ?",
+    "active_goal_progress_updated_at": "2026-07-28T14:50:36.221426+00:00",
+    "active_mission": "Phase19.4 Soak Mission",
+    "active_mission_id": "659112f8-ff10-4f07-adc4-9dbe773f622a",
+    "active_mission_title": "Phase19.4 Soak Mission",
+    "active_mission_status": "in_progress",
+    "active_mission_progress": 0.0,
+    "active_mission_priority": "NORMAL",
+    "active_mission_stage": "Validate greeting",
+    "active_mission_last_completed_step": null,
+    "active_mission_last_summary": "Salut Nolan — que veux-tu valider exactement sur le greeting dans cette phase 19.4 (le ton, la longueur, ou le contenu) ?",
+    "active_mission_progress_updated_at": "2026-07-28T14:50:36.221350+00:00",
+    "active_mission_current_objective": "Validate greeting",
+    "missions": [
+        {
+            "id": "44e9e26c-9bdd-4dd7-90df-7441493418db",
+            "title": "Phase19.4 Soak Mission",
+            "status": "QUEUED",
+            "progress": 0.0
+        },
+        {
+            "id": "659112f8-ff10-4f07-adc4-9dbe773f622a",
+            "title": "Phase19.4 Soak Mission",
+            "status": "ACTIVE",
+            "progress": 0.0
+        },
+        {
+            "id": "103ff8a9-75aa-4cf4-910f-bf080c039722",
+            "title": "Phase19.4 Soak Mission",
+            "status": "QUEUED",
+            "progress": 33.33
+        },
+        {
+            "id": "92b08a28-2131-49dc-9f29-311b904e6bd1",
+            "title": "Phase19.4 Soak Mission",
+            "status": "QUEUED",
+            "progress": 0.0
+        }
+    ],
+    "mission_queue_count": 3,
+    "paused_mission_count": 0,
+    "current_step": "Développement du State Manager",
+    "current_goal": "Safe conversation-only soak validation",
+    "next_action": "Validate greeting",
+    "current_focus": "Validate greeting",
+    "running_tasks": [],
+    "active_tools": [],
+    "important_decisions": [],
+    "brain_mode": "working",
+    "progress": "En développement",
+    "conversation_state": {
+        "last_user_message": "Concurrent A: dis A",
+        "last_titan_response": "Salut Nolan — que veux-tu valider exactement sur le greeting dans cette phase 19.4 (le ton, la longueur, ou le contenu) ?"
+    },
+    "current_execution_risk": "SAFE_READ",
+    "confirmation_pending": false,
+    "confirmation_id": null,
+    "blocked_reason": null,
+    "last_tool": null,
+    "last_execution": "Execution ready for action=Validate greeting goal=Titan project=Titan mission=Phase19.4 Soak Mission",
+    "execution_duration": 0.0,
+    "execution_status": "SUCCESS",
+    "last_error": null,
+    "current_retry": 0,
+    "retry_count": 0,
+    "rollback_available": false,
+    "execution_recovered": false,
+    "last_failure_reason": null,
+    "updated_at": "2026-07-28T14:50:36.221879+00:00",
+    "schema_version": 1
+}

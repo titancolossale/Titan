@@ -438,14 +438,16 @@ def test_nlo_runs_reasoning_in_awareness(tmp_path: Path) -> None:
     from brain.natural_language_orchestrator import SystemName
 
     brain = _build_brain(tmp_path)
-    result = brain.process_request("What is the safest way to implement caching?")
+    # Tool/research intent — conversation/question route skips reasoning_engine.
+    result = brain.process_request("Search the web for FastAPI documentation")
     assert "reasoning" in result.artifacts
     assert SystemName.REASONING_ENGINE in result.systems_used.invoked
 
 
 def test_nlo_reasoning_summary_enriched(tmp_path: Path) -> None:
     brain = _build_brain(tmp_path)
-    result = brain.process_request("Compare two approaches for memory retrieval")
+    # Non-conversation route so reasoning still runs and enriches the summary.
+    result = brain.process_request("Look up Python asyncio docs")
     assert "Reasoning:" in result.reasoning_summary or "reasoning" in result.artifacts
 
 

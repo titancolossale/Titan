@@ -1684,10 +1684,15 @@ class NaturalLanguageOrchestrator:
             return base
         domain = getattr(summary, "domain", None)
         domain_value = domain.value if hasattr(domain, "value") else str(domain)
+        confidence_raw = getattr(summary, "confidence_score", 0.0)
+        try:
+            confidence = float(confidence_raw)
+        except (TypeError, ValueError):
+            confidence = 0.0
         return (
             f"{base} Reasoning: domain={domain_value} "
             f"strategy={getattr(recommendation, 'strategy', '')[:120]} "
-            f"confidence={getattr(summary, 'confidence_score', 0.0):.2f}."
+            f"confidence={confidence:.2f}."
         )
 
 

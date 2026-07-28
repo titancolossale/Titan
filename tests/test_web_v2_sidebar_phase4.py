@@ -83,7 +83,7 @@ def test_phase4_sidebar_material_is_carved_not_boxed() -> None:
 
 def test_phase4_presence_merged_into_sidebar_structure() -> None:
     sidebar = (V2 / "sidebar" / "sidebar-region.js").read_text(encoding="utf-8")
-    assert 'dataset.phase = "5"' in sidebar or 'dataset.phase = "4"' in sidebar
+    assert 'dataset.phase = "10"' in sidebar
     assert "tdl-v2-sidebar-presence" in sidebar
     assert "TITAN PRESENCE" in sidebar
     assert "TITAN ONLINE" in sidebar
@@ -98,6 +98,7 @@ def test_phase4_presence_merged_into_sidebar_structure() -> None:
 def test_phase4_navigation_remains_quiet_and_complete() -> None:
     router = (V2 / "core" / "router.js").read_text(encoding="utf-8")
     sidebar = (V2 / "sidebar" / "sidebar-region.js").read_text(encoding="utf-8")
+    ui_css = (V2 / "design" / "ui.css").read_text(encoding="utf-8")
     for label in (
         "Chat",
         "Projects",
@@ -110,7 +111,8 @@ def test_phase4_navigation_remains_quiet_and_complete() -> None:
     ):
         assert f'label: "{label}"' in router
     assert "tdl-v2-nav-item--conversation" in sidebar
-    assert "BIENTÔT" in sidebar
+    assert 'dataset.placeholder = "true"' in sidebar or "route.placeholder" in sidebar
+    assert 'content: "BIENTÔT"' in ui_css
     assert 'PRESENCE_LABELS.idle' in sidebar or '"Je suis prêt. À tes côtés."' in sidebar
 
 
@@ -130,9 +132,9 @@ def test_phase4_does_not_touch_frozen_architecture_surfaces() -> None:
 def test_phase4_ui_version_bump() -> None:
     out = _run_node(
         """
-import { TITAN_UI_VERSION, TITAN_UI_VERSION_LABEL } from './web/v2/core/version.js';
-if (!/^0\\.2[8-9]|^0\\.3|^0\\.4/.test(TITAN_UI_VERSION)) throw new Error('expected 0.28+ UI version');
-if (!TITAN_UI_VERSION_LABEL.includes(TITAN_UI_VERSION)) throw new Error('bad label');
+import { TITAN_UI_VERSION, TITAN_UI_VERSION_LABEL, TITAN_PRODUCT_VERSION } from './web/v2/core/version.js';
+if (!/^0\\.2[8-9]|^0\\.3|^0\\.4|^0\\.5/.test(TITAN_UI_VERSION)) throw new Error('expected 0.28+ UI version');
+if (!TITAN_UI_VERSION_LABEL.includes(TITAN_PRODUCT_VERSION)) throw new Error('bad label');
 console.log(JSON.stringify({ ok: true, version: TITAN_UI_VERSION }));
 """
     )

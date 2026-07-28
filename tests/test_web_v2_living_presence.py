@@ -188,10 +188,10 @@ def test_phase8_docs_exist() -> None:
 def test_phase8_ui_version_bump() -> None:
     out = _run_node(
         """
-import { TITAN_UI_VERSION, TITAN_UI_VERSION_LABEL } from './web/v2/core/version.js';
+import { TITAN_UI_VERSION, TITAN_UI_VERSION_LABEL, TITAN_PRODUCT_VERSION } from './web/v2/core/version.js';
 const ok = ['0.51.0','0.50.0', '0.48.0', '0.47.0'].includes(TITAN_UI_VERSION);
 if (!ok) throw new Error('expected 0.50.0 / 0.48.0 / 0.47.0 UI version');
-if (!TITAN_UI_VERSION_LABEL.includes(TITAN_UI_VERSION)) throw new Error('bad label');
+if (!TITAN_UI_VERSION_LABEL.includes(TITAN_PRODUCT_VERSION)) throw new Error('bad label');
 console.log(JSON.stringify({ ok: true, version: TITAN_UI_VERSION }));
 """
     )
@@ -202,7 +202,7 @@ console.log(JSON.stringify({ ok: true, version: TITAN_UI_VERSION }));
 
 def test_phase8_settings_version_bump() -> None:
     settings = (ROOT / "config" / "settings.py").read_text(encoding="utf-8")
-    assert 'VERSION = "0.43.0"' in settings or 'VERSION = "0.42.0"' in settings
+    assert 'VERSION = "0.45.0"' in settings
 
 
 def test_phase8_index_meta_version() -> None:

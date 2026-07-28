@@ -65,6 +65,32 @@ def _emit_presence(emit: EmitCallback, state: str) -> None:
     emit("presence", {"state": state})
 
 
+def _emit_workspace_state(
+    emit: EmitCallback,
+    *,
+    connected: bool = False,
+    fanout_hub: bool = False,
+) -> dict[str, Any]:
+    """Publish a read-only WorkspaceState snapshot for the State UI (Phase 13.4).
+
+    Never mutates StateManager. ``connected=True`` logs STATE_UI_CONNECTED
+    (SSE attach); otherwise logs STATE_UI_REFRESH.
+    """
+    from api.status_builders import build_workspace_state
+
+    payload = build_workspace_state(get_titan())
+    emit("workspace_state", payload)
+    if fanout_hub and emit is not _default_emit:
+        # Chat-stream clients use a local emit; fan-out so /events/stream
+        # subscribers also refresh without polling.
+        event_hub.publish("workspace_state", payload)
+    if connected:
+        logger.info("STATE_UI_CONNECTED")
+    else:
+        logger.info("STATE_UI_REFRESH")
+    return payload
+
+
 def _emit_legacy_alias(emit: EmitCallback, event_type: str, data: dict[str, Any]) -> None:
     legacy = _LEGACY_EVENT_MAP.get(event_type)
     if legacy:
@@ -215,6 +241,7 @@ def emit_initial_status(emit: EmitCallback | None = None) -> list[tuple[str, dic
     _emit_brain_state(publisher)
     _emit_presence(publisher, "idle")
     publisher("telemetry", _build_telemetry(titan))
+    _emit_workspace_state(publisher, connected=True)
     return emitted
 
 
@@ -536,5 +563,6 @@ def handle_chat_stream(
     _emit_presence(publisher, "idle")
     publisher("brain_state", {"state": "idle"})
     publisher("telemetry", _build_telemetry(titan))
+    _emit_workspace_state(publisher, fanout_hub=True)
 
     return response

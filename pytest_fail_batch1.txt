@@ -1,0 +1,160 @@
+﻿FFFFFFFFF.                                                               [100%]
+================================== FAILURES ===================================
+_______________________ test_validate_calendar_enabled ________________________
+tests\test_calendar_validator.py:17: in test_validate_calendar_enabled
+    assert result.ok
+E   AssertionError: assert False
+E    +  where False = CalendarValidationResult(ok=False, code=<CalendarValidationCode.GOOGLE_MISSING_CLIENT_SECRET: 'google_missing_client_s...t_secret_path=WindowsPath('data/google_client_secret.json'), token_path=WindowsPath('data/google_calendar_token.json')).ok
+___________________ test_flow1_simple_informational_via_nlo ___________________
+tests\test_cognitive_lifecycle_end_to_end.py:57: in test_flow1_simple_informational_via_nlo
+    assert SystemName.REASONING_ENGINE.value in result.systems_used.invoked
+E   AssertionError: assert 'reasoning_engine' in ['context_manager', 'workspace_awareness', 'memory', 'mission_runtime', 'development_session', 'brain_think']
+E    +  where 'reasoning_engine' = <SystemName.REASONING_ENGINE: 'reasoning_engine'>.value
+E    +    where <SystemName.REASONING_ENGINE: 'reasoning_engine'> = SystemName.REASONING_ENGINE
+E    +  and   ['context_manager', 'workspace_awareness', 'memory', 'mission_runtime', 'development_session', 'brain_think'] = SystemsUsed(planned=(<SystemName.REASONING_ENGINE: 'reasoning_engine'>, <SystemName.CONTEXT_MANAGER: 'context_manager'...gence (conversation_route)', 'executive_function (conversation_route)', 'proactive_intelligence (conversation_route)']).invoked
+E    +    where SystemsUsed(planned=(<SystemName.REASONING_ENGINE: 'reasoning_engine'>, <SystemName.CONTEXT_MANAGER: 'context_manager'...gence (conversation_route)', 'executive_function (conversation_route)', 'proactive_intelligence (conversation_route)']) = OrchestrationResult(request_analysis=RequestAnalysis(request='What is the capital of France?', normalized='what is the...State.ACTIVE'}, 'executive': None}, 'skip_agents': True, 'think_response': True}, duration_seconds=0.05267610005103052).systems_used
+_____________ test_handle_chat_stream_emits_live_pipeline_events ______________
+tests\test_cognitive_stream.py:85: in test_handle_chat_stream_emits_live_pipeline_events
+    assert "memory_lookup" in events
+E   AssertionError: assert 'memory_lookup' in ['conversation_started', 'presence', 'brain_state', 'thinking_started', 'thinking', 'conversation_stage', ...]
+------------------------------ Captured log call ------------------------------
+ERROR    api.chat_service:chat_service.py:963 Conversation hydrate/persist failed request_id=e2ce720671e54410a860517023516d4b
+Traceback (most recent call last):
+  File "C:\Users\nolan\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\sqlalchemy\engine\base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\nolan\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.ProgrammingError: Error binding parameter 10: type 'MagicMock' is not supported
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\nolan\OneDrive\Desktop\Titan\api\chat_service.py", line 946, in process_chat_message
+    pending = conv_service.begin_assistant_message(
+        conversation_id=durable_conv_id,
+    ...<2 lines>...
+        model=model_name,
+    )
+  File "C:\Users\nolan\OneDrive\Desktop\Titan\core\web_conversations\service.py", line 385, in begin_assistant_message
+    return self._repo.add_message(
+           ~~~~~~~~~~~~~~~~~~~~~~^
+        conversation_id=conversation_id,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+        model=model,
+        ^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\nolan\OneDrive\Desktop\Titan\core\web_conversations\repository.py", line 345, in add_message
+    conn.execute(
+    ~~~~~~~~~~~~^
+        messages_table.insert().values(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<12 lines>...
+        )
+        ^
+    )
+    ^
+  File "C:\Users\nolan\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\sqlalchemy\engine\base.py", line 1421, in execute
+    return meth(
+        self,
+        distilled_parameters,
+        execution_options or NO_OPTIONS,
+    )
+  File "C:\Users\nolan\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\sqlalchemy\sql\elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, distilled_params, execution_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\nolan\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\sqlalchemy\engine\base.py", line 1643, in _execute_clauseelement
+    ret = self._execute_context(
+        dialect,
+    ...<8 lines>...
+        cache_hit=cache_hit,
+    )
+  File "C:\Users\nolan\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\sqlalchemy\engine\base.py", line 1848, in _execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\nolan\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\sqlalchemy\engine\base.py", line 1988, in _exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\nolan\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\sqlalchemy\engine\base.py", line 2365, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\nolan\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\sqlalchemy\engine\base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\nolan\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.ProgrammingError: (sqlite3.ProgrammingError) Error binding parameter 10: type 'MagicMock' is not supported
+[SQL: INSERT INTO web_messages (id, conversation_id, role, content, created_at, request_id, status, error_code, provider, model, metadata_json, sequence) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
+[parameters: ('msg_cVLbXJmhV7LhlJFC2GmRAWk8', 'conv_gsE7j2p56HEwQK6Wn39Mtm5c', 'assistant', '', '2026-07-28 13:54:37.849220', 'e2ce720671e54410a860517023516d4b', 'pending', None, 'openai', <MagicMock name='mock.model' id='2691057415040'>, '{}', 2)]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+____________ test_nlo_invokes_reasoning_before_downstream_systems _____________
+tests\test_core_system_integration.py:118: in test_nlo_invokes_reasoning_before_downstream_systems
+    assert SystemName.REASONING_ENGINE.value in result.systems_used.invoked
+E   AssertionError: assert 'reasoning_engine' in ['context_manager', 'workspace_awareness', 'memory', 'mission_runtime', 'development_session', 'brain_think']
+E    +  where 'reasoning_engine' = <SystemName.REASONING_ENGINE: 'reasoning_engine'>.value
+E    +    where <SystemName.REASONING_ENGINE: 'reasoning_engine'> = SystemName.REASONING_ENGINE
+E    +  and   ['context_manager', 'workspace_awareness', 'memory', 'mission_runtime', 'development_session', 'brain_think'] = SystemsUsed(planned=(<SystemName.REASONING_ENGINE: 'reasoning_engine'>, <SystemName.CONTEXT_MANAGER: 'context_manager'...gence (conversation_route)', 'executive_function (conversation_route)', 'proactive_intelligence (conversation_route)']).invoked
+E    +    where SystemsUsed(planned=(<SystemName.REASONING_ENGINE: 'reasoning_engine'>, <SystemName.CONTEXT_MANAGER: 'context_manager'...gence (conversation_route)', 'executive_function (conversation_route)', 'proactive_intelligence (conversation_route)']) = OrchestrationResult(request_analysis=RequestAnalysis(request='What is Python?', normalized='what is python?', tokens=(...nState.ACTIVE'}, 'executive': None}, 'skip_agents': True, 'think_response': True}, duration_seconds=0.0351238998118788).systems_used
+________________ test_decision_to_no_capability_surfaces_error ________________
+tests\test_decision_runtime_integration.py:117: in test_decision_to_no_capability_surfaces_error
+    assert result.decision_report.fallback_action == FallbackAction.NO_CAPABILITY
+E   AssertionError: assert <FallbackActi...execute_tool'> == <FallbackActi...o_capability'>
+E     
+E     - no_capability
+E     + execute_tool
+______________ test_legacy_runtime_no_capability_still_surfaces _______________
+tests\test_decision_runtime_integration.py:274: in test_legacy_runtime_no_capability_still_surfaces
+    assert result.decision_report.fallback_action == FallbackAction.NO_CAPABILITY
+E   AssertionError: assert <FallbackActi...execute_tool'> == <FallbackActi...o_capability'>
+E     
+E     - no_capability
+E     + execute_tool
+____________________ test_ambiguous_request_clarification _____________________
+tests\test_file_nl_operations.py:312: in test_ambiguous_request_clarification
+    assert result.tool_results
+E   AssertionError: assert []
+E    +  where [] = ExecutionResult(agent_results=[], agent_results_text='', tool_results=[], tool_results_text='', agents_truncated=0, to...nstruire un plan fiable.', failed_node_ids=(), pending_confirmation=False), tool_results=(), orchestration_results=())).tool_results
+_______________________ test_path_traversal_blocked_e2e _______________________
+tests\test_file_nl_operations.py:327: in test_path_traversal_blocked_e2e
+    assert not result.tool_results[0].success
+               ^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: list index out of range
+_____________________ test_connector_with_google_backend ______________________
+tests\test_google_calendar_provider.py:218: in test_connector_with_google_backend
+    assert outcome.success
+E   AssertionError: assert False
+E    +  where False = ConnectorResult(success=False, action='list_calendars', data='', error='Fichier client OAuth introuvable : data\\googl....0 (application de bureau) depuis Google Cloud Console et dÚfinissez TITAN_GOOGLE_CLIENT_SECRET_PATH.', target_path='').success
+=========================== short test summary info ===========================
+FAILED tests/test_calendar_validator.py::test_validate_calendar_enabled - Ass...
+FAILED tests/test_cognitive_lifecycle_end_to_end.py::test_flow1_simple_informational_via_nlo
+FAILED tests/test_cognitive_stream.py::test_handle_chat_stream_emits_live_pipeline_events
+FAILED tests/test_core_system_integration.py::test_nlo_invokes_reasoning_before_downstream_systems
+FAILED tests/test_decision_runtime_integration.py::test_decision_to_no_capability_surfaces_error
+FAILED tests/test_decision_runtime_integration.py::test_legacy_runtime_no_capability_still_surfaces
+FAILED tests/test_file_nl_operations.py::test_ambiguous_request_clarification
+FAILED tests/test_file_nl_operations.py::test_path_traversal_blocked_e2e - In...
+FAILED tests/test_google_calendar_provider.py::test_connector_with_google_backend
+9 failed, 1 passed in 3.64s

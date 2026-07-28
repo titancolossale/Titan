@@ -63,6 +63,7 @@ def test_composition_stylesheet_loaded() -> None:
 def test_full_sidebar_navigation_labels() -> None:
     router = (V2 / "core" / "router.js").read_text(encoding="utf-8")
     sidebar = (V2 / "sidebar" / "sidebar-region.js").read_text(encoding="utf-8")
+    ui_css = (V2 / "design" / "ui.css").read_text(encoding="utf-8")
     for label in (
         "Chat",
         "Projects",
@@ -77,21 +78,22 @@ def test_full_sidebar_navigation_labels() -> None:
     assert "TITAN ONLINE" in sidebar
     assert "CERVEAU ACTIF" in sidebar
     assert "Je suis prêt. À tes côtés." in sidebar
-    assert "BIENTÔT" in sidebar
+    assert 'dataset.placeholder = "true"' in sidebar or "route.placeholder" in sidebar
+    assert 'content: "BIENTÔT"' in ui_css
     assert "sidebarPinned: true" in (V2 / "core" / "state-store.js").read_text(encoding="utf-8")
 
 
 def test_permanent_desktop_orchestrator_panel() -> None:
     orch = (V2 / "orchestrator" / "orchestrator-region.js").read_text(encoding="utf-8")
     layout = (V2 / "design" / "layout.css").read_text(encoding="utf-8")
-    assert "Cognitive Orchestrator" in orch
-    assert "Current Objective" in orch
-    assert "Execution Pipeline" in orch
-    assert "Active Tools" in orch
-    assert "Neural Activity" in orch
+    assert "Titan Core" in orch
+    assert "Objectif Actuel" in orch
+    assert "Pipeline d'Exécution" in orch
+    assert "Systèmes Connectés" in orch
+    assert "Activité Neurale" in orch
     assert "IDLE_PLAN_STEPS" in orch
-    assert "Understanding Request" in orch
-    assert "Final Response" in orch
+    assert "Compréhension" in orch
+    assert '"Réponse"' in orch or "Réponse" in orch
     assert "dataset.status" in orch
     assert "var(--tdl-orchestrator-width)" in layout
 
@@ -100,11 +102,11 @@ def test_lower_floating_card_row() -> None:
     status = (V2 / "status" / "status-region.js").read_text(encoding="utf-8")
     css = (V2 / "design" / "composition.css").read_text(encoding="utf-8")
     for title in (
-        "Recent Memory",
+        "Mémoire Récente",
         "Obsidian",
         "Browser",
-        "Cognitive State",
-        "Presence",
+        "État Cognitif",
+        "Présence",
     ):
         assert title in status
     assert "tdl-v2-dock-status-cards--float" in status
@@ -120,7 +122,7 @@ def test_chat_composer_ids_preserved() -> None:
     assert "tdl-v2-send-chat" in manager
     assert "tdl-v2-voice-mic" in composer
     assert "tdl-v2-composer-attach" in composer
-    assert "SEND" in composer
+    assert "Envoyer" in composer
 
 
 def test_no_marketing_welcome_headline() -> None:

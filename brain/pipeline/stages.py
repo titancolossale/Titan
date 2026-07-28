@@ -2,16 +2,27 @@
 # Titan Think Pipeline Stages
 # =====================================
 
-"""Ordered cognitive pipeline stages for Brain.think() (Phase 2 — P2-020)."""
+"""Ordered cognitive pipeline stages for Brain.think() (Phase 2 — P2-020).
+
+Phase 19.1 — emits PIPELINE_START / PIPELINE_STAGE / PIPELINE_FINISHED /
+PIPELINE_FAILED diagnostics with per-stage timings for runtime validation.
+"""
 
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING
 
 from agents.agent_context import AgentContext
 from brain.chat_fast_path import is_simple_conversational_request
-from brain.pipeline.context_bundle import ThinkContext
+from brain.pipeline.context_bundle import (
+    ThinkContext,
+    apply_mission_progress_update,
+    apply_project_progress_update,
+    apply_goal_progress_update,
+    refresh_mission_context_from_state,
+)
 from brain.prompt_builder import PromptBuilder
 from brain.request_deadline import check_deadline, get_request_deadline
 from config.settings import DEBUG_BRAIN, TITAN_MAX_AGENT_HANDOFFS
@@ -34,6 +45,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Phase 19.1 — unified think-pipeline diagnostic envelope.
+DIAG_PIPELINE_START = "PIPELINE_START"
+DIAG_PIPELINE_STAGE = "PIPELINE_STAGE"
+DIAG_PIPELINE_FINISHED = "PIPELINE_FINISHED"
+DIAG_PIPELINE_FAILED = "PIPELINE_FAILED"
+
 # Canonical stage order — rulebook Section 14.2 (P2-020).
 STAGE_ORDER: tuple[str, ...] = (
     "knowledge_search",
@@ -49,6 +66,8 @@ STAGE_ORDER: tuple[str, ...] = (
     "executive_analysis",
     "initiative_analysis",
     "create_plan",
+    "create_decision",
+    "create_execution",
     "internal_analysis_debug",
     "memory_write_decision",
     "tool_confirmation_commands",
@@ -85,6 +104,7 @@ class ThinkPipeline:
         reasoning=None,
         planning=None,
         decision=None,
+        execution=None,
         executor=None,
         monologue=None,
         tool_dispatcher=None,
@@ -105,11 +125,14 @@ class ThinkPipeline:
         self._reasoning = reasoning
         self._planning = planning
         self._decision = decision
+        self._execution = execution
         self._executor = executor
         self._monologue = monologue
         self._tool_dispatcher = tool_dispatcher
         self._conversation_engine = conversation_engine
         self._stage_log: list[str] = []
+        self._stage_timings_ms: dict[str, float] = {}
+        self._pipeline_total_ms: float = 0.0
         self._stream: CognitiveStreamEmitter | None = None
 
     @property
@@ -117,43 +140,101 @@ class ThinkPipeline:
         """Record of stages executed in the last ``run()`` call."""
         return list(self._stage_log)
 
+    @property
+    def stage_timings_ms(self) -> dict[str, float]:
+        """Per-stage wall durations (ms) from the last ``run()`` call."""
+        return dict(self._stage_timings_ms)
+
+    @property
+    def pipeline_total_ms(self) -> float:
+        """Total pipeline wall duration (ms) from the last ``run()`` call."""
+        return self._pipeline_total_ms
+
     def run(
         self,
         ctx: ThinkContext,
         *,
         stream: CognitiveStreamEmitter | None = None,
     ) -> ThinkContext:
-        """Execute all pipeline stages in canonical order."""
+        """Execute all pipeline stages in canonical order.
+
+        Phase 19.1 — emits PIPELINE_* diagnostics and records stage timings.
+        """
         self._stage_log = []
+        self._stage_timings_ms = {}
+        self._pipeline_total_ms = 0.0
         self._stream = stream
         # Safety net: conversational greetings never need agent/tool orchestration.
         if is_simple_conversational_request(ctx.user_message):
             ctx.skip_agents = True
         deadline = get_request_deadline()
         request_id = deadline.request_id if deadline else "-"
-        for stage_name in STAGE_ORDER:
-            check_deadline(stage_name)
-            logger.info(
-                "CHAT_THINK_STAGE_ENTER request_id=%s elapsed_ms=%s stage=%s "
-                "skip_agents=%s",
+        pipeline_started = time.perf_counter()
+        last_stage: str | None = None
+        logger.info(
+            "%s request_id=%s skip_agents=%s skip_llm=%s",
+            DIAG_PIPELINE_START,
+            request_id,
+            bool(getattr(ctx, "skip_agents", False)),
+            bool(getattr(ctx, "skip_llm", False)),
+        )
+        try:
+            for stage_name in STAGE_ORDER:
+                check_deadline(stage_name)
+                logger.info(
+                    "CHAT_THINK_STAGE_ENTER request_id=%s elapsed_ms=%s stage=%s "
+                    "skip_agents=%s",
+                    request_id,
+                    deadline.elapsed_ms() if deadline else 0,
+                    stage_name,
+                    bool(getattr(ctx, "skip_agents", False)),
+                )
+                if ctx.skip_llm and stage_name in (
+                    "execution_coordinate",
+                    "assemble_prompt",
+                    "llm_call",
+                ):
+                    continue
+                stage_fn = getattr(self, f"_stage_{stage_name}")
+                self._stage_log.append(stage_name)
+                last_stage = stage_name
+                stage_started = time.perf_counter()
+                stage_fn(ctx)
+                stage_ms = (time.perf_counter() - stage_started) * 1000.0
+                self._stage_timings_ms[stage_name] = stage_ms
+                logger.info(
+                    "%s request_id=%s stage=%s duration_ms=%.3f",
+                    DIAG_PIPELINE_STAGE,
+                    request_id,
+                    stage_name,
+                    stage_ms,
+                )
+                deadline = get_request_deadline()
+                if deadline is not None:
+                    deadline.mark_stage(stage_name)
+                    request_id = deadline.request_id
+        except Exception as exc:
+            self._pipeline_total_ms = (
+                time.perf_counter() - pipeline_started
+            ) * 1000.0
+            logger.error(
+                "%s request_id=%s stage=%s error=%s duration_ms=%.3f",
+                DIAG_PIPELINE_FAILED,
                 request_id,
-                deadline.elapsed_ms() if deadline else 0,
-                stage_name,
-                bool(getattr(ctx, "skip_agents", False)),
+                last_stage or "-",
+                type(exc).__name__,
+                self._pipeline_total_ms,
             )
-            if ctx.skip_llm and stage_name in (
-                "execution_coordinate",
-                "assemble_prompt",
-                "llm_call",
-            ):
-                continue
-            stage_fn = getattr(self, f"_stage_{stage_name}")
-            self._stage_log.append(stage_name)
-            stage_fn(ctx)
-            deadline = get_request_deadline()
-            if deadline is not None:
-                deadline.mark_stage(stage_name)
-                request_id = deadline.request_id
+            self._stream = None
+            raise
+        self._pipeline_total_ms = (time.perf_counter() - pipeline_started) * 1000.0
+        logger.info(
+            "%s request_id=%s stages=%s duration_ms=%.3f",
+            DIAG_PIPELINE_FINISHED,
+            request_id,
+            len(self._stage_log),
+            self._pipeline_total_ms,
+        )
         self._stream = None
         return ctx
 
@@ -165,6 +246,18 @@ class ThinkPipeline:
     def _debug(self, message: str, *args: object) -> None:
         if DEBUG_BRAIN:
             logger.debug(message, *args)
+
+    @staticmethod
+    def _dict_view_from_workspace(workspace: object) -> dict:
+        """Build the legacy prompt dict view from request-scoped WorkspaceState."""
+        to_dict = getattr(workspace, "to_dict", None)
+        if not callable(to_dict):
+            return {}
+        payload = to_dict()
+        conversation = payload.get("conversation_state") or {}
+        payload["last_user_message"] = conversation.get("last_user_message")
+        payload["last_titan_response"] = conversation.get("last_titan_response")
+        return payload
 
     def _stage_knowledge_search(self, ctx: ThinkContext) -> None:
         ctx.knowledge_hits = self.knowledge.search(ctx.user_message)
@@ -201,6 +294,7 @@ class ThinkPipeline:
             return
         ctx.response = response
         ctx.mission = self.mission_manager.get_mission()
+        refresh_mission_context_from_state(ctx, self.state_manager)
         if self.mission_manager.is_pure_mission_command(ctx.user_message):
             ctx.skip_llm = True
         self._debug("Commande mission : réponse directe.")
@@ -319,7 +413,11 @@ class ThinkPipeline:
         self._debug("Mémoire permanente (retrieved) :\n%s", ctx.retrieved_memory)
 
     def _stage_load_state(self, ctx: ThinkContext) -> None:
-        ctx.state = self.state_manager.get_state()
+        """Expose operational state for prompts; prefer request-scoped WorkspaceState."""
+        if ctx.workspace_state is not None:
+            ctx.state = self._dict_view_from_workspace(ctx.workspace_state)
+        else:
+            ctx.state = self.state_manager.get_state()
         self._debug("ÉTAT ACTUEL :\n%s", ctx.state)
 
     def _stage_load_or_create_mission(self, ctx: ThinkContext) -> None:
@@ -330,6 +428,7 @@ class ThinkPipeline:
         ):
             self.mission_manager.create_mission_from_message(ctx.user_message)
             ctx.mission = self.mission_manager.get_mission()
+            refresh_mission_context_from_state(ctx, self.state_manager)
         self._debug("MISSION ACTIVE :\n%s", self.mission_manager.show_mission())
 
     def _stage_executive_analysis(self, ctx: ThinkContext) -> None:
@@ -361,19 +460,214 @@ class ThinkPipeline:
             self._debug("INITIATIVE :\n%s", ctx.initiative_text)
 
     def _stage_create_plan(self, ctx: ThinkContext) -> None:
-        """Build structured plan linked to mission step (P8-033)."""
+        """Build next-action Plan from workspace hierarchy (Phase 17.1 / 17.2).
+
+        Reuses the request-scoped WorkspaceState already loaded — no second
+        ``StateManager.load()``. Planning runs once per think (no duplicate)
+        unless a mid-turn evolution trigger fires later.
+        """
         if ctx.skip_llm or self._planning is None:
             return
         engine = getattr(self._planning, "engine", None)
         if engine is None:
             return
-        plan = engine.create_plan(
-            ctx.user_message,
-            mission=ctx.mission,
-            state=ctx.state,
-        )
-        ctx.structured_plan_text = plan.format_for_prompt()
+
+        goal = None
+        project = None
+        mission = None
+        mission_lookup = None
+        if self.mission_manager is not None:
+            get_active = getattr(self.mission_manager, "get_active_mission", None)
+            if callable(get_active):
+                mission = get_active()
+            runtime = getattr(self.mission_manager, "runtime", None)
+            if runtime is not None:
+                get_by_id = getattr(runtime, "get_mission", None)
+                if callable(get_by_id):
+                    mission_lookup = get_by_id
+            project_manager = getattr(self.mission_manager, "_project_manager", None)
+            if project_manager is not None:
+                get_project = getattr(project_manager, "get_active_project", None)
+                if callable(get_project):
+                    project = get_project()
+                goal_manager = getattr(project_manager, "_goal_manager", None)
+                if goal_manager is not None:
+                    get_goal = getattr(goal_manager, "get_active_goal", None)
+                    if callable(get_goal):
+                        goal = get_goal()
+
+        plan_next = getattr(engine, "plan_next", None)
+        if callable(plan_next):
+            execution_plan = plan_next(
+                workspace=ctx.workspace_state,
+                goal=goal,
+                project=project,
+                mission=mission,
+                mission_lookup=mission_lookup,
+            )
+            ctx.execution_plan = execution_plan
+            ctx.structured_plan_text = execution_plan.format_for_prompt()
+        else:
+            # Phase 8 fallback — turn-scoped StructuredPlan only.
+            structured = engine.create_plan(
+                ctx.user_message,
+                mission=ctx.mission,
+                state=ctx.state,
+            )
+            ctx.structured_plan_text = structured.format_for_prompt()
         self._debug("Plan structuré :\n%s", ctx.structured_plan_text)
+
+    def _stage_create_decision(self, ctx: ThinkContext) -> None:
+        """Select next action from the current plan (Phase 17.3).
+
+        Single scoring pass over ``execution_plan.next_actions``. Reuses the
+        request-scoped WorkspaceState and active Goal / Project / Mission —
+        no duplicated StateManager.load() and no re-scoring.
+        """
+        if ctx.skip_llm or self._decision is None:
+            return
+        decide_next = getattr(self._decision, "decide_next", None)
+        if not callable(decide_next):
+            engine = getattr(self._decision, "engine", None)
+            decide_next = getattr(engine, "decide", None) if engine is not None else None
+        if not callable(decide_next):
+            return
+
+        goal = None
+        project = None
+        mission = None
+        if self.mission_manager is not None:
+            get_active = getattr(self.mission_manager, "get_active_mission", None)
+            if callable(get_active):
+                mission = get_active()
+            project_manager = getattr(self.mission_manager, "_project_manager", None)
+            if project_manager is not None:
+                get_project = getattr(project_manager, "get_active_project", None)
+                if callable(get_project):
+                    project = get_project()
+                goal_manager = getattr(project_manager, "_goal_manager", None)
+                if goal_manager is not None:
+                    get_goal = getattr(goal_manager, "get_active_goal", None)
+                    if callable(get_goal):
+                        goal = get_goal()
+
+        decision = decide_next(
+            plan=getattr(ctx, "execution_plan", None),
+            workspace=ctx.workspace_state,
+            goal=goal,
+            project=project,
+            mission=mission,
+        )
+        ctx.execution_decision = decision
+        format_prompt = getattr(decision, "format_for_prompt", None)
+        ctx.decision_text = format_prompt() if callable(format_prompt) else ""
+        self._debug("Décision moteur :\n%s", ctx.decision_text)
+
+    def _stage_create_execution(self, ctx: ThinkContext) -> None:
+        """Transform Decision into ExecutionTask / Result (Phase 18.1–18.2).
+
+        Single execute pass. Reuses request-scoped WorkspaceState and the
+        Decision / Plan already produced this turn — no duplicated objects.
+        DecisionEngine feedback is sent for Failed/Blocked outcomes only;
+        successful mission outcomes still feed learning via evaluate_mission_step.
+
+        Phase 18.2 — when the user sends ``/confirm <id>`` for a pending
+        ExecutionTask, resume that task instead of creating a parallel one.
+        """
+        if ctx.skip_llm or self._execution is None:
+            return
+        execute = getattr(self._execution, "execute_decision", None)
+        if not callable(execute):
+            engine = getattr(self._execution, "engine", None)
+            execute = getattr(engine, "execute", None) if engine is not None else None
+        if not callable(execute):
+            return
+
+        goal = None
+        project = None
+        mission = None
+        if self.mission_manager is not None:
+            get_active = getattr(self.mission_manager, "get_active_mission", None)
+            if callable(get_active):
+                mission = get_active()
+            project_manager = getattr(self.mission_manager, "_project_manager", None)
+            if project_manager is not None:
+                get_project = getattr(project_manager, "get_active_project", None)
+                if callable(get_project):
+                    project = get_project()
+                goal_manager = getattr(project_manager, "_goal_manager", None)
+                if goal_manager is not None:
+                    get_goal = getattr(goal_manager, "get_active_goal", None)
+                    if callable(get_goal):
+                        goal = get_goal()
+
+        decision = getattr(ctx, "execution_decision", None)
+        feedback_fn = None
+        if self._decision is not None:
+            feedback_fn = getattr(self._decision, "record_feedback", None)
+            if not callable(feedback_fn):
+                engine = getattr(self._decision, "engine", None)
+                feedback_fn = (
+                    getattr(engine, "record_feedback", None)
+                    if engine is not None
+                    else None
+                )
+
+        # Preview: send feedback only when the run cannot proceed.
+        send_feedback = False
+        plan = getattr(ctx, "execution_plan", None)
+        if plan is not None and getattr(plan, "is_blocked", False):
+            send_feedback = True
+        elif decision is not None and not getattr(decision, "selected_action", None):
+            reason = str(getattr(decision, "reason", "") or "").lower()
+            if "blocked" in reason:
+                send_feedback = True
+
+        confirmation_token = None
+        try:
+            from brain.tool_confirmation_handler import parse_confirmation_token
+
+            token = parse_confirmation_token(ctx.user_message or "")
+            if token:
+                lookup = getattr(self._execution, "lookup_pending", None)
+                if callable(lookup) and lookup(token) is not None:
+                    confirmation_token = token
+                    send_feedback = True
+        except Exception:
+            confirmation_token = None
+
+        result = execute(
+            decision=decision,
+            plan=plan,
+            workspace=ctx.workspace_state,
+            goal=goal,
+            project=project,
+            mission=mission,
+            decision_feedback=feedback_fn if callable(feedback_fn) else None,
+            send_feedback=send_feedback,
+            confirmation_token=confirmation_token,
+            user=getattr(ctx, "current_user", None) or "Nolan",
+            session_id=getattr(ctx, "session_id", None) or "default",
+            turn_id=getattr(ctx, "turn_id", None),
+        )
+        ctx.execution_result = result
+        task = getattr(self._execution, "active_task", None)
+        if task is None:
+            engine = getattr(self._execution, "engine", None)
+            task = getattr(engine, "active_task", None) if engine is not None else None
+        ctx.execution_task = task
+        format_prompt = getattr(task, "format_for_prompt", None)
+        if callable(format_prompt):
+            ctx.execution_text = format_prompt()
+        elif result is not None:
+            ctx.execution_text = (
+                f"Current Execution:\n{getattr(result, 'action', None) or 'None'}\n\n"
+                f"Running Task:\nNone\n\n"
+                f"Execution Status:\n{getattr(getattr(result, 'status', None), 'value', None) or getattr(result, 'status', 'None')}"
+            )
+        else:
+            ctx.execution_text = ""
+        self._debug("Exécution moteur :\n%s", ctx.execution_text)
 
     def _stage_internal_analysis_debug(self, ctx: ThinkContext) -> None:
         """Collapsed placeholder stages — debug output only, not injected into prompt."""
@@ -388,7 +682,8 @@ class ThinkPipeline:
             if self._executor is not None:
                 action = self._executor.execute(analysis)
                 self._debug("Action choisie : %s", action)
-        if self._planning is not None:
+        # Phase 17.1 — avoid duplicated planning; create_plan stage already ran.
+        if self._planning is not None and not ctx.structured_plan_text:
             plan = self._planning.create_plan(ctx.user_message)
             plan_lines = "\n".join(f"- {step}" for step in plan)
             self._debug("Plan :\n%s", plan_lines)
@@ -582,9 +877,241 @@ class ThinkPipeline:
             ctx.mission,
         ):
             self._debug("Étape terminée.")
+            # Phase 17.4 — positive feedback for the selected decision action.
+            self._record_decision_feedback(
+                ctx,
+                success=True,
+                actual_result=1.0,
+            )
             self.mission_manager.complete_current_step()
             ctx.mission = self.mission_manager.get_mission()
+            refresh_mission_context_from_state(ctx, self.state_manager)
             self._debug("Nouvelle mission :\n%s", self.mission_manager.show_mission())
+            # Phase 17.2 — evolve execution plan when mission advances / completes.
+            # Mid-turn replan is allowed only on this trigger (no duplicate planning).
+            if self._planning is not None:
+                remaining = ctx.mission.get("remaining_steps") if ctx.mission else None
+                current = ctx.mission.get("current_step") if ctx.mission else None
+                if not remaining and not current:
+                    complete = getattr(self._planning, "complete_plan", None)
+                    if callable(complete):
+                        ctx.execution_plan = complete(
+                            getattr(ctx, "execution_plan", None),
+                        )
+                        if ctx.execution_plan is not None:
+                            ctx.structured_plan_text = (
+                                ctx.execution_plan.format_for_prompt()
+                            )
+                        self._refresh_decision_after_plan_change(ctx)
+                else:
+                    self._evolve_plan_after_mission_change(
+                        ctx,
+                        change_reason=None,
+                    )
+
+    def _record_decision_feedback(
+        self,
+        ctx: ThinkContext,
+        *,
+        success: bool,
+        actual_result: float,
+        duration: float = 0.0,
+    ) -> None:
+        """Single feedback update for DecisionEngine learning (Phase 17.4)."""
+        if self._decision is None:
+            return
+        decision = getattr(ctx, "execution_decision", None)
+        if decision is None or not getattr(decision, "selected_action", None):
+            return
+        record = getattr(self._decision, "record_feedback", None)
+        if not callable(record):
+            engine = getattr(self._decision, "engine", None)
+            record = getattr(engine, "record_feedback", None) if engine is not None else None
+        if not callable(record):
+            return
+        if duration <= 0.0:
+            plan = getattr(ctx, "execution_plan", None)
+            estimated = getattr(plan, "estimated_duration", None) if plan is not None else None
+            if estimated is not None:
+                try:
+                    duration = max(0.0, float(estimated))
+                except (TypeError, ValueError):
+                    duration = 0.0
+        record(
+            actual_result=actual_result,
+            success=success,
+            duration=duration,
+            decision_id=getattr(decision, "decision_id", None),
+            selected_action=getattr(decision, "selected_action", None),
+            expected_value=getattr(decision, "expected_value", None),
+        )
+
+    def _refresh_decision_after_plan_change(self, ctx: ThinkContext) -> None:
+        """Re-run DecisionEngine once after mid-turn plan evolution (Phase 17.3).
+
+        Single evaluation pass only — triggered solely when the plan changes.
+        """
+        if self._decision is None:
+            return
+        decide_next = getattr(self._decision, "decide_next", None)
+        if not callable(decide_next):
+            engine = getattr(self._decision, "engine", None)
+            decide_next = getattr(engine, "decide", None) if engine is not None else None
+        if not callable(decide_next):
+            return
+
+        goal = None
+        project = None
+        mission = None
+        if self.mission_manager is not None:
+            get_active = getattr(self.mission_manager, "get_active_mission", None)
+            if callable(get_active):
+                mission = get_active()
+            project_manager = getattr(self.mission_manager, "_project_manager", None)
+            if project_manager is not None:
+                get_project = getattr(project_manager, "get_active_project", None)
+                if callable(get_project):
+                    project = get_project()
+                goal_manager = getattr(project_manager, "_goal_manager", None)
+                if goal_manager is not None:
+                    get_goal = getattr(goal_manager, "get_active_goal", None)
+                    if callable(get_goal):
+                        goal = get_goal()
+
+        decision = decide_next(
+            plan=getattr(ctx, "execution_plan", None),
+            workspace=ctx.workspace_state,
+            goal=goal,
+            project=project,
+            mission=mission,
+        )
+        ctx.execution_decision = decision
+        format_prompt = getattr(decision, "format_for_prompt", None)
+        ctx.decision_text = format_prompt() if callable(format_prompt) else ""
+        self._debug("Décision évoluée :\n%s", ctx.decision_text)
+        self._refresh_execution_after_decision_change(ctx)
+
+    def _refresh_execution_after_decision_change(self, ctx: ThinkContext) -> None:
+        """Re-run ExecutionEngine once after mid-turn decision refresh (Phase 18.1)."""
+        if self._execution is None:
+            return
+        execute = getattr(self._execution, "execute_decision", None)
+        if not callable(execute):
+            engine = getattr(self._execution, "engine", None)
+            execute = getattr(engine, "execute", None) if engine is not None else None
+        if not callable(execute):
+            return
+
+        goal = None
+        project = None
+        mission = None
+        if self.mission_manager is not None:
+            get_active = getattr(self.mission_manager, "get_active_mission", None)
+            if callable(get_active):
+                mission = get_active()
+            project_manager = getattr(self.mission_manager, "_project_manager", None)
+            if project_manager is not None:
+                get_project = getattr(project_manager, "get_active_project", None)
+                if callable(get_project):
+                    project = get_project()
+                goal_manager = getattr(project_manager, "_goal_manager", None)
+                if goal_manager is not None:
+                    get_goal = getattr(goal_manager, "get_active_goal", None)
+                    if callable(get_goal):
+                        goal = get_goal()
+
+        decision = getattr(ctx, "execution_decision", None)
+        feedback_fn = None
+        if self._decision is not None:
+            feedback_fn = getattr(self._decision, "record_feedback", None)
+            if not callable(feedback_fn):
+                engine = getattr(self._decision, "engine", None)
+                feedback_fn = (
+                    getattr(engine, "record_feedback", None)
+                    if engine is not None
+                    else None
+                )
+
+        result = execute(
+            decision=decision,
+            plan=getattr(ctx, "execution_plan", None),
+            workspace=ctx.workspace_state,
+            goal=goal,
+            project=project,
+            mission=mission,
+            decision_feedback=feedback_fn if callable(feedback_fn) else None,
+            send_feedback=False,
+        )
+        ctx.execution_result = result
+        task = getattr(self._execution, "active_task", None)
+        if task is None:
+            engine = getattr(self._execution, "engine", None)
+            task = getattr(engine, "active_task", None) if engine is not None else None
+        ctx.execution_task = task
+        format_prompt = getattr(task, "format_for_prompt", None)
+        ctx.execution_text = format_prompt() if callable(format_prompt) else ""
+        self._debug("Exécution évoluée :\n%s", ctx.execution_text)
+
+    def _evolve_plan_after_mission_change(
+        self,
+        ctx: ThinkContext,
+        *,
+        change_reason: str | None,
+    ) -> None:
+        """Incremental mid-turn plan evolution after a mission trigger (Phase 17.2).
+
+        Reuses the request-scoped WorkspaceState and active Goal / Project /
+        Mission entities — does not call ``StateManager.load()`` again.
+        """
+        if self._planning is None:
+            return
+        engine = getattr(self._planning, "engine", None)
+        plan_next = getattr(engine, "plan_next", None) if engine is not None else None
+        if not callable(plan_next):
+            return
+
+        goal = None
+        project = None
+        mission = None
+        mission_lookup = None
+        if self.mission_manager is not None:
+            get_active = getattr(self.mission_manager, "get_active_mission", None)
+            if callable(get_active):
+                mission = get_active()
+            runtime = getattr(self.mission_manager, "runtime", None)
+            if runtime is not None:
+                get_by_id = getattr(runtime, "get_mission", None)
+                if callable(get_by_id):
+                    mission_lookup = get_by_id
+            project_manager = getattr(self.mission_manager, "_project_manager", None)
+            if project_manager is not None:
+                get_project = getattr(project_manager, "get_active_project", None)
+                if callable(get_project):
+                    project = get_project()
+                goal_manager = getattr(project_manager, "_goal_manager", None)
+                if goal_manager is not None:
+                    get_goal = getattr(goal_manager, "get_active_goal", None)
+                    if callable(get_goal):
+                        goal = get_goal()
+
+        # Refresh request-scoped workspace mirror after mission mutation.
+        if self.state_manager is not None and ctx.workspace_state is None:
+            load_ws = getattr(self.state_manager, "load", None)
+            if callable(load_ws):
+                ctx.workspace_state = load_ws()
+
+        execution_plan = plan_next(
+            workspace=ctx.workspace_state,
+            goal=goal,
+            project=project,
+            mission=mission,
+            mission_lookup=mission_lookup,
+            change_reason=change_reason,
+        )
+        ctx.execution_plan = execution_plan
+        ctx.structured_plan_text = execution_plan.format_for_prompt()
+        self._debug("Plan évolué :\n%s", ctx.structured_plan_text)
+        self._refresh_decision_after_plan_change(ctx)
 
     def _stage_record_learning(self, ctx: ThinkContext) -> None:
         """Attach learning context and record explicit failure/success signals (P9-020)."""
@@ -614,6 +1141,30 @@ class ThinkPipeline:
             )
 
     def _stage_update_state(self, ctx: ThinkContext) -> None:
+        """Evolve WorkspaceState from pipeline context, then record turn messages.
+
+        Phase 13.3 — automatic state evolution uses artifacts already produced
+        in this turn (message, mission, context). No second Brain pass / LLM call.
+        Phase 14.4 — after a successful response, stamp mission progress / resume
+        fields onto the request-scoped WorkspaceState (no extra StateManager write).
+        Phase 15.2 — stamp project progress / resume fields the same way.
+        Phase 16.2 — stamp goal progress / resume fields the same way.
+        Persistence remains in Brain._end_think via StateManager.
+        """
+        if ctx.workspace_state is not None:
+            from brain.state_evolution import StateEvolutionEngine
+
+            StateEvolutionEngine().apply(ctx)
+            apply_mission_progress_update(ctx)
+            apply_project_progress_update(ctx)
+            apply_goal_progress_update(ctx)
+            ctx.workspace_state.conversation_state["last_user_message"] = (
+                ctx.user_message
+            )
+            ctx.workspace_state.conversation_state["last_titan_response"] = (
+                ctx.response
+            )
+            return
         self.state_manager.update_after_response(ctx.user_message, ctx.response)
 
     def _stage_update_context(self, ctx: ThinkContext) -> None:

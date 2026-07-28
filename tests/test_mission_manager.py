@@ -13,7 +13,7 @@ import pytest
 from core.mission_manager import MissionManager
 
 EXPECTED_DEFAULT_MISSION = {
-    "schema_version": 3,
+    "schema_version": 4,
     "active_mission_id": None,
     "missions": {},
     "active": False,

@@ -54,7 +54,11 @@ from tools.natural_language_planner import NaturalLanguagePlanner, compute_execu
 from tools.orchestration_models import OrchestrationStatus, ToolOrchestrationResult
 from tools.planner_models import PlannerResult, PlanStepKind
 from tools.providers.provider_fallback_policy import FallbackDecision
-from tools.reasoning_loop import ReasoningLoop, ReviewedPlannerResult
+from tools.reasoning_loop import (
+    ReasoningLoop,
+    ReviewedPlannerResult,
+    reasoning_clarification_tool_result,
+)
 from tools.tool_manager import ToolManager
 from tools.tool_orchestrator import ToolOrchestrator
 from tools.tool_result import ToolRequest, ToolResult
@@ -181,16 +185,32 @@ class CognitiveOrchestrator:
         if not isinstance(report, ToolDecisionReport):
             report = None
 
-        if plan.clarification_required:
-            runtime.status = PlanStatus.SUSPENDED
-            self._suspended[plan.plan_id] = (plan, runtime)
-            return runtime
-
+        # Decision guards (clarification / no-capability / confirmation) must
+        # surface tool results even when the planner also requested clarification.
         guarded = self._decision_guard_results(report)
         if guarded is not None:
             runtime.tool_results = guarded
             runtime.status = PlanStatus.COMPLETED
             return runtime
+
+        if plan.clarification_required:
+            # Workspace / confirmation routing may still need execution despite
+            # planner clarification (mirrors ExecutionCoordinator override rules).
+            allow_execute = report is not None and (
+                bool(report.workspace_operation)
+                or report.confirmation_required
+                or report.fallback_decision
+                == FallbackDecision.REQUEST_CONFIRMATION.value
+            )
+            if not allow_execute:
+                reviewed = plan.analysis.get("reviewed_planner_result")
+                if isinstance(reviewed, ReviewedPlannerResult):
+                    runtime.tool_results = [
+                        reasoning_clarification_tool_result(reviewed),
+                    ]
+                runtime.status = PlanStatus.SUSPENDED
+                self._suspended[plan.plan_id] = (plan, runtime)
+                return runtime
 
         if tool_requests_override is not None:
             orchestration_results = self._execute_override_requests(

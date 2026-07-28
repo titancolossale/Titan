@@ -1,0 +1,173 @@
+﻿........................................................................ [  2%]
+........................................................................ [  5%]
+........................................................................ [  7%]
+........................................................................ [ 10%]
+........................................................................ [ 12%]
+........................................................................ [ 15%]
+........................................................................ [ 18%]
+........................................................................ [ 20%]
+...................................s...............s.................... [ 23%]
+........................................................................ [ 25%]
+........................................................................ [ 28%]
+........................................................................ [ 31%]
+........................................................................ [ 33%]
+........................................................................ [ 36%]
+........................................................................ [ 38%]
+........................................................................ [ 41%]
+........................................................................ [ 44%]
+........................................................................ [ 46%]
+........................................................................ [ 49%]
+........................................................................ [ 51%]
+.s.......................................................s.............. [ 54%]
+........................................................................ [ 57%]
+........................................................................ [ 59%]
+...........F............................................................ [ 62%]
+........................................................................ [ 64%]
+........................................................................ [ 67%]
+........................................................................ [ 70%]
+.........s.............................................................. [ 72%]
+........................................................................ [ 75%]
+........................................................................ [ 77%]
+........................................................................ [ 80%]
+........................................................................ [ 82%]
+................................................................s....... [ 85%]
+................ssssss.................................................. [ 88%]
+...ss..........s........ss..........sss...............ss.........sssss.. [ 90%]
+s......s.......s........ss...........s.........s.......s...............s [ 93%]
+sss.....s......ss.......ss........ssss.......s.......ss...........ss.... [ 95%]
+..s.....ss.......s.....s................................................ [ 98%]
+........................................                                 [100%]
+================================== FAILURES ===================================
+E   PermissionError: [Errno 13] Permission denied: 'C:\\Users\\nolan\\OneDrive\\Desktop\\Titan\\data\\execution_checkpoint.json'
+---------------------------- Captured stderr call -----------------------------
+2026-07-28 10:13:13 | brain.decision_engine | INFO | DECISION_CREATED action=parallel_action confidence=0.8895 priority=0.8 risk=0.05 expected_value=0.95 candidates=1
+2026-07-28 10:13:13 | brain.decision_engine | INFO | DECISION_SELECTED action=parallel_action confidence=0.8895 priority=0.8 risk=0.05 expected_value=0.95 reason=Selected 'parallel_action' with overall_score=0.8300; priority=0.8000; urgency=0.5000; risk=0.0500; dependency=1.0000; estimated_value=0.9500; mission=Phase 19.2 Validation
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_CREATED task_id=5a11af55-1155-4768-b6da-1bc10ed8f0dd action=parallel_action decision_id=33dcbac2-ce59-411e-90de-f2bc978d1a67 status=PENDING
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_SAFETY_EVALUATED task_id=5a11af55-1155-4768-b6da-1bc10ed8f0dd action=parallel_action risk_level=SAFE_READ decision=APPROVED requires_confirmation=False confirmation_id=None
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_STARTED task_id=5a11af55-1155-4768-b6da-1bc10ed8f0dd action=parallel_action status=RUNNING
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_COMPLETED task_id=5a11af55-1155-4768-b6da-1bc10ed8f0dd action=parallel_action duration=0.0010 actual_result=1.0 bridge_status=SUCCESS attempts=1
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_WORKSPACE_UPDATED action=parallel_action status=COMPLETED next_action=parallel_action running_tasks=[] risk=SAFE_READ confirmation_pending=False last_tool=fake_tool retry_count=0 rollback_available=False
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_CREATED task_id=8ca00825-5bfd-4dd7-a4b0-444ce80c605a action=parallel_action decision_id=33dcbac2-ce59-411e-90de-f2bc978d1a67 status=PENDING
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_SAFETY_EVALUATED task_id=8ca00825-5bfd-4dd7-a4b0-444ce80c605a action=parallel_action risk_level=SAFE_READ decision=APPROVED requires_confirmation=False confirmation_id=None
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_STARTED task_id=8ca00825-5bfd-4dd7-a4b0-444ce80c605a action=parallel_action status=RUNNING
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_COMPLETED task_id=8ca00825-5bfd-4dd7-a4b0-444ce80c605a action=parallel_action duration=0.0010 actual_result=1.0 bridge_status=SUCCESS attempts=1
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_WORKSPACE_UPDATED action=parallel_action status=COMPLETED next_action=parallel_action running_tasks=[] risk=SAFE_READ confirmation_pending=False last_tool=fake_tool retry_count=0 rollback_available=False
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_CREATED task_id=dad5c908-9049-4d7d-adb3-42117101152a action=parallel_action decision_id=33dcbac2-ce59-411e-90de-f2bc978d1a67 status=PENDING
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_SAFETY_EVALUATED task_id=dad5c908-9049-4d7d-adb3-42117101152a action=parallel_action risk_level=SAFE_READ decision=APPROVED requires_confirmation=False confirmation_id=None
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_STARTED task_id=dad5c908-9049-4d7d-adb3-42117101152a action=parallel_action status=RUNNING
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_CREATED task_id=0a53e465-dc48-42ef-a3fa-cbe48945238e action=parallel_action decision_id=33dcbac2-ce59-411e-90de-f2bc978d1a67 status=PENDING
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_SAFETY_EVALUATED task_id=0a53e465-dc48-42ef-a3fa-cbe48945238e action=parallel_action risk_level=SAFE_READ decision=APPROVED requires_confirmation=False confirmation_id=None
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_STARTED task_id=0a53e465-dc48-42ef-a3fa-cbe48945238e action=parallel_action status=RUNNING
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_COMPLETED task_id=dad5c908-9049-4d7d-adb3-42117101152a action=parallel_action duration=0.0010 actual_result=1.0 bridge_status=SUCCESS attempts=1
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_CREATED task_id=e9cb6544-9f52-4c3a-95a5-fa2fd694562d action=parallel_action decision_id=33dcbac2-ce59-411e-90de-f2bc978d1a67 status=PENDING
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_WORKSPACE_UPDATED action=parallel_action status=COMPLETED next_action=parallel_action running_tasks=[] risk=SAFE_READ confirmation_pending=False last_tool=fake_tool retry_count=0 rollback_available=False
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_SAFETY_EVALUATED task_id=e9cb6544-9f52-4c3a-95a5-fa2fd694562d action=parallel_action risk_level=SAFE_READ decision=APPROVED requires_confirmation=False confirmation_id=None
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_CREATED task_id=c6dc796e-c05e-4e48-b6f9-2bf16e441f0a action=parallel_action decision_id=33dcbac2-ce59-411e-90de-f2bc978d1a67 status=PENDING
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_STARTED task_id=e9cb6544-9f52-4c3a-95a5-fa2fd694562d action=parallel_action status=RUNNING
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_CREATED task_id=2b9b73f1-f811-4901-9e79-5c3c6d30aa3b action=parallel_action decision_id=33dcbac2-ce59-411e-90de-f2bc978d1a67 status=PENDING
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_CREATED task_id=fd35bfa9-2eff-4c8c-901e-bb1e6b44e6d1 action=parallel_action decision_id=33dcbac2-ce59-411e-90de-f2bc978d1a67 status=PENDING
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_SAFETY_EVALUATED task_id=c6dc796e-c05e-4e48-b6f9-2bf16e441f0a action=parallel_action risk_level=SAFE_READ decision=APPROVED requires_confirmation=False confirmation_id=None
+2026-07-28 10:13:13 | brain.planning_engine | INFO | PLAN_CREATED goal=Ship Titan Production project=Production Hardening mission=Phase 19.2 Validation priority=0.55 actions=1 blocked=False revision=1 reason=plan 0
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_SAFETY_EVALUATED task_id=2b9b73f1-f811-4901-9e79-5c3c6d30aa3b action=parallel_action risk_level=SAFE_READ decision=APPROVED requires_confirmation=False confirmation_id=None
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_SAFETY_EVALUATED task_id=fd35bfa9-2eff-4c8c-901e-bb1e6b44e6d1 action=parallel_action risk_level=SAFE_READ decision=APPROVED requires_confirmation=False confirmation_id=None
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_STARTED task_id=c6dc796e-c05e-4e48-b6f9-2bf16e441f0a action=parallel_action status=RUNNING
+2026-07-28 10:13:13 | brain.planning_engine | INFO | PLAN_REVISION revision=1
+2026-07-28 10:13:13 | brain.planning_engine | INFO | PLAN_CREATED goal=Ship Titan Production project=Production Hardening mission=Phase 19.2 Validation priority=0.55 actions=1 blocked=False revision=1 reason=plan 1
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_STARTED task_id=fd35bfa9-2eff-4c8c-901e-bb1e6b44e6d1 action=parallel_action status=RUNNING
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_STARTED task_id=2b9b73f1-f811-4901-9e79-5c3c6d30aa3b action=parallel_action status=RUNNING
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_COMPLETED task_id=e9cb6544-9f52-4c3a-95a5-fa2fd694562d action=parallel_action duration=0.0010 actual_result=1.0 bridge_status=SUCCESS attempts=1
+2026-07-28 10:13:13 | brain.planning_engine | INFO | PLAN_REVISION revision=1
+2026-07-28 10:13:13 | brain.planning_engine | INFO | PLAN_CREATED goal=Ship Titan Production project=Production Hardening mission=Phase 19.2 Validation priority=0.55 actions=1 blocked=False revision=1 reason=plan 2
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_WORKSPACE_UPDATED action=parallel_action status=COMPLETED next_action=parallel_action running_tasks=[] risk=SAFE_READ confirmation_pending=False last_tool=fake_tool retry_count=0 rollback_available=False
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_COMPLETED task_id=c6dc796e-c05e-4e48-b6f9-2bf16e441f0a action=parallel_action duration=0.0010 actual_result=1.0 bridge_status=SUCCESS attempts=1
+2026-07-28 10:13:13 | brain.planning_engine | INFO | PLAN_REVISION revision=1
+2026-07-28 10:13:13 | brain.planning_engine | INFO | PLAN_CREATED goal=Ship Titan Production project=Production Hardening mission=Phase 19.2 Validation priority=0.55 actions=1 blocked=False revision=1 reason=plan 3
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_COMPLETED task_id=2b9b73f1-f811-4901-9e79-5c3c6d30aa3b action=parallel_action duration=0.0010 actual_result=1.0 bridge_status=SUCCESS attempts=1
+2026-07-28 10:13:13 | brain.execution_recovery | WARNING | Failed to clear execution checkpoint: [WinError 2] Le fichier spÚcifiÚ est introuvable: 'C:\\Users\\nolan\\OneDrive\\Desktop\\Titan\\data\\execution_checkpoint.json'
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_WORKSPACE_UPDATED action=parallel_action status=COMPLETED next_action=parallel_action running_tasks=[] risk=SAFE_READ confirmation_pending=False last_tool=fake_tool retry_count=0 rollback_available=False
+2026-07-28 10:13:13 | brain.planning_engine | INFO | PLAN_REVISION revision=1
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_WORKSPACE_UPDATED action=parallel_action status=COMPLETED next_action=parallel_action running_tasks=[] risk=SAFE_READ confirmation_pending=False last_tool=fake_tool retry_count=0 rollback_available=False
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_COMPLETED task_id=fd35bfa9-2eff-4c8c-901e-bb1e6b44e6d1 action=parallel_action duration=0.0010 actual_result=1.0 bridge_status=SUCCESS attempts=1
+2026-07-28 10:13:13 | brain.execution_engine | INFO | EXECUTION_WORKSPACE_UPDATED action=parallel_action status=COMPLETED next_action=parallel_action running_tasks=[] risk=SAFE_READ confirmation_pending=False last_tool=fake_tool retry_count=0 rollback_available=False
+2026-07-28 10:13:13 | brain.planning_engine | INFO | PLAN_CREATED goal=Ship Titan Production project=Production Hardening mission=Phase 19.2 Validation priority=0.55 actions=1 blocked=False revision=1 reason=plan 4
+2026-07-28 10:13:13 | brain.planning_engine | INFO | PLAN_CREATED goal=Ship Titan Production project=Production Hardening mission=Phase 19.2 Validation priority=0.55 actions=1 blocked=False revision=1 reason=plan 5
+2026-07-28 10:13:13 | brain.planning_engine | INFO | PLAN_CREATED goal=Ship Titan Production project=Production Hardening mission=Phase 19.2 Validation priority=0.55 actions=1 blocked=False revision=1 reason=plan 6
+2026-07-28 10:13:13 | brain.planning_engine | INFO | PLAN_CREATED goal=Ship Titan Production project=Production Hardening mission=Phase 19.2 Validation priority=0.55 actions=1 blocked=False revision=1 reason=plan 7
+2026-07-28 10:13:13 | brain.planning_engine | INFO | PLAN_REVISION revision=1
+2026-07-28 10:13:13 | brain.planning_engine | INFO | PLAN_REVISION revision=1
+2026-07-28 10:13:13 | brain.planning_engine | INFO | PLAN_REVISION revision=1
+2026-07-28 10:13:13 | brain.planning_engine | INFO | PLAN_REVISION revision=1
+------------------------------ Captured log call ------------------------------
+INFO     brain.decision_engine:decision_engine.py:595 DECISION_CREATED action=parallel_action confidence=0.8895 priority=0.8 risk=0.05 expected_value=0.95 candidates=1
+INFO     brain.decision_engine:decision_engine.py:618 DECISION_SELECTED action=parallel_action confidence=0.8895 priority=0.8 risk=0.05 expected_value=0.95 reason=Selected 'parallel_action' with overall_score=0.8300; priority=0.8000; urgency=0.5000; risk=0.0500; dependency=1.0000; estimated_value=0.9500; mission=Phase 19.2 Validation
+INFO     brain.execution_engine:execution_engine.py:263 EXECUTION_CREATED task_id=5a11af55-1155-4768-b6da-1bc10ed8f0dd action=parallel_action decision_id=33dcbac2-ce59-411e-90de-f2bc978d1a67 status=PENDING
+INFO     brain.execution_engine:execution_engine.py:1717 EXECUTION_SAFETY_EVALUATED task_id=5a11af55-1155-4768-b6da-1bc10ed8f0dd action=parallel_action risk_level=SAFE_READ decision=APPROVED requires_confirmation=False confirmation_id=None
+INFO     brain.execution_engine:execution_engine.py:770 EXECUTION_STARTED task_id=5a11af55-1155-4768-b6da-1bc10ed8f0dd action=parallel_action status=RUNNING
+INFO     brain.execution_engine:execution_engine.py:910 EXECUTION_COMPLETED task_id=5a11af55-1155-4768-b6da-1bc10ed8f0dd action=parallel_action duration=0.0010 actual_result=1.0 bridge_status=SUCCESS attempts=1
+INFO     brain.execution_engine:execution_engine.py:1661 EXECUTION_WORKSPACE_UPDATED action=parallel_action status=COMPLETED next_action=parallel_action running_tasks=[] risk=SAFE_READ confirmation_pending=False last_tool=fake_tool retry_count=0 rollback_available=False
+INFO     brain.execution_engine:execution_engine.py:263 EXECUTION_CREATED task_id=8ca00825-5bfd-4dd7-a4b0-444ce80c605a action=parallel_action decision_id=33dcbac2-ce59-411e-90de-f2bc978d1a67 status=PENDING
+INFO     brain.execution_engine:execution_engine.py:1717 EXECUTION_SAFETY_EVALUATED task_id=8ca00825-5bfd-4dd7-a4b0-444ce80c605a action=parallel_action risk_level=SAFE_READ decision=APPROVED requires_confirmation=False confirmation_id=None
+INFO     brain.execution_engine:execution_engine.py:770 EXECUTION_STARTED task_id=8ca00825-5bfd-4dd7-a4b0-444ce80c605a action=parallel_action status=RUNNING
+INFO     brain.execution_engine:execution_engine.py:910 EXECUTION_COMPLETED task_id=8ca00825-5bfd-4dd7-a4b0-444ce80c605a action=parallel_action duration=0.0010 actual_result=1.0 bridge_status=SUCCESS attempts=1
+INFO     brain.execution_engine:execution_engine.py:1661 EXECUTION_WORKSPACE_UPDATED action=parallel_action status=COMPLETED next_action=parallel_action running_tasks=[] risk=SAFE_READ confirmation_pending=False last_tool=fake_tool retry_count=0 rollback_available=False
+INFO     brain.execution_engine:execution_engine.py:263 EXECUTION_CREATED task_id=dad5c908-9049-4d7d-adb3-42117101152a action=parallel_action decision_id=33dcbac2-ce59-411e-90de-f2bc978d1a67 status=PENDING
+INFO     brain.execution_engine:execution_engine.py:1717 EXECUTION_SAFETY_EVALUATED task_id=dad5c908-9049-4d7d-adb3-42117101152a action=parallel_action risk_level=SAFE_READ decision=APPROVED requires_confirmation=False confirmation_id=None
+INFO     brain.execution_engine:execution_engine.py:770 EXECUTION_STARTED task_id=dad5c908-9049-4d7d-adb3-42117101152a action=parallel_action status=RUNNING
+INFO     brain.execution_engine:execution_engine.py:263 EXECUTION_CREATED task_id=0a53e465-dc48-42ef-a3fa-cbe48945238e action=parallel_action decision_id=33dcbac2-ce59-411e-90de-f2bc978d1a67 status=PENDING
+INFO     brain.execution_engine:execution_engine.py:1717 EXECUTION_SAFETY_EVALUATED task_id=0a53e465-dc48-42ef-a3fa-cbe48945238e action=parallel_action risk_level=SAFE_READ decision=APPROVED requires_confirmation=False confirmation_id=None
+INFO     brain.execution_engine:execution_engine.py:770 EXECUTION_STARTED task_id=0a53e465-dc48-42ef-a3fa-cbe48945238e action=parallel_action status=RUNNING
+INFO     brain.execution_engine:execution_engine.py:910 EXECUTION_COMPLETED task_id=dad5c908-9049-4d7d-adb3-42117101152a action=parallel_action duration=0.0010 actual_result=1.0 bridge_status=SUCCESS attempts=1
+INFO     brain.execution_engine:execution_engine.py:263 EXECUTION_CREATED task_id=e9cb6544-9f52-4c3a-95a5-fa2fd694562d action=parallel_action decision_id=33dcbac2-ce59-411e-90de-f2bc978d1a67 status=PENDING
+INFO     brain.execution_engine:execution_engine.py:1661 EXECUTION_WORKSPACE_UPDATED action=parallel_action status=COMPLETED next_action=parallel_action running_tasks=[] risk=SAFE_READ confirmation_pending=False last_tool=fake_tool retry_count=0 rollback_available=False
+INFO     brain.execution_engine:execution_engine.py:1717 EXECUTION_SAFETY_EVALUATED task_id=e9cb6544-9f52-4c3a-95a5-fa2fd694562d action=parallel_action risk_level=SAFE_READ decision=APPROVED requires_confirmation=False confirmation_id=None
+INFO     brain.execution_engine:execution_engine.py:263 EXECUTION_CREATED task_id=c6dc796e-c05e-4e48-b6f9-2bf16e441f0a action=parallel_action decision_id=33dcbac2-ce59-411e-90de-f2bc978d1a67 status=PENDING
+INFO     brain.execution_engine:execution_engine.py:770 EXECUTION_STARTED task_id=e9cb6544-9f52-4c3a-95a5-fa2fd694562d action=parallel_action status=RUNNING
+INFO     brain.execution_engine:execution_engine.py:263 EXECUTION_CREATED task_id=2b9b73f1-f811-4901-9e79-5c3c6d30aa3b action=parallel_action decision_id=33dcbac2-ce59-411e-90de-f2bc978d1a67 status=PENDING
+INFO     brain.execution_engine:execution_engine.py:263 EXECUTION_CREATED task_id=fd35bfa9-2eff-4c8c-901e-bb1e6b44e6d1 action=parallel_action decision_id=33dcbac2-ce59-411e-90de-f2bc978d1a67 status=PENDING
+INFO     brain.execution_engine:execution_engine.py:1717 EXECUTION_SAFETY_EVALUATED task_id=c6dc796e-c05e-4e48-b6f9-2bf16e441f0a action=parallel_action risk_level=SAFE_READ decision=APPROVED requires_confirmation=False confirmation_id=None
+INFO     brain.planning_engine:planning_engine.py:200 PLAN_CREATED goal=Ship Titan Production project=Production Hardening mission=Phase 19.2 Validation priority=0.55 actions=1 blocked=False revision=1 reason=plan 0
+INFO     brain.execution_engine:execution_engine.py:1717 EXECUTION_SAFETY_EVALUATED task_id=2b9b73f1-f811-4901-9e79-5c3c6d30aa3b action=parallel_action risk_level=SAFE_READ decision=APPROVED requires_confirmation=False confirmation_id=None
+INFO     brain.execution_engine:execution_engine.py:1717 EXECUTION_SAFETY_EVALUATED task_id=fd35bfa9-2eff-4c8c-901e-bb1e6b44e6d1 action=parallel_action risk_level=SAFE_READ decision=APPROVED requires_confirmation=False confirmation_id=None
+INFO     brain.execution_engine:execution_engine.py:770 EXECUTION_STARTED task_id=c6dc796e-c05e-4e48-b6f9-2bf16e441f0a action=parallel_action status=RUNNING
+INFO     brain.planning_engine:planning_engine.py:212 PLAN_REVISION revision=1
+INFO     brain.planning_engine:planning_engine.py:200 PLAN_CREATED goal=Ship Titan Production project=Production Hardening mission=Phase 19.2 Validation priority=0.55 actions=1 blocked=False revision=1 reason=plan 1
+INFO     brain.execution_engine:execution_engine.py:770 EXECUTION_STARTED task_id=fd35bfa9-2eff-4c8c-901e-bb1e6b44e6d1 action=parallel_action status=RUNNING
+INFO     brain.execution_engine:execution_engine.py:770 EXECUTION_STARTED task_id=2b9b73f1-f811-4901-9e79-5c3c6d30aa3b action=parallel_action status=RUNNING
+INFO     brain.execution_engine:execution_engine.py:910 EXECUTION_COMPLETED task_id=e9cb6544-9f52-4c3a-95a5-fa2fd694562d action=parallel_action duration=0.0010 actual_result=1.0 bridge_status=SUCCESS attempts=1
+INFO     brain.planning_engine:planning_engine.py:212 PLAN_REVISION revision=1
+INFO     brain.planning_engine:planning_engine.py:200 PLAN_CREATED goal=Ship Titan Production project=Production Hardening mission=Phase 19.2 Validation priority=0.55 actions=1 blocked=False revision=1 reason=plan 2
+INFO     brain.execution_engine:execution_engine.py:1661 EXECUTION_WORKSPACE_UPDATED action=parallel_action status=COMPLETED next_action=parallel_action running_tasks=[] risk=SAFE_READ confirmation_pending=False last_tool=fake_tool retry_count=0 rollback_available=False
+INFO     brain.execution_engine:execution_engine.py:910 EXECUTION_COMPLETED task_id=c6dc796e-c05e-4e48-b6f9-2bf16e441f0a action=parallel_action duration=0.0010 actual_result=1.0 bridge_status=SUCCESS attempts=1
+INFO     brain.planning_engine:planning_engine.py:212 PLAN_REVISION revision=1
+INFO     brain.planning_engine:planning_engine.py:200 PLAN_CREATED goal=Ship Titan Production project=Production Hardening mission=Phase 19.2 Validation priority=0.55 actions=1 blocked=False revision=1 reason=plan 3
+INFO     brain.execution_engine:execution_engine.py:910 EXECUTION_COMPLETED task_id=2b9b73f1-f811-4901-9e79-5c3c6d30aa3b action=parallel_action duration=0.0010 actual_result=1.0 bridge_status=SUCCESS attempts=1
+WARNING  brain.execution_recovery:execution_recovery.py:663 Failed to clear execution checkpoint: [WinError 2] Le fichier spÚcifiÚ est introuvable: 'C:\\Users\\nolan\\OneDrive\\Desktop\\Titan\\data\\execution_checkpoint.json'
+INFO     brain.execution_engine:execution_engine.py:1661 EXECUTION_WORKSPACE_UPDATED action=parallel_action status=COMPLETED next_action=parallel_action running_tasks=[] risk=SAFE_READ confirmation_pending=False last_tool=fake_tool retry_count=0 rollback_available=False
+INFO     brain.planning_engine:planning_engine.py:212 PLAN_REVISION revision=1
+INFO     brain.execution_engine:execution_engine.py:1661 EXECUTION_WORKSPACE_UPDATED action=parallel_action status=COMPLETED next_action=parallel_action running_tasks=[] risk=SAFE_READ confirmation_pending=False last_tool=fake_tool retry_count=0 rollback_available=False
+INFO     brain.execution_engine:execution_engine.py:910 EXECUTION_COMPLETED task_id=fd35bfa9-2eff-4c8c-901e-bb1e6b44e6d1 action=parallel_action duration=0.0010 actual_result=1.0 bridge_status=SUCCESS attempts=1
+INFO     brain.execution_engine:execution_engine.py:1661 EXECUTION_WORKSPACE_UPDATED action=parallel_action status=COMPLETED next_action=parallel_action running_tasks=[] risk=SAFE_READ confirmation_pending=False last_tool=fake_tool retry_count=0 rollback_available=False
+INFO     brain.planning_engine:planning_engine.py:200 PLAN_CREATED goal=Ship Titan Production project=Production Hardening mission=Phase 19.2 Validation priority=0.55 actions=1 blocked=False revision=1 reason=plan 4
+INFO     brain.planning_engine:planning_engine.py:200 PLAN_CREATED goal=Ship Titan Production project=Production Hardening mission=Phase 19.2 Validation priority=0.55 actions=1 blocked=False revision=1 reason=plan 5
+INFO     brain.planning_engine:planning_engine.py:200 PLAN_CREATED goal=Ship Titan Production project=Production Hardening mission=Phase 19.2 Validation priority=0.55 actions=1 blocked=False revision=1 reason=plan 6
+INFO     brain.planning_engine:planning_engine.py:200 PLAN_CREATED goal=Ship Titan Production project=Production Hardening mission=Phase 19.2 Validation priority=0.55 actions=1 blocked=False revision=1 reason=plan 7
+INFO     brain.planning_engine:planning_engine.py:212 PLAN_REVISION revision=1
+INFO     brain.planning_engine:planning_engine.py:212 PLAN_REVISION revision=1
+INFO     brain.planning_engine:planning_engine.py:212 PLAN_REVISION revision=1
+INFO     brain.planning_engine:planning_engine.py:212 PLAN_REVISION revision=1
+C:\Users\nolan\AppData\Local\Python\pythoncore-3.14-64\Lib\pathlib\__init__.py:771: PermissionError: [Errno 13] Permission denied: 'C:\\Users\\nolan\\OneDrive\\Desktop\\Titan\\data\\execution_checkpoint.json'
+============================== warnings summary ===============================
+..\..\..\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\testclient.py:1
+  C:\Users\nolan\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/test_brain_lock_lifecycle.py: 3 warnings
+tests/test_conversation_intelligence_12_2.py: 1 warning
+tests/test_web_conversations_12_1.py: 8 warnings
+  C:\Users\nolan\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\sqlalchemy\engine\default.py:952: DeprecationWarning: The default datetime adapter is deprecated as of Python 3.12; see the sqlite3 documentation for suggested replacement recipes
+    cursor.execute(statement, parameters)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_production_validation_19_2.py::test_parallel_execution_and_planning
+1 failed, 2717 passed, 58 skipped, 13 warnings in 436.24s (0:07:16)

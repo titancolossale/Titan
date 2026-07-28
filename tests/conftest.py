@@ -34,7 +34,9 @@ from brain.llm import LLM
 from context.context_manager import ContextManager
 
 from core.conversation_engine import ConversationEngine
+from core.goal_manager import GoalManager
 from core.mission_manager import MissionManager
+from core.project_manager import ProjectManager
 
 from core.state_manager import StateManager
 
@@ -56,6 +58,43 @@ def state_manager(tmp_path: Path) -> StateManager:
     """StateManager pointed at a temp file; never reads or writes repo data/."""
 
     return StateManager(file_path=tmp_path / "titan_state.json")
+
+
+
+
+
+@pytest.fixture
+
+def goal_manager(tmp_path: Path, state_manager: StateManager) -> GoalManager:
+
+    """GoalManager pointed at a temp file; mirrors into the test StateManager."""
+
+    return GoalManager(
+        file_path=tmp_path / "titan_goals.json",
+        state_manager=state_manager,
+    )
+
+
+
+
+
+@pytest.fixture
+
+def project_manager(
+    tmp_path: Path,
+    state_manager: StateManager,
+    goal_manager: GoalManager,
+) -> ProjectManager:
+
+    """ProjectManager pointed at a temp file; mirrors into the test StateManager."""
+
+    manager = ProjectManager(
+        file_path=tmp_path / "titan_projects.json",
+        state_manager=state_manager,
+        goal_manager=goal_manager,
+    )
+    goal_manager.bind_project_manager(manager)
+    return manager
 
 
 
@@ -137,7 +176,22 @@ def brain(tmp_path: Path, mock_agent_llm: MagicMock) -> Brain:
 
 
     state = StateManager(file_path=tmp_path / "titan_state.json")
-    mission = MissionManager(file_path=tmp_path / "titan_mission.json")
+    goals = GoalManager(
+        file_path=tmp_path / "titan_goals.json",
+        state_manager=state,
+    )
+    projects = ProjectManager(
+        file_path=tmp_path / "titan_projects.json",
+        state_manager=state,
+        goal_manager=goals,
+    )
+    mission = MissionManager(
+        file_path=tmp_path / "titan_mission.json",
+        state_manager=state,
+        project_manager=projects,
+    )
+    goals.bind_project_manager(projects)
+    goals.bind_mission_manager(mission)
     conversation_engine = ConversationEngine(persist_sessions=False)
 
     return Brain(
@@ -158,6 +212,10 @@ def brain(tmp_path: Path, mock_agent_llm: MagicMock) -> Brain:
         state_manager=state,
 
         mission_manager=mission,
+
+        project_manager=projects,
+
+        goal_manager=goals,
 
         memory_service=MemoryService(
 

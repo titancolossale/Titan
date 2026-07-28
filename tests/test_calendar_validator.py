@@ -13,9 +13,15 @@ from tools.connectors.calendar_validator import (
 
 
 def test_validate_calendar_enabled() -> None:
-    result = validate_calendar_config(enabled=True, timeout_seconds=30.0)
+    # Explicit mock provider — isolate from process .env (e.g. google OAuth).
+    result = validate_calendar_config(
+        enabled=True,
+        timeout_seconds=30.0,
+        provider="mock",
+    )
     assert result.ok
     assert result.code == CalendarValidationCode.OK
+    assert result.provider == "mock"
 
 
 def test_validate_calendar_disabled() -> None:

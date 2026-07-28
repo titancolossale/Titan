@@ -1,0 +1,306 @@
+{
+    "schema_version": 4,
+    "active_mission_id": "659112f8-ff10-4f07-adc4-9dbe773f622a",
+    "missions": {
+        "92b08a28-2131-49dc-9f29-311b904e6bd1": {
+            "id": "92b08a28-2131-49dc-9f29-311b904e6bd1",
+            "title": "Phase19.4 Soak Mission",
+            "description": "Safe conversation-only soak validation",
+            "status": "QUEUED",
+            "priority": "NORMAL",
+            "created_at": "2026-07-28T14:38:29.938896+00:00",
+            "updated_at": "2026-07-28T14:39:40.681957+00:00",
+            "started_at": null,
+            "completed_at": null,
+            "progress": 0.0,
+            "tags": [],
+            "parent_mission": null,
+            "child_missions": [],
+            "current_step": "Validate greeting",
+            "next_step": "Validate continuity",
+            "notes": "",
+            "project_id": "619e6f23-45d5-42be-a010-992170ae776f",
+            "objective": "Safe conversation-only soak validation",
+            "state": "QUEUED",
+            "completed_steps": [],
+            "remaining_steps": [
+                "Validate greeting",
+                "Validate continuity",
+                "Validate recovery"
+            ],
+            "progress_percent": 0.0,
+            "steps": [
+                "Validate greeting",
+                "Validate continuity",
+                "Validate recovery"
+            ],
+            "history": [
+                {
+                    "event": "mission_created",
+                    "timestamp": "2026-07-28T14:38:29.938896+00:00",
+                    "detail": "Mission « Phase19.4 Soak Mission » created with 3 step(s).",
+                    "metadata": {}
+                },
+                {
+                    "event": "mission_queued",
+                    "timestamp": "2026-07-28T14:39:40.681957+00:00",
+                    "detail": "Mission « Phase19.4 Soak Mission » queued (another mission is ACTIVE).",
+                    "metadata": {}
+                }
+            ],
+            "goal": {
+                "description": "Safe conversation-only soak validation",
+                "success_criteria": ""
+            },
+            "tasks": [
+                {
+                    "id": "d97211d0-f929-4964-b3b0-495802be40bb",
+                    "description": "Validate greeting",
+                    "order": 0,
+                    "state": "IN_PROGRESS"
+                },
+                {
+                    "id": "4ddd8e48-3018-4de0-a7e2-def86e4a83a8",
+                    "description": "Validate continuity",
+                    "order": 1,
+                    "state": "PENDING"
+                },
+                {
+                    "id": "ef474f0f-2cfa-4141-b022-0d3e30c412df",
+                    "description": "Validate recovery",
+                    "order": 2,
+                    "state": "PENDING"
+                }
+            ]
+        },
+        "103ff8a9-75aa-4cf4-910f-bf080c039722": {
+            "id": "103ff8a9-75aa-4cf4-910f-bf080c039722",
+            "title": "Phase19.4 Soak Mission",
+            "description": "Safe conversation-only soak validation",
+            "status": "QUEUED",
+            "priority": "NORMAL",
+            "created_at": "2026-07-28T14:39:40.681957+00:00",
+            "updated_at": "2026-07-28T14:41:07.270152+00:00",
+            "started_at": "2026-07-28T14:40:27.331822+00:00",
+            "completed_at": null,
+            "progress": 33.33,
+            "tags": [],
+            "parent_mission": null,
+            "child_missions": [],
+            "current_step": "Validate continuity",
+            "next_step": "Validate recovery",
+            "notes": "",
+            "project_id": "619e6f23-45d5-42be-a010-992170ae776f",
+            "objective": "Safe conversation-only soak validation",
+            "state": "QUEUED",
+            "completed_steps": [
+                "Validate greeting"
+            ],
+            "remaining_steps": [
+                "Validate continuity",
+                "Validate recovery"
+            ],
+            "progress_percent": 33.33,
+            "steps": [
+                "Validate greeting",
+                "Validate continuity",
+                "Validate recovery"
+            ],
+            "history": [
+                {
+                    "event": "mission_created",
+                    "timestamp": "2026-07-28T14:39:40.681957+00:00",
+                    "detail": "Mission « Phase19.4 Soak Mission » created with 3 step(s).",
+                    "metadata": {}
+                },
+                {
+                    "event": "step_completed",
+                    "timestamp": "2026-07-28T14:40:27.331822+00:00",
+                    "detail": "Step completed: « Validate greeting ».",
+                    "metadata": {
+                        "step": "Validate greeting",
+                        "next_step": "Validate continuity"
+                    }
+                },
+                {
+                    "event": "mission_queued",
+                    "timestamp": "2026-07-28T14:41:07.270152+00:00",
+                    "detail": "Mission « Phase19.4 Soak Mission » queued (another mission is ACTIVE).",
+                    "metadata": {}
+                }
+            ],
+            "goal": {
+                "description": "Safe conversation-only soak validation",
+                "success_criteria": ""
+            },
+            "tasks": [
+                {
+                    "id": "290d0fe6-4ffc-4f13-aaab-c142485d704f",
+                    "description": "Validate greeting",
+                    "order": 0,
+                    "state": "COMPLETED"
+                },
+                {
+                    "id": "66cc3ca4-3b24-4370-bb1e-8098b164150f",
+                    "description": "Validate continuity",
+                    "order": 1,
+                    "state": "IN_PROGRESS"
+                },
+                {
+                    "id": "9585ee53-2c2b-4e2b-b3cd-329ecf3fb511",
+                    "description": "Validate recovery",
+                    "order": 2,
+                    "state": "PENDING"
+                }
+            ]
+        },
+        "44e9e26c-9bdd-4dd7-90df-7441493418db": {
+            "id": "44e9e26c-9bdd-4dd7-90df-7441493418db",
+            "title": "Phase19.4 Soak Mission",
+            "description": "Safe conversation-only soak validation",
+            "status": "QUEUED",
+            "priority": "NORMAL",
+            "created_at": "2026-07-28T14:41:07.270152+00:00",
+            "updated_at": "2026-07-28T14:47:40.527039+00:00",
+            "started_at": null,
+            "completed_at": null,
+            "progress": 0.0,
+            "tags": [],
+            "parent_mission": null,
+            "child_missions": [],
+            "current_step": "Validate greeting",
+            "next_step": "Validate continuity",
+            "notes": "",
+            "project_id": "619e6f23-45d5-42be-a010-992170ae776f",
+            "objective": "Safe conversation-only soak validation",
+            "state": "QUEUED",
+            "completed_steps": [],
+            "remaining_steps": [
+                "Validate greeting",
+                "Validate continuity",
+                "Validate recovery"
+            ],
+            "progress_percent": 0.0,
+            "steps": [
+                "Validate greeting",
+                "Validate continuity",
+                "Validate recovery"
+            ],
+            "history": [
+                {
+                    "event": "mission_created",
+                    "timestamp": "2026-07-28T14:41:07.270152+00:00",
+                    "detail": "Mission « Phase19.4 Soak Mission » created with 3 step(s).",
+                    "metadata": {}
+                },
+                {
+                    "event": "mission_queued",
+                    "timestamp": "2026-07-28T14:47:40.527039+00:00",
+                    "detail": "Mission « Phase19.4 Soak Mission » queued (another mission is ACTIVE).",
+                    "metadata": {}
+                }
+            ],
+            "goal": {
+                "description": "Safe conversation-only soak validation",
+                "success_criteria": ""
+            },
+            "tasks": [
+                {
+                    "id": "4460fc77-cb6a-48a4-9eaf-843c9d39fc91",
+                    "description": "Validate greeting",
+                    "order": 0,
+                    "state": "IN_PROGRESS"
+                },
+                {
+                    "id": "4cbc11e1-f2a1-4cbf-86e6-1977aa0b04fd",
+                    "description": "Validate continuity",
+                    "order": 1,
+                    "state": "PENDING"
+                },
+                {
+                    "id": "033ee9af-36dc-4dd6-a6f8-a524817da096",
+                    "description": "Validate recovery",
+                    "order": 2,
+                    "state": "PENDING"
+                }
+            ]
+        },
+        "659112f8-ff10-4f07-adc4-9dbe773f622a": {
+            "id": "659112f8-ff10-4f07-adc4-9dbe773f622a",
+            "title": "Phase19.4 Soak Mission",
+            "description": "Safe conversation-only soak validation",
+            "status": "READY",
+            "priority": "NORMAL",
+            "created_at": "2026-07-28T14:47:40.527039+00:00",
+            "updated_at": "2026-07-28T14:47:40.527039+00:00",
+            "started_at": null,
+            "completed_at": null,
+            "progress": 0.0,
+            "tags": [],
+            "parent_mission": null,
+            "child_missions": [],
+            "current_step": "Validate greeting",
+            "next_step": "Validate continuity",
+            "notes": "",
+            "project_id": "619e6f23-45d5-42be-a010-992170ae776f",
+            "objective": "Safe conversation-only soak validation",
+            "state": "READY",
+            "completed_steps": [],
+            "remaining_steps": [
+                "Validate greeting",
+                "Validate continuity",
+                "Validate recovery"
+            ],
+            "progress_percent": 0.0,
+            "steps": [
+                "Validate greeting",
+                "Validate continuity",
+                "Validate recovery"
+            ],
+            "history": [
+                {
+                    "event": "mission_created",
+                    "timestamp": "2026-07-28T14:47:40.527039+00:00",
+                    "detail": "Mission « Phase19.4 Soak Mission » created with 3 step(s).",
+                    "metadata": {}
+                }
+            ],
+            "goal": {
+                "description": "Safe conversation-only soak validation",
+                "success_criteria": ""
+            },
+            "tasks": [
+                {
+                    "id": "d9e55f98-5f18-4b55-b7aa-aafe0fbd8ad4",
+                    "description": "Validate greeting",
+                    "order": 0,
+                    "state": "IN_PROGRESS"
+                },
+                {
+                    "id": "dcb9fef5-c4a5-499b-90a1-367a950b5e5e",
+                    "description": "Validate continuity",
+                    "order": 1,
+                    "state": "PENDING"
+                },
+                {
+                    "id": "e9b8a91f-a34b-4160-bf2a-647dc9ad0d4e",
+                    "description": "Validate recovery",
+                    "order": 2,
+                    "state": "PENDING"
+                }
+            ]
+        }
+    },
+    "active": true,
+    "title": "Phase19.4 Soak Mission",
+    "objective": "Safe conversation-only soak validation",
+    "steps": [
+        "Validate greeting",
+        "Validate continuity",
+        "Validate recovery"
+    ],
+    "completed_steps": [],
+    "current_step": "Validate greeting",
+    "status": "in_progress",
+    "id": "659112f8-ff10-4f07-adc4-9dbe773f622a"
+}

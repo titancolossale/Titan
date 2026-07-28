@@ -1,0 +1,526 @@
+{
+  "phase": "19.4",
+  "started_at": "2026-07-28T14:40:43.713932+00:00",
+  "soak_dir": "C:\\Users\\nolan\\OneDrive\\Desktop\\Titan\\data\\phase19_4_soak",
+  "scenarios": [
+    {
+      "name": "01_greeting",
+      "ok": true,
+      "request_id": "soak-322bc43a462e",
+      "total_ms": 3255.65,
+      "provider_ttft_ms": null,
+      "provider_calls": 1,
+      "response_chars": 127,
+      "response_preview": "Salut Nolan. Je suis l\u00e0.\n\nTu veux que je t\u2019aide sur la Soak Mission (Phase 19.4) ou tu as une autre priorit\u00e9 l\u00e0 tout de suite ?",
+      "intent": "conversation",
+      "confidence": 0.9,
+      "error_code": null,
+      "wall_ms": 3255.69
+    },
+    {
+      "name": "02_context_recall",
+      "ok": true,
+      "store": {
+        "request_id": "soak-8be9923ad600",
+        "total_ms": 12311.69,
+        "provider_ttft_ms": null,
+        "provider_calls": 1,
+        "response_chars": 326,
+        "response_preview": "Not\u00e9 : ton projet principal s\u2019appelle **Titan** et il est bien l\u2019**actif** en ce moment.\n\nPour valider la **continuit\u00e9** (Phase19.4 Soak Mission, conversation-only), dis-moi juste ",
+        "intent": "question",
+        "confidence": 0.5,
+        "error_code": null
+      },
+      "recall": {
+        "request_id": "soak-2d12094658a4",
+        "total_ms": 5675.08,
+        "provider_ttft_ms": null,
+        "provider_calls": 1,
+        "response_chars": 49,
+        "response_preview": "Ton projet principal (actif) s\u2019appelle **Titan**.",
+        "intent": "question",
+        "confidence": 0.55,
+        "error_code": null
+      },
+      "recalled_titan": true,
+      "wall_ms": 17986.86
+    },
+    {
+      "name": "03_mission_continuity",
+      "ok": true,
+      "mission_id": "44e9e26c-9bdd-4dd7-90df-7441493418db",
+      "same_mission": true,
+      "summary": {
+        "request_id": "soak-eb110cd99986",
+        "total_ms": 26.09,
+        "provider_ttft_ms": null,
+        "provider_calls": 1,
+        "response_chars": 904,
+        "response_preview": "Missions actives:\n- [MissionState.QUEUED] Phase19.4 Soak Mission (103ff8a9-75aa-4cf4-910f-bf080c039722)\n- [MissionState.READY] Phase19.4 Soak Mission (44e9e26c-9bdd-4dd7-90df-74414",
+        "intent": "mission_management",
+        "confidence": 0.9,
+        "error_code": null
+      },
+      "followup": {
+        "request_id": "soak-f40486bf2328",
+        "total_ms": 28.61,
+        "provider_ttft_ms": null,
+        "provider_calls": 1,
+        "response_chars": 905,
+        "response_preview": "Missions actives:\n- [MissionState.QUEUED] Phase19.4 Soak Mission (103ff8a9-75aa-4cf4-910f-bf080c039722)\n- [MissionState.READY] Phase19.4 Soak Mission (44e9e26c-9bdd-4dd7-90df-74414",
+        "intent": "mission_management",
+        "confidence": 0.9,
+        "error_code": null
+      },
+      "wall_ms": 74.26
+    },
+    {
+      "name": "04_project_switching",
+      "ok": true,
+      "high_match": {
+        "matched": true,
+        "confidence": 1.0,
+        "project_id": "e43d86d7-1096-4442-8caf-f12be205462b"
+      },
+      "low_match": {
+        "matched": false,
+        "confidence": 0.0,
+        "reason": "no_signal"
+      },
+      "active_project": "Soak Beta",
+      "prompt_project": "Soak Beta",
+      "turn": {
+        "request_id": "soak-3cc0ed4051cb",
+        "total_ms": 11146.32,
+        "provider_ttft_ms": null,
+        "provider_calls": 1,
+        "response_chars": 791,
+        "response_preview": "Bien re\u00e7u : je travaille **uniquement sur Soak Beta**.\n\n\u00c9tape active c\u00f4t\u00e9 mission : **Validate greeting**.  \nObjectif : v\u00e9rifier que mon **message d\u2019ouverture** est s\u00fbr, neutre, \u201cc",
+        "intent": "question",
+        "confidence": 0.5,
+        "error_code": null
+      },
+      "seeded": {
+        "alpha": "91086990-3da6-4360-959f-254b4879a05f",
+        "beta": "e43d86d7-1096-4442-8caf-f12be205462b"
+      },
+      "wall_ms": 11194.09
+    },
+    {
+      "name": "05_goal_switching",
+      "ok": true,
+      "high_match": {
+        "matched": true,
+        "confidence": 1.0,
+        "goal_id": "17573618-42fb-42d4-95f3-8df37d3a5ddf"
+      },
+      "low_match": {
+        "matched": false,
+        "confidence": 0.0,
+        "reason": "no_signal"
+      },
+      "active_goal": "Soak Goal Beta",
+      "seeded": {
+        "alpha": "3e3bacb8-58f4-4144-9f6a-3c4e9a500db7",
+        "beta": "17573618-42fb-42d4-95f3-8df37d3a5ddf"
+      },
+      "wall_ms": 39.66
+    },
+    {
+      "name": "06_planning",
+      "ok": true,
+      "actions": [
+        "Validate greeting",
+        "Validate continuity",
+        "Validate recovery"
+      ],
+      "actions2": [
+        "Validate greeting",
+        "Validate continuity",
+        "Validate recovery"
+      ],
+      "revision": 1,
+      "revision2": 1,
+      "planning_ms": 0.29,
+      "plan_created_logs": 2,
+      "single_active_plan": true,
+      "wall_ms": 14.31
+    },
+    {
+      "name": "07_decision",
+      "ok": true,
+      "selected_action": "Summarize mission status",
+      "reason": "Selected 'Summarize mission status' with overall_score=0.8300; priority=0.8000; urgency=0.5000; risk=0.0500; dependency=1.0000; estimated_value=0.9500; mission=Phase19.4 Soak Mission",
+      "confidence": 0.5693,
+      "decision_ms": 0.48,
+      "wall_ms": 0.51
+    },
+    {
+      "name": "08_safe_execution",
+      "ok": true,
+      "status": "COMPLETED",
+      "success": true,
+      "requires_confirmation": false,
+      "execution_ms": 2.14,
+      "wall_ms": 2.83
+    },
+    {
+      "name": "09_confirmation_required",
+      "ok": true,
+      "status": "AWAITING_CONFIRMATION",
+      "requires_confirmation": true,
+      "bridge_calls": 0,
+      "workspace_confirmation_pending": true,
+      "wall_ms": 1.25
+    },
+    {
+      "name": "10_11_stream_cancel_long",
+      "ok": true,
+      "stream": {
+        "first_delta_ms": 6256.88,
+        "total_ms": 6257.1,
+        "event_order": [
+          "conversation_started",
+          "presence",
+          "brain_state",
+          "thinking_started",
+          "thinking",
+          "conversation_stage",
+          "brain_state",
+          "orchestration_started",
+          "conversation_stage",
+          "acknowledged",
+          "memory_lookup",
+          "conversation_stage",
+          "brain_state",
+          "memory_activity",
+          "memory_miss",
+          "conversation_stage",
+          "brain_state",
+          "memory_activity",
+          "response_building",
+          "conversation_stage",
+          "brain_state",
+          "response_started",
+          "brain_state",
+          "text_delta",
+          "text_delta",
+          "text_delta",
+          "text_delta",
+          "text_delta",
+          "text_delta",
+          "text_delta",
+          "text_delta",
+          "text_delta",
+          "text_delta",
+          "text_delta",
+          "text_delta",
+          "text_delta",
+          "text_delta",
+          "response_ready",
+          "conversation_stage",
+          "brain_state",
+          "thinking_finished",
+          "conversation_stage",
+          "brain_state",
+          "memory_activity",
+          "memory_activity",
+          "memory_activity",
+          "memory_activity",
+          "memory_activity",
+          "brain_state",
+          "orchestration_finished",
+          "conversation_stage",
+          "conversation_finished",
+          "response_completed",
+          "presence",
+          "brain_state",
+          "telemetry",
+          "workspace_state"
+        ],
+        "event_count": 57
+      },
+      "required_events_present": [
+        "brain_state",
+        "conversation_finished",
+        "conversation_started",
+        "response_started",
+        "text_delta"
+      ],
+      "missing_events": [],
+      "deltas_after_completion": false,
+      "cancel_recovery_ok": true,
+      "cancel_recovery_ms": 21087.9,
+      "long_response": {
+        "request_id": "soak-cbae70dde25c",
+        "total_ms": 13093.24,
+        "provider_ttft_ms": null,
+        "provider_calls": 1,
+        "response_chars": 1122,
+        "response_preview": "Le **Brain** est le chef d\u2019orchestre : il comprend ta demande, fixe l\u2019objectif imm\u00e9diat et assemble la r\u00e9ponse finale.  \nLes **Agents** sont des sp\u00e9cialistes internes (ex : code, p",
+        "intent": "question",
+        "confidence": 0.5,
+        "error_code": null
+      },
+      "diag_stream": 4,
+      "diag_cancel": 0,
+      "wall_ms": 41307.0
+    },
+    {
+      "name": "12_long_conversation_25",
+      "ok": true,
+      "turns": 25,
+      "duplicate_consecutive": 0,
+      "avg_ms": 6663.18,
+      "p95_ms": 9252.07,
+      "mission_still_active": "Phase19.4 Soak Mission",
+      "wall_ms": 166583.14
+    },
+    {
+      "name": "13_repeated_50",
+      "ok": true,
+      "count": 50,
+      "errors": 0,
+      "avg_ms": 4796.98,
+      "p50_ms": 4641.76,
+      "p95_ms": 9946.86,
+      "slowest_ms": 17112.68,
+      "first10_avg_ms": 4025.54,
+      "last10_avg_ms": 4711.47,
+      "growth_ratio": 1.17,
+      "wall_ms": 239852.1
+    },
+    {
+      "name": "14_concurrent",
+      "ok": true,
+      "lock_results": [
+        {
+          "n": 0,
+          "acquired": true,
+          "busy": false,
+          "ms": 2000.24
+        },
+        {
+          "n": 2,
+          "acquired": false,
+          "busy": true,
+          "ms": 412.88
+        },
+        {
+          "n": 1,
+          "acquired": false,
+          "busy": true,
+          "ms": 414.88
+        }
+      ],
+      "acquired_count": 1,
+      "busy_count": 2
+    },
+    {
+      "name": "15_persistence_local_store",
+      "ok": true,
+      "backend": "sqlite",
+      "conversation_id": "conv_nx_BEn_ykkbp-JWV8SOEQOtE",
+      "message_count": 2,
+      "survives_reopen": true,
+      "no_duplicate_assistant": true,
+      "assistant_pending": 0,
+      "note": "Local soak uses SQLite isolation; Railway /ready confirms postgresql.",
+      "wall_ms": 39.92
+    }
+  ],
+  "performance": {
+    "request_count": 83,
+    "avg_ms": 3538.24,
+    "p50_ms": 3094.76,
+    "p95_ms": 11146.32,
+    "slowest_ms": 17112.68,
+    "provider_ttft_avg_ms": null,
+    "provider_ttft_p95_ms": null,
+    "provider_samples": 0,
+    "error_rate": 0.1429
+  },
+  "diagnostics": {
+    "markers_found": {
+      "CHAT_API_RECEIVED": true,
+      "CHAT_BRAIN_LOCK_WAIT": true,
+      "CHAT_BRAIN_LOCK_ACQUIRED": true,
+      "CHAT_BRAIN_START": true,
+      "CHAT_STREAM_STARTED": true,
+      "CHAT_PROVIDER_START": true,
+      "CHAT_FIRST_DELTA": true,
+      "CHAT_PROVIDER_END": true,
+      "CHAT_STREAM_COMPLETED": true,
+      "CHAT_RESPONSE_READY": true,
+      "CHAT_BRAIN_LOCK_RELEASED": true,
+      "PIPELINE_START": true,
+      "PIPELINE_STAGE": true,
+      "PIPELINE_FINISHED": true,
+      "PLAN_CREATED": true,
+      "DECISION_SELECTED": true
+    },
+    "markers_missing": [
+      "CHAT_CANCELLED",
+      "CHAT_TIMEOUT",
+      "CHAT_BRAIN_LOCK_TIMEOUT"
+    ],
+    "total_log_lines": 8073
+  },
+  "persistence": {},
+  "environment": {
+    "api_key_loaded": true,
+    "api_key_length": 164,
+    "model": "gpt-5.2",
+    "stream_enabled": true,
+    "chat_diagnostics": true,
+    "data_isolated": "C:\\Users\\nolan\\OneDrive\\Desktop\\Titan\\data\\phase19_4_soak",
+    "obsidian_forced_off": "false",
+    "trading_live_off": "false"
+  },
+  "failures": [],
+  "ok": true,
+  "finished_at": "2026-07-28T14:46:00.519371+00:00",
+  "railway": {
+    "base": "https://titan-production-e377.up.railway.app",
+    "checks": [
+      {
+        "path": "/health",
+        "ok": true,
+        "status": 200,
+        "body": {
+          "status": "ok",
+          "name": "Titan",
+          "version": "0.44.0",
+          "web_enabled": true,
+          "dev_mode": false,
+          "auth_required": true,
+          "session_auth": true
+        }
+      },
+      {
+        "path": "/ready",
+        "ok": true,
+        "status": 200,
+        "body": {
+          "status": "ready",
+          "name": "Titan",
+          "version": "0.44.0",
+          "dev_mode": false,
+          "auth_required": true,
+          "checks": {
+            "web_enabled": {
+              "ok": true,
+              "required": true
+            },
+            "data_directory": {
+              "ok": true,
+              "required": true,
+              "message": "ok"
+            },
+            "auth_configured": {
+              "ok": true,
+              "required": true
+            },
+            "conversation_store": {
+              "ok": true,
+              "required": true,
+              "message": "Conversation store ready (postgresql).",
+              "backend": "postgresql"
+            }
+          },
+          "optional_subsystems": [
+            {
+              "name": "obsidian",
+              "status": "disabled",
+              "required": false,
+              "healthy": null,
+              "message": "Connecteur Obsidian d\u00e9sactiv\u00e9. D\u00e9finissez TITAN_OBSIDIAN_ENABLED=true dans .env pour activer l'int\u00e9gration."
+            },
+            {
+              "name": "browser",
+              "status": "disabled",
+              "required": false,
+              "healthy": null,
+              "message": "Browser connector disabled."
+            },
+            {
+              "name": "voice",
+              "status": "available",
+              "required": false,
+              "healthy": true,
+              "message": "Voice runtime enabled (server-side mock/browser STT)."
+            },
+            {
+              "name": "trading",
+              "status": "available",
+              "required": false,
+              "healthy": true,
+              "message": "Trading runtime enabled (mock/paper default)."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/chat/stream",
+        "ok": true,
+        "status": 401,
+        "body": "{\"detail\":\"Unauthorized\"}"
+      }
+    ],
+    "summary": {
+      "health_ok": true,
+      "ready_ok": true,
+      "auth_required": true,
+      "session_auth": true,
+      "conversation_backend": "postgresql",
+      "conversation_store_ok": true,
+      "unauthenticated_chat_blocked": true
+    },
+    "railway_chat_soak": "skipped_no_credentials",
+    "ok": true
+  },
+  "rerun_12_14": {
+    "phase": "19.4-rerun",
+    "started_at": "2026-07-28T14:47:40.544624+00:00",
+    "scenarios": [
+      {
+        "name": "12_long_conversation_25",
+        "ok": true,
+        "turns": 25,
+        "duplicate_consecutive": 0,
+        "avg_ms": 6663.18,
+        "p95_ms": 9252.07,
+        "mission_still_active": "Phase19.4 Soak Mission",
+        "wall_ms": 166583.14
+      },
+      {
+        "name": "14_concurrent",
+        "ok": true,
+        "lock_results": [
+          {
+            "n": 0,
+            "acquired": true,
+            "busy": false,
+            "ms": 2000.24
+          },
+          {
+            "n": 2,
+            "acquired": false,
+            "busy": true,
+            "ms": 412.88
+          },
+          {
+            "n": 1,
+            "acquired": false,
+            "busy": true,
+            "ms": 414.88
+          }
+        ],
+        "acquired_count": 1,
+        "busy_count": 2
+      }
+    ],
+    "ok": true,
+    "finished_at": "2026-07-28T14:50:36.225026+00:00"
+  }
+}

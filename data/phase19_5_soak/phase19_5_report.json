@@ -1,0 +1,342 @@
+{
+  "phase": "19.5",
+  "base": "https://titan-production-e377.up.railway.app",
+  "started_at": "2026-07-28T17:41:09.844950+00:00",
+  "finished_at": "2026-07-28T17:41:09.844964+00:00",
+  "wall_ms": 124544.5,
+  "quick": false,
+  "scenarios": [
+    {
+      "name": "00_environment",
+      "ok": true,
+      "health": {
+        "path": "/health",
+        "ok": true,
+        "status": 200,
+        "status_field": "ok",
+        "auth_required": true,
+        "session_auth": true,
+        "conversation_backend": null
+      },
+      "ready": {
+        "path": "/ready",
+        "ok": true,
+        "status": 200,
+        "status_field": "ready",
+        "auth_required": true,
+        "session_auth": null,
+        "conversation_backend": "postgresql"
+      },
+      "unauthenticated_chat_blocked": true,
+      "failing_layer": null
+    },
+    {
+      "name": "01_login",
+      "ok": true,
+      "login": {
+        "ok": true,
+        "status": 200,
+        "auth_ms": 257.82,
+        "wall_ms": 257.99,
+        "session_cookie": true,
+        "csrf_cookie": true,
+        "csrf_token_present": true,
+        "username_returned": true
+      },
+      "auth_status": {
+        "ok": true,
+        "status": 200,
+        "authenticated": true,
+        "auth_mode": "session",
+        "session_auth": true,
+        "auth_required": true,
+        "ms": 137.39
+      },
+      "credentials_in_logs": false,
+      "failing_layer": null
+    },
+    {
+      "name": "02_basic_chat",
+      "ok": false,
+      "request_id": "p195-399b64de12c5",
+      "conversation_id": "conv_z8p29lPHkqAYDVnnMpZyRbgi",
+      "turn": {
+        "status": 200,
+        "assistant_chars": 0,
+        "total_ms": 5553.6,
+        "ttft_ms": 878,
+        "missing_required_events": [
+          "response_started",
+          "text_delta"
+        ]
+      },
+      "persisted_user_messages": 1,
+      "persisted_assistant_messages": 1,
+      "pending_assistant": 0,
+      "reload_ms": 246.21,
+      "failing_layer": "basic_chat_persistence"
+    },
+    {
+      "name": "03_context_continuity",
+      "ok": false,
+      "conversation_id": "conv_VAOnD7sBa-BP7Vs3YaETPomj",
+      "request_id": "p195-d05830b59bef",
+      "mentions_titan": false,
+      "assistant_preview": "",
+      "failing_layer": "context_continuity"
+    },
+    {
+      "name": "04_refresh_continuity",
+      "ok": false,
+      "conversation_id": "conv_cGsO4aupCCbpMSWNt8VyeerK",
+      "request_id": "p195-ede86094d766",
+      "messages_before": 2,
+      "messages_after_reload": 2,
+      "duplicates": false,
+      "continued_ok": false,
+      "mentions_secret": false,
+      "reload_ms": 157.47,
+      "failing_layer": "refresh_continuity"
+    },
+    {
+      "name": "05_restart_continuity",
+      "ok": false,
+      "conversation_id": "conv_U0QgDDz3azZXMq4uuXvdVCq6",
+      "request_id": "p195-fd09bc9ba268",
+      "message_count_before": 6,
+      "message_count_after_relogin": 6,
+      "pending_before": 0,
+      "pending_after": 0,
+      "redeploy_triggered": false,
+      "note": "No Railway CLI available; validated Postgres survival across fresh authenticated sessions without unsafe redeploy.",
+      "failing_layer": "restart_continuity"
+    },
+    {
+      "name": "06_streaming_order",
+      "ok": false,
+      "request_id": "p195-8ae4b1ee119a",
+      "conversation_id": "conv_Egwq-zpqcBdL35re2kd8vy3f",
+      "event_order": [
+        "conversation_started",
+        "presence",
+        "brain_state",
+        "thinking_started",
+        "thinking",
+        "conversation_stage",
+        "brain_state",
+        "orchestration_started",
+        "conversation_stage",
+        "thinking_finished",
+        "conversation_stage",
+        "brain_state",
+        "memory_activity",
+        "memory_activity",
+        "memory_activity",
+        "memory_activity",
+        "memory_activity",
+        "brain_state",
+        "orchestration_finished",
+        "conversation_stage",
+        "conversation_finished",
+        "structured_error",
+        "presence",
+        "brain_state",
+        "telemetry"
+      ],
+      "required_positions": {
+        "conversation_started": 0,
+        "brain_state": 2,
+        "conversation_finished": 20
+      },
+      "deltas_after_finish": false,
+      "failing_layer": "streaming_order"
+    },
+    {
+      "name": "07_cancellation_recovery",
+      "ok": false,
+      "failing_layer": "cancel_seed",
+      "error": "seed failed",
+      "request_id": "p195-7c20100533d7"
+    },
+    {
+      "name": "08_sequential_soak",
+      "ok": false,
+      "conversation_id": "conv_CpgUdkPfaloVoUg-iVfqA7Tf",
+      "request_count": 3,
+      "failures": 3,
+      "p50_ms": 5510.4,
+      "p95_ms": 5837.99,
+      "slowest_ms": 5837.99,
+      "first_third_avg_ms": 5602.69,
+      "last_third_avg_ms": 5602.69,
+      "latency_trend_ok": true,
+      "duplicate_request_ids": true,
+      "pending_assistant": 0,
+      "failing_layer": "sequential_soak"
+    },
+    {
+      "name": "09_long_conversation",
+      "ok": false,
+      "conversation_id": "conv_v53xQ78M1k7DuGGtM6JBn-Lt",
+      "request_id": "p195-d379b74d8f21",
+      "failed_at_turn": 1,
+      "failing_layer": "long_conversation_turn",
+      "error": "brain_busy"
+    },
+    {
+      "name": "10_project_goal_mission",
+      "ok": false,
+      "entities": {
+        "goal": "P195-Goal-ca42de11",
+        "project": "P195-Project-ca42de11",
+        "mission": "P195-Mission-ca42de11"
+      },
+      "request_id": "p195-16d4c7483845",
+      "workspace_ms": 153.45,
+      "status_ms": 199.48,
+      "reload_ms": 142.47,
+      "seen_in_workspace": {
+        "goal": false,
+        "project": false,
+        "mission": false
+      },
+      "survives_refresh_session": false,
+      "failing_layer": "hierarchy_continuity",
+      "note": "Isolated P195-* entities only; no real user project edits intended."
+    },
+    {
+      "name": "11_confirmation_safety",
+      "ok": false,
+      "request_id": "p195-e12b7bfe396a",
+      "conversation_id": "conv_5nb0gdKch0LeDF1TSopa6Ft4",
+      "approval_required": false,
+      "confirmation_language": false,
+      "assistant_preview": "",
+      "external_side_effects": false,
+      "failing_layer": "confirmation_safety",
+      "note": "Production tools disabled/guarded; validated no-side-effect confirmation language and/or approval_required flag."
+    },
+    {
+      "name": "12_postgres_integrity",
+      "ok": false,
+      "conversation_id": "conv_voBN5pElHgVylvQaNhfmQLI2",
+      "request_id": "p195-27b26bc9c558",
+      "user_messages": 2,
+      "assistant_messages": 2,
+      "completed_assistants": 0,
+      "pending_assistants": 0,
+      "duplicate_request_ids": true,
+      "conversation_list_matches": 1,
+      "list_ms": 130.18,
+      "reload_ms": 182.45,
+      "backend_from_ready": "postgresql",
+      "direct_db_credentials_used": false,
+      "failing_layer": "postgres_integrity_api"
+    },
+    {
+      "name": "13_lock_contention",
+      "ok": false,
+      "success_count": 0,
+      "statuses": [
+        200,
+        200
+      ],
+      "error_codes": [
+        "brain_busy",
+        "brain_busy"
+      ],
+      "busy_or_timeout_observed": true,
+      "request_ids": [
+        "p195-1f965e663659",
+        "p195-20d88bf29feb"
+      ],
+      "note": "Server CHAT_BRAIN_LOCK_TIMEOUT requires Railway log access; validated contention behavior via concurrent HTTP responses.",
+      "failing_layer": "lock_contention"
+    }
+  ],
+  "failures": [
+    {
+      "scenario": "02_basic_chat",
+      "request_id": "p195-399b64de12c5",
+      "layer": "basic_chat_persistence"
+    },
+    {
+      "scenario": "03_context_continuity",
+      "request_id": "p195-d05830b59bef",
+      "layer": "context_continuity"
+    },
+    {
+      "scenario": "04_refresh_continuity",
+      "request_id": "p195-ede86094d766",
+      "layer": "refresh_continuity"
+    },
+    {
+      "scenario": "05_restart_continuity",
+      "request_id": "p195-fd09bc9ba268",
+      "layer": "restart_continuity"
+    },
+    {
+      "scenario": "06_streaming_order",
+      "request_id": "p195-8ae4b1ee119a",
+      "layer": "streaming_order"
+    },
+    {
+      "scenario": "07_cancellation_recovery",
+      "request_id": "p195-7c20100533d7",
+      "layer": "cancel_seed"
+    },
+    {
+      "scenario": "08_sequential_soak",
+      "request_id": null,
+      "layer": "sequential_soak"
+    },
+    {
+      "scenario": "09_long_conversation",
+      "request_id": "p195-d379b74d8f21",
+      "layer": "long_conversation_turn"
+    },
+    {
+      "scenario": "10_project_goal_mission",
+      "request_id": "p195-16d4c7483845",
+      "layer": "hierarchy_continuity"
+    },
+    {
+      "scenario": "11_confirmation_safety",
+      "request_id": "p195-e12b7bfe396a",
+      "layer": "confirmation_safety"
+    },
+    {
+      "scenario": "12_postgres_integrity",
+      "request_id": "p195-27b26bc9c558",
+      "layer": "postgres_integrity_api"
+    },
+    {
+      "scenario": "13_lock_contention",
+      "request_id": null,
+      "layer": "lock_contention"
+    }
+  ],
+  "performance": {
+    "auth_ms": 207.61,
+    "request_count": 23,
+    "full_request_p50_ms": 5445.85,
+    "full_request_p95_ms": 5670.21,
+    "full_request_slowest_ms": 5837.99,
+    "full_request_avg_ms": 5479.22,
+    "first_token_p50_ms": 878.0,
+    "first_token_p95_ms": 878.0,
+    "provider_duration_avg_ms": 5197.65,
+    "titan_internal_avg_ms": 281.57,
+    "error_rate": 0.8571,
+    "conversation_ids_created": 16
+  },
+  "diagnostics": {
+    "server_log_access": false,
+    "railway_cli_available": false,
+    "client_sse_order_validated": false,
+    "cancellation_path_exercised": true,
+    "lock_contention_exercised": true,
+    "note": "Production CHAT_* / PIPELINE_* log markers require Railway log access (CLI not installed). Client-side SSE + API invariants validated."
+  },
+  "ok": false
+}

@@ -1,0 +1,22 @@
+{
+    "schema_version": 1,
+    "confidence_bias": 0.1101,
+    "history": [
+        {
+            "decision_id": "b89fbbc2-49ae-4d7d-8842-44a21bc2191c",
+            "selected_action": "Validate greeting",
+            "expected_value": 0.8875,
+            "actual_result": 1.0,
+            "success": true,
+            "duration": 45.0,
+            "feedback_score": 0.7338,
+            "completed_at": "2026-07-28T14:40:27.329526+00:00"
+        }
+    ],
+    "stats": {
+        "success_rate": 1.0,
+        "average_feedback": 0.7338,
+        "average_duration": 45.0,
+        "sample_count": 1
+    }
+}

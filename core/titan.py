@@ -17,6 +17,8 @@ from core.conversation import Conversation
 from core.conversation_engine import ConversationEngine
 from core.state_manager import StateManager
 from core.mission_manager import MissionManager
+from core.project_manager import ProjectManager
+from core.goal_manager import GoalManager
 from core.job_store import JobStore
 from core.scheduler import Scheduler
 from core.job_runner import JobRunner
@@ -47,7 +49,18 @@ class Titan:
             autonomy_policy=self.autonomy_policy,
         )
         self.state = StateManager()
-        self.mission = MissionManager()
+        self.goals = GoalManager(state_manager=self.state)
+        self.projects = ProjectManager(
+            state_manager=self.state,
+            goal_manager=self.goals,
+        )
+        self.mission = MissionManager(
+            state_manager=self.state,
+            project_manager=self.projects,
+        )
+        # Phase 16.2 — Goal progress scans + resume restore use shared managers.
+        self.goals.bind_project_manager(self.projects)
+        self.goals.bind_mission_manager(self.mission)
         self.context = ContextManager(
             state_manager=self.state,
             mission_manager=self.mission,
@@ -72,6 +85,8 @@ class Titan:
             context_manager=self.context,
             state_manager=self.state,
             mission_manager=self.mission,
+            project_manager=self.projects,
+            goal_manager=self.goals,
             memory_service=self.memory,
             tool_manager=self.tools,
             conversation_engine=conversation_engine,

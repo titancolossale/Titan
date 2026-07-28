@@ -432,12 +432,15 @@ class ConversationRepository:
         if model is not None:
             values["model"] = model
         with self._lock, self.engine.begin() as conn:
+            # Only transition pending rows — prevents stale owners from
+            # overwriting a completed/cancelled assistant message.
             result = conn.execute(
                 update(messages_table)
                 .where(
                     and_(
                         messages_table.c.id == message_id,
                         messages_table.c.conversation_id == conversation_id,
+                        messages_table.c.status == MessageStatus.PENDING.value,
                     )
                 )
                 .values(**values)

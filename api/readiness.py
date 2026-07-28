@@ -141,6 +141,34 @@ def build_readiness_payload(*, include_subsystems: bool = True) -> dict[str, Any
             "message": f"Conversation readiness check failed: {type(exc).__name__}",
         }
 
+    # Phase 19.6 — Brain lock is operational status only; never fails readiness.
+    try:
+        from api.chat_service import brain_lock_diagnostics
+
+        lock_diag = brain_lock_diagnostics()
+        lock_state = str(lock_diag.get("lock_state") or "IDLE")
+        brain_busy = lock_state not in {"IDLE", "RELEASED", "RECLAIMED"} and bool(
+            lock_diag.get("owner_present") or lock_diag.get("lock_held")
+        )
+        checks["brain_lock"] = {
+            "ok": True,
+            "required": False,
+            "status": "busy" if brain_busy else "idle",
+            "lock_state": lock_state,
+            "message": (
+                "Brain temporarily busy (serialized turn in progress)."
+                if brain_busy
+                else "Brain lock idle."
+            ),
+        }
+    except Exception:
+        checks["brain_lock"] = {
+            "ok": True,
+            "required": False,
+            "status": "unknown",
+            "message": "Brain lock diagnostics unavailable.",
+        }
+
     return {
         "status": status,
         "http_status": http_status,

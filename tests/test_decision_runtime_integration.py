@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -26,6 +26,9 @@ from tools.tool_enums import RiskLevel, ToolHealthState
 from tools.tool_manager import ToolManager
 from tools.tool_result import ToolRequest
 from tools.tool_run_models import ToolExecutionContext, ToolRunStatus
+
+# Probe for a domain whose tool is made unavailable — email now exists (EXECUTE_TOOL).
+_NO_CAPABILITY_PROBE = "Search the web for Titan architecture docs"
 
 
 @pytest.fixture
@@ -110,9 +113,15 @@ def test_decision_to_confirmation_required(
 
 def test_decision_to_no_capability_surfaces_error(
     runtime_coordinator: ExecutionCoordinator,
+    runtime_tool_manager: ToolManager,
 ) -> None:
     """P10B-104: NO_CAPABILITY produces explicit decision_engine tool result."""
-    result = runtime_coordinator.execute("Send an email to Ibrahim")
+    runtime = runtime_tool_manager.runtime
+    assert runtime is not None
+    # Email is registered; mark web_search offline so the probe has no capability.
+    runtime.health_monitor.set_tool_health("web_search", ToolHealthState.OFFLINE)
+
+    result = runtime_coordinator.execute(_NO_CAPABILITY_PROBE)
     assert result.decision_report is not None
     assert result.decision_report.fallback_action == FallbackAction.NO_CAPABILITY
     assert len(result.tool_results) == 1
@@ -269,7 +278,12 @@ def test_legacy_runtime_no_capability_still_surfaces(
     orchestrator = TaskOrchestrator(TaskManager(agent_manager), agent_manager)
     orchestrator.task_manager.create_tasks = MagicMock(return_value=[])
     coordinator = ExecutionCoordinator(orchestrator, dispatcher, reasoning=Reasoning())
-    result = coordinator.execute("Send an email to Nolan")
+    # Legacy has no health monitor — restrict available tools so web_search is absent.
+    with patch(
+        "tools.decision.tool_decision_engine.DEFAULT_AVAILABLE_TOOLS",
+        frozenset({"time", "file_read"}),
+    ):
+        result = coordinator.execute(_NO_CAPABILITY_PROBE)
     assert result.decision_report is not None
     assert result.decision_report.fallback_action == FallbackAction.NO_CAPABILITY
     assert result.tool_results[0].source == "decision_engine"

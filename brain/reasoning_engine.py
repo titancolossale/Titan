@@ -164,6 +164,7 @@ class ReasoningEngine:
         compare_mode: bool = False,
         explicit_options: tuple[str, ...] | None = None,
         project_focus: bool = False,
+        executive_evaluation: Any | None = None,
     ) -> ReasoningResult:
         """Run the full six-stage reasoning pipeline for *message*."""
         request = (message or "").strip()
@@ -178,6 +179,7 @@ class ReasoningEngine:
             user=user,
             project_id=project_id,
             workspace=workspace,
+            executive_evaluation=executive_evaluation,
         )
 
         # Stage 3 — Decompose
@@ -385,6 +387,7 @@ class ReasoningEngine:
         user: str | None,
         project_id: str | None,
         workspace: WorkspaceSnapshot | None,
+        executive_evaluation: Any | None = None,
     ) -> CognitiveContext:
         builder = self._resolve_context_builder()
         return builder.build_for_request(
@@ -393,6 +396,7 @@ class ReasoningEngine:
             project_id=project_id,
             workspace=workspace,
             understanding=understanding,
+            executive_evaluation=executive_evaluation,
         )
 
     def _resolve_context_builder(self) -> CognitiveContextBuilder:

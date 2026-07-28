@@ -214,6 +214,18 @@ export function routeBackendEvent(brain, store, type, data) {
         });
       }
       break;
+    case "workspace_state":
+      // Phase 13.4 — read-only live WorkspaceState; never mutate backend state.
+      if (store && data && typeof data === "object") {
+        const first = store.getState().workspaceState == null;
+        const patch = { workspaceState: data };
+        if (typeof data.active_project === "string" && data.active_project) {
+          patch.activeProject = data.active_project;
+        }
+        store.setState(patch);
+        console.debug(first ? "STATE_UI_CONNECTED" : "STATE_UI_REFRESH");
+      }
+      break;
     case "telemetry":
       if (store) {
         store.setState({ telemetry: data });

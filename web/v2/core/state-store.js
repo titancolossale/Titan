@@ -70,6 +70,7 @@
  * @property {string | null} chatStage
  * @property {number | null} lastHttpStatus
  * @property {number | null} providerDurationMs
+ * @property {object | null} workspaceState
  */
 
 /** @type {AppState} */
@@ -138,6 +139,7 @@ const DEFAULT_STATE = Object.freeze({
   chatStage: null,
   lastHttpStatus: null,
   providerDurationMs: null,
+  workspaceState: null,
 });
 
 export class StateStore {

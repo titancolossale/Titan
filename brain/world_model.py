@@ -462,6 +462,7 @@ class WorldModel:
         user: str | None = None,
         project_id: str | None = None,
         refresh_workspace: bool = True,
+        executive_evaluation: ExecutiveEvaluation | None = None,
     ) -> WorldModelSnapshot:
         """Aggregate all subsystem signals into a fresh world model snapshot."""
         timestamp = _utc_now()
@@ -472,12 +473,14 @@ class WorldModel:
             project_id=project_id,
             refresh=refresh_workspace,
         )
-        executive = self._load_executive(
-            message,
-            user=user,
-            project_id=project_id,
-            workspace=workspace,
-        )
+        executive = executive_evaluation
+        if executive is None:
+            executive = self._load_executive(
+                message,
+                user=user,
+                project_id=project_id,
+                workspace=workspace,
+            )
         architecture = self._load_architecture(
             user=user,
             project_id=project_id,

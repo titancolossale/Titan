@@ -20,6 +20,8 @@ _FORBIDDEN_MANAGER_CONSTRUCTORS = (
     "ContextManager()",
     "StateManager()",
     "MissionManager()",
+    "ProjectManager()",
+    "GoalManager()",
     "LongTermMemory()",
     "MemoryService()",
     "ToolManager()",
@@ -61,6 +63,24 @@ def test_titan_and_brain_share_mission_manager() -> None:
     titan = Titan()
 
     assert titan.mission is titan.brain.mission_manager
+
+
+def test_titan_and_brain_share_project_manager() -> None:
+    """Titan must inject its ProjectManager into Brain (Phase 15.1); no duplicate instance."""
+    titan = Titan()
+
+    assert titan.projects is titan.brain.project_manager
+    assert titan.mission._project_manager is titan.projects
+    assert titan.projects._state_manager is titan.state
+
+
+def test_titan_and_brain_share_goal_manager() -> None:
+    """Titan must inject its GoalManager into Brain (Phase 16.1); no duplicate instance."""
+    titan = Titan()
+
+    assert titan.goals is titan.brain.goal_manager
+    assert titan.projects._goal_manager is titan.goals
+    assert titan.goals._state_manager is titan.state
 
 
 def test_titan_and_brain_share_memory_service() -> None:

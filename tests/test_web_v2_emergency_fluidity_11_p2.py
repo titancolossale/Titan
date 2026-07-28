@@ -443,7 +443,7 @@ def test_chat_timing_logged_safely(
     assert "CHAT_API_RECEIVED" in joined
     assert "CHAT_BRAIN_START" in joined
     assert "CHAT_BRAIN_END" in joined
-    assert "CHAT_RESPONSE_SENT" in joined
+    assert "CHAT_API_RESPONSE" in joined
     assert "corr-11p2-1" in joined
     assert "Bonjour Titan" not in joined
     get_titan().brain.process_request.assert_called_once()

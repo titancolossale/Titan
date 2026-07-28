@@ -1,0 +1,61 @@
+﻿
+SKIPPED [1] tests\test_core_terminal_tool.py:173: pytest not on PATH
+SKIPPED [1] tests\test_core_terminal_tool.py:488: uv not installed
+SKIPPED [1] tests\test_obsidian_validator.py:111: Platform does not enforce directory write permissions in this test
+SKIPPED [1] tests\test_obsidian_write_operations.py:369: Symlink creation is not supported in this environment.
+SKIPPED [1] tests\test_state_ui.py:343: Node.js not installed
+SKIPPED [1] tests\test_web_chat_freeze_11_1b.py:181: Node.js not installed
+SKIPPED [1] tests\test_web_chat_stream_completion_12_1f.py:336: Node.js not installed
+SKIPPED [1] tests\test_web_chat_stream_completion_12_1f.py:381: Node.js not installed
+SKIPPED [1] tests\test_web_chat_stream_completion_12_1f.py:496: Node.js not installed
+SKIPPED [1] tests\test_web_chat_stream_completion_12_1f.py:573: Node.js not installed
+SKIPPED [1] tests\test_web_chat_stream_completion_12_1f.py:656: Node.js not installed
+SKIPPED [1] tests\test_web_chat_stream_completion_12_1f.py:760: Node.js not installed
+SKIPPED [1] tests\test_web_v2_canonical_final.py:221: Node.js not installed
+SKIPPED [1] tests\test_web_v2_canonical_final.py:247: Node.js not installed
+SKIPPED [1] tests\test_web_v2_cinematic_living.py:153: node not available
+SKIPPED [1] tests\test_web_v2_cognitive_os.py:181: Node.js not installed
+SKIPPED [1] tests\test_web_v2_cognitive_os.py:246: Node.js not installed
+SKIPPED [1] tests\test_web_v2_emergency_fluidity_11_p2.py:143: node not available
+SKIPPED [1] tests\test_web_v2_emergency_fluidity_11_p2.py:229: node not available
+SKIPPED [1] tests\test_web_v2_emergency_fluidity_11_p2.py:320: node not available
+SKIPPED [1] tests\test_web_v2_floating_workspaces.py:198: node not available
+SKIPPED [1] tests\test_web_v2_floating_workspaces.py:220: node not available
+SKIPPED [1] tests\test_web_v2_frame_pacing_11_p3.py:135: node not available
+SKIPPED [1] tests\test_web_v2_frame_pacing_11_p3.py:205: node not available
+SKIPPED [1] tests\test_web_v2_frame_pacing_11_p3.py:256: node not available
+SKIPPED [1] tests\test_web_v2_frame_pacing_11_p3.py:388: node not available
+SKIPPED [1] tests\test_web_v2_frame_pacing_11_p3.py:446: node not available
+SKIPPED [1] tests\test_web_v2_frontend.py:24: Node.js not installed
+SKIPPED [1] tests\test_web_v2_frontend.py:92: Node.js not installed
+SKIPPED [1] tests\test_web_v2_immersive_neural_stage.py:149: node not available
+SKIPPED [1] tests\test_web_v2_living_orchestrator.py:175: Node.js not installed
+SKIPPED [1] tests\test_web_v2_living_orchestrator.py:209: Node.js not installed
+SKIPPED [1] tests\test_web_v2_living_presence.py:187: Node.js not installed
+SKIPPED [1] tests\test_web_v2_living_runtime.py:166: Node.js not installed
+SKIPPED [1] tests\test_web_v2_neural_architecture.py:106: node not available
+SKIPPED [1] tests\test_web_v2_neural_core.py:257: Node.js not installed
+SKIPPED [1] tests\test_web_v2_neural_core.py:272: Node.js not installed
+SKIPPED [1] tests\test_web_v2_neural_core.py:284: Node.js not installed
+SKIPPED [1] tests\test_web_v2_neural_core.py:323: Node.js not installed
+SKIPPED [1] tests\test_web_v2_neural_core_master_polish.py:103: node not available
+SKIPPED [1] tests\test_web_v2_orchestrator_phase42.py:119: Node.js not installed
+SKIPPED [1] tests\test_web_v2_orchestrator_phase42.py:139: Node.js not installed
+SKIPPED [1] tests\test_web_v2_orchestrator_phase43.py:146: Node.js not installed
+SKIPPED [1] tests\test_web_v2_orchestrator_phase43.py:177: Node.js not installed
+SKIPPED [1] tests\test_web_v2_performance.py:149: node not available
+SKIPPED [1] tests\test_web_v2_performance.py:219: node not available
+SKIPPED [1] tests\test_web_v2_performance.py:364: node not available
+SKIPPED [1] tests\test_web_v2_performance.py:432: node not available
+SKIPPED [1] tests\test_web_v2_phase5_layout.py:157: node not available
+SKIPPED [1] tests\test_web_v2_presence_os.py:126: Node.js not installed
+SKIPPED [1] tests\test_web_v2_presence_os.py:143: Node.js not installed
+SKIPPED [1] tests\test_web_v2_reference_composition.py:161: Node.js not installed
+SKIPPED [1] tests\test_web_v2_reference_composition.py:177: Node.js not installed
+SKIPPED [1] tests\test_web_v2_reference_final.py:111: Node.js not installed
+SKIPPED [1] tests\test_web_v2_reference_scene.py:126: node not available
+SKIPPED [1] tests\test_web_v2_reference_scene.py:147: node not available
+SKIPPED [1] tests\test_web_v2_sidebar_phase4.py:131: Node.js not installed
+SKIPPED [1] tests\test_web_v2_titan_core_identity.py:103: node not available
+
+

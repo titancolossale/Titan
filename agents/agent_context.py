@@ -25,6 +25,8 @@ class AgentContext:
     retrieved_memory: str = ""
     state: dict = field(default_factory=dict)
     mission: dict = field(default_factory=dict)
+    # Phase 14.3 — shared WorkspaceState-derived mission awareness.
+    mission_context: dict = field(default_factory=dict)
     executive_analysis: str = ""
     active_project: str = ""
     current_phase: str = ""
@@ -34,6 +36,22 @@ class AgentContext:
     def from_think_context(cls, think_ctx: ThinkContext, task: str) -> AgentContext:
         """Build agent context from the Brain pipeline bundle."""
         snapshot = think_ctx.context_snapshot
+        mission_context = think_ctx.mission_context
+        mission_context_dict: dict = {}
+        if mission_context is not None:
+            mission_context_dict = {
+                "active_mission": mission_context.active_mission,
+                "status": mission_context.status,
+                "progress": mission_context.progress,
+                "priority": mission_context.priority,
+                "stage": mission_context.stage,
+                "last_completed_step": mission_context.last_completed_step,
+                "last_summary": mission_context.last_summary,
+                "progress_updated_at": mission_context.progress_updated_at,
+                "current_objective": mission_context.current_objective,
+                "queue_count": mission_context.queue_count,
+                "paused_count": mission_context.paused_count,
+            }
         return cls(
             user_message=think_ctx.user_message,
             task=task,
@@ -42,6 +60,7 @@ class AgentContext:
             retrieved_memory=think_ctx.retrieved_memory,
             state=dict(think_ctx.state),
             mission=dict(think_ctx.mission),
+            mission_context=mission_context_dict,
             executive_analysis=think_ctx.executive_analysis,
             active_project=_snapshot_field(snapshot, "active_project"),
             current_phase=_snapshot_field(snapshot, "current_phase"),

@@ -267,7 +267,7 @@ console.log(JSON.stringify({ ok: true, version: TITAN_UI_VERSION }));
 
 def test_phase9_settings_version_bump() -> None:
     settings = (ROOT / "config" / "settings.py").read_text(encoding="utf-8")
-    assert 'VERSION = "0.43.0"' in settings
+    assert 'VERSION = "0.45.0"' in settings
 
 
 def test_phase9_index_meta_version() -> None:

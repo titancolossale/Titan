@@ -1,0 +1,142 @@
+{
+    "schema_version": 1,
+    "active_goal_id": "d509dc09-cd7c-4fe7-a664-fa3ad13608fd",
+    "goals": {
+        "d509dc09-cd7c-4fe7-a664-fa3ad13608fd": {
+            "id": "d509dc09-cd7c-4fe7-a664-fa3ad13608fd",
+            "name": "Titan",
+            "description": "",
+            "status": "ACTIVE",
+            "priority": "NORMAL",
+            "created_at": "2026-07-28T10:38:29.914832-04:00",
+            "updated_at": "2026-07-28T10:47:40.534637-04:00",
+            "progress": 0.0,
+            "project_ids": [
+                "619e6f23-45d5-42be-a010-992170ae776f",
+                "493032ce-cc0a-4cb3-984c-d1682cf68e26",
+                "b67eee85-eb1f-484d-8800-171dbd634013",
+                "f1232b1b-9936-43e0-98a8-b7b8192488ef",
+                "a1544411-4cff-4587-aaf4-177b34085355",
+                "91086990-3da6-4360-959f-254b4879a05f",
+                "e43d86d7-1096-4442-8caf-f12be205462b"
+            ],
+            "active_project_id": "619e6f23-45d5-42be-a010-992170ae776f",
+            "aliases": [],
+            "keywords": []
+        },
+        "214fff6a-e66f-4c67-8741-6b7f65bd6074": {
+            "id": "214fff6a-e66f-4c67-8741-6b7f65bd6074",
+            "name": "Soak Goal Alpha",
+            "description": "Isolated soak goal A",
+            "status": "PAUSED",
+            "priority": "NORMAL",
+            "created_at": "2026-07-28T10:38:39.711771-04:00",
+            "updated_at": "2026-07-28T10:38:39.730022-04:00",
+            "progress": 0.0,
+            "project_ids": [],
+            "active_project_id": null,
+            "aliases": [
+                "goal-alpha"
+            ],
+            "keywords": [
+                "goal-alpha",
+                "soak-goal-a"
+            ]
+        },
+        "251492fd-ae46-4a92-9fdb-1f8591c9dcd1": {
+            "id": "251492fd-ae46-4a92-9fdb-1f8591c9dcd1",
+            "name": "Soak Goal Beta",
+            "description": "Isolated soak goal B",
+            "status": "PAUSED",
+            "priority": "NORMAL",
+            "created_at": "2026-07-28T10:38:39.718067-04:00",
+            "updated_at": "2026-07-28T10:39:11.844195-04:00",
+            "progress": 0.0,
+            "project_ids": [],
+            "active_project_id": null,
+            "aliases": [
+                "goal-beta"
+            ],
+            "keywords": [
+                "goal-beta",
+                "soak-goal-b"
+            ]
+        },
+        "6c8b068c-8744-4308-b629-6e769fc3a62c": {
+            "id": "6c8b068c-8744-4308-b629-6e769fc3a62c",
+            "name": "Soak Goal Alpha",
+            "description": "Isolated soak goal A",
+            "status": "PAUSED",
+            "priority": "NORMAL",
+            "created_at": "2026-07-28T10:39:51.401767-04:00",
+            "updated_at": "2026-07-28T10:39:51.414584-04:00",
+            "progress": 0.0,
+            "project_ids": [],
+            "active_project_id": null,
+            "aliases": [
+                "goal-alpha"
+            ],
+            "keywords": [
+                "goal-alpha",
+                "soak-goal-a"
+            ]
+        },
+        "855a5f0b-0bd6-4612-9be9-569afba53a8f": {
+            "id": "855a5f0b-0bd6-4612-9be9-569afba53a8f",
+            "name": "Soak Goal Beta",
+            "description": "Isolated soak goal B",
+            "status": "PAUSED",
+            "priority": "NORMAL",
+            "created_at": "2026-07-28T10:39:51.405432-04:00",
+            "updated_at": "2026-07-28T10:39:58.512482-04:00",
+            "progress": 0.0,
+            "project_ids": [],
+            "active_project_id": null,
+            "aliases": [
+                "goal-beta"
+            ],
+            "keywords": [
+                "goal-beta",
+                "soak-goal-b"
+            ]
+        },
+        "3e3bacb8-58f4-4144-9f6a-3c4e9a500db7": {
+            "id": "3e3bacb8-58f4-4144-9f6a-3c4e9a500db7",
+            "name": "Soak Goal Alpha",
+            "description": "Isolated soak goal A",
+            "status": "PAUSED",
+            "priority": "NORMAL",
+            "created_at": "2026-07-28T10:41:18.538355-04:00",
+            "updated_at": "2026-07-28T10:41:18.569360-04:00",
+            "progress": 0.0,
+            "project_ids": [],
+            "active_project_id": null,
+            "aliases": [
+                "goal-alpha"
+            ],
+            "keywords": [
+                "goal-alpha",
+                "soak-goal-a"
+            ]
+        },
+        "17573618-42fb-42d4-95f3-8df37d3a5ddf": {
+            "id": "17573618-42fb-42d4-95f3-8df37d3a5ddf",
+            "name": "Soak Goal Beta",
+            "description": "Isolated soak goal B",
+            "status": "PAUSED",
+            "priority": "NORMAL",
+            "created_at": "2026-07-28T10:41:18.551851-04:00",
+            "updated_at": "2026-07-28T10:41:25.764583-04:00",
+            "progress": 0.0,
+            "project_ids": [],
+            "active_project_id": null,
+            "aliases": [
+                "goal-beta"
+            ],
+            "keywords": [
+                "goal-beta",
+                "soak-goal-b"
+            ]
+        }
+    }
+}

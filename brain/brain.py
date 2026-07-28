@@ -9,12 +9,20 @@ from brain.decision import Decision
 from brain.decision_execution_bridge import decision_engine_from_manager
 from brain.reasoning import Reasoning
 from brain.planning import Planning
+from brain.execution import Execution
+from brain.execution_engine import ExecutionEngine
+from brain.execution_tool_bridge import ToolExecutionBridge
 from brain.knowledge import Knowledge
 from brain.executor import Executor
 from brain.llm import LLM
 from brain.prompt_builder import PromptBuilder
 from brain.pipeline.stages import ThinkPipeline
-from brain.pipeline.context_bundle import ThinkContext
+from brain.pipeline.context_bundle import (
+    ThinkContext,
+    inject_goal_context,
+    inject_mission_context,
+    inject_project_context,
+)
 from brain.request_deadline import get_request_deadline
 from context.context_manager import ContextManager
 from brain.internal_monologue import InternalMonologue
@@ -150,8 +158,25 @@ from tools.tool_manager import ToolManager
 from core.conversation_engine import ConversationEngine
 from core.mission_manager import MissionManager
 from core.mission_models import Mission, MissionPriority, MissionProgress, MissionState
+from core.project_manager import ProjectManager
+from core.goal_manager import GoalManager
+from core.project_matcher import match_project
+from core.goal_matcher import GoalMatchResult, match_goal
 
 logger = logging.getLogger(__name__)
+
+
+def _goal_selection_reason(outcome: GoalMatchResult) -> str:
+    """Human-readable selection reason for PromptBuilder (Phase 16.3)."""
+    if outcome.matched:
+        if outcome.reason == "already_active":
+            return "already_active"
+        if outcome.reason == "switch":
+            return "auto_switched"
+        return outcome.reason
+    if outcome.reason in {"low_confidence", "ambiguous", "no_signal", "empty_message", "no_goals"}:
+        return f"retained_current ({outcome.reason})"
+    return f"retained_current ({outcome.reason})"
 
 
 class Brain:
@@ -208,6 +233,8 @@ class Brain:
         tool_intelligence: ToolIntelligence | None = None,
         tool_execution_engine: ToolExecutionEngine | None = None,
         core_tool_runtime: CoreToolRuntime | None = None,
+        project_manager: ProjectManager | None = None,
+        goal_manager: GoalManager | None = None,
     ) -> None:
         self.decision = Decision()
         self.reasoning = Reasoning(
@@ -244,6 +271,19 @@ class Brain:
         self._core_permission_manager = (
             runtime.permission_manager if runtime is not None else None
         )
+        # Phase 18.3 — Tool Execution Bridge over the shared core Tool Registry.
+        tool_bridge = ToolExecutionBridge(
+            tool_registry=(
+                runtime.tool_registry if runtime is not None else None
+            ),
+            action_registry=(
+                runtime.action_registry if runtime is not None else None
+            ),
+            permission_manager=self._core_permission_manager,
+        )
+        self.execution = Execution(
+            engine=ExecutionEngine(tool_bridge=tool_bridge)
+        )
         self.llm = llm if llm is not None else LLM()
         self.llm_router = llm_router if llm_router is not None else LLMRouter(self.llm)
         self.autonomy_policy = autonomy_policy or AutonomyPolicy.from_settings()
@@ -257,6 +297,25 @@ class Brain:
         self.memory_service = memory_service
         self.state_manager = state_manager
         self.mission_manager = mission_manager
+        self.project_manager = project_manager
+        self.goal_manager = goal_manager
+        # Phase 14.2 / 14.5 — ensure WorkspaceState mirror is always wired.
+        if getattr(self.mission_manager, "_state_manager", None) is not self.state_manager:
+            self.mission_manager.bind_state_manager(self.state_manager)
+        # Phase 16.1 — GoalManager mirror + project ownership validation.
+        if self.goal_manager is not None:
+            if getattr(self.goal_manager, "_state_manager", None) is not self.state_manager:
+                self.goal_manager.bind_state_manager(self.state_manager)
+        # Phase 15.1 — ProjectManager mirror + mission ownership validation.
+        if self.project_manager is not None:
+            if getattr(self.project_manager, "_state_manager", None) is not self.state_manager:
+                self.project_manager.bind_state_manager(self.state_manager)
+            self.mission_manager.bind_project_manager(self.project_manager)
+            if self.goal_manager is not None:
+                self.project_manager.bind_goal_manager(self.goal_manager)
+                # Phase 16.2 — progress from projects + resume restore chain.
+                self.goal_manager.bind_project_manager(self.project_manager)
+                self.goal_manager.bind_mission_manager(self.mission_manager)
         self.workspace_awareness = WorkspaceAwareness(
             workspace_root=getattr(tool_manager, "project_root", None),
             mission_manager=self.mission_manager,
@@ -469,6 +528,7 @@ class Brain:
             reasoning=self.reasoning,
             planning=self.planning,
             decision=self.decision,
+            execution=self.execution,
             executor=self.executor,
             monologue=self.monologue,
             tool_dispatcher=self.tool_dispatcher,
@@ -500,10 +560,260 @@ class Brain:
     def think(self, message: str, *, stream=None, skip_agents: bool = False) -> str:
         """Cognitive pipeline entry — delegates to the think pipeline."""
         self._log_chat_think_enter(skip_agents)
-        ctx = ThinkContext(user_message=message, skip_agents=skip_agents)
+        ctx = self._begin_think(message, skip_agents=skip_agents)
         result = self.pipeline.run(ctx, stream=stream)
-        self._last_think_context = result
+        self._end_think(result)
         return result.response
+
+    def _begin_think(self, message: str, *, skip_agents: bool) -> ThinkContext:
+        """Create ThinkContext and load request-scoped WorkspaceState (Phase 13.2).
+
+        Phase 14.3 — derive mission awareness once from WorkspaceState and inject
+        into ThinkContext so every pipeline stage shares the same mission context.
+        Phase 14.4 — resume fields (stage, progress, last step, summary) load with
+        that same WorkspaceState read — no duplicated StateManager lookup.
+        Phase 15.1 — project awareness (current project + progress) loads from the
+        same WorkspaceState read — no duplicated ProjectManager lookup.
+        Phase 15.2 — project resume fields (active mission, last step, summary,
+        progress) load with that same WorkspaceState read.
+        Phase 15.3 — automatic project matching/switching runs before the single
+        WorkspaceState load so PromptBuilder sees only the selected active project.
+        Phase 16.1 — goal awareness (current goal) loads from the same
+        WorkspaceState read — no duplicated GoalManager lookup.
+        Phase 16.3 — automatic goal matching/switching runs before project
+        matching and the single WorkspaceState load; resume_goal restores
+        project + mission + workspace mirror.
+        """
+        goal_match = self._maybe_auto_switch_goal(message)
+        self._maybe_auto_switch_project(message)
+        ctx = ThinkContext(user_message=message, skip_agents=skip_agents)
+        if goal_match is not None:
+            ctx.goal_match_confidence = goal_match.confidence
+            ctx.goal_match_reason = _goal_selection_reason(goal_match)
+        deadline = get_request_deadline()
+        request_id = deadline.request_id if deadline else "-"
+        logger.info("STATE_LOAD_BEGIN request_id=%s", request_id)
+        ctx.workspace_state = self.state_manager.load()
+        logger.info(
+            "STATE_LOAD_DONE request_id=%s active_project=%s",
+            request_id,
+            getattr(ctx.workspace_state, "active_project", None),
+        )
+        workspace = ctx.workspace_state
+        logger.info(
+            "GOAL_CONTEXT_LOADED request_id=%s has_active=%s id=%s name=%s "
+            "status=%s progress=%s",
+            request_id,
+            bool(getattr(workspace, "active_goal_id", None)),
+            getattr(workspace, "active_goal_id", None),
+            getattr(workspace, "active_goal", None),
+            getattr(workspace, "active_goal_status", None),
+            getattr(workspace, "active_goal_progress", None),
+        )
+        logger.info(
+            "PROJECT_CONTEXT_LOADED request_id=%s has_active=%s id=%s name=%s "
+            "status=%s progress=%s",
+            request_id,
+            bool(getattr(workspace, "active_project_id", None)),
+            getattr(workspace, "active_project_id", None),
+            getattr(workspace, "active_project", None),
+            getattr(workspace, "active_project_status", None),
+            getattr(workspace, "active_project_progress", None),
+        )
+        logger.info(
+            "MISSION_CONTEXT_LOADED request_id=%s has_active=%s title=%s "
+            "status=%s progress=%s priority=%s stage=%s",
+            request_id,
+            bool(
+                getattr(workspace, "active_mission_id", None)
+                or getattr(workspace, "active_mission_title", None)
+                or getattr(workspace, "active_mission", None)
+            ),
+            getattr(workspace, "active_mission_title", None)
+            or getattr(workspace, "active_mission", None),
+            getattr(workspace, "active_mission_status", None),
+            getattr(workspace, "active_mission_progress", None),
+            getattr(workspace, "active_mission_priority", None),
+            getattr(workspace, "active_mission_stage", None),
+        )
+        inject_goal_context(ctx)
+        inject_project_context(ctx)
+        inject_mission_context(ctx)
+        return ctx
+
+    def _maybe_auto_switch_goal(self, message: str) -> GoalMatchResult | None:
+        """Match the user request to a known goal and switch when confident.
+
+        Uses in-memory GoalManager / ProjectManager data plus a StateManager
+        snapshot for the active goal's recent summary — never a second
+        WorkspaceState ``load()``, and never creates a new goal.
+
+        When confidence >= 0.85 and the winner is clear, calls
+        ``goal_manager.resume_goal`` which restores the goal's current project,
+        current mission, and WorkspaceState mirror.
+        """
+        if self.goal_manager is None:
+            return None
+
+        logger.info("GOAL_MATCH_STARTED")
+        goals = self.goal_manager.list_goals(include_archived=False)
+        if not goals:
+            logger.info("GOAL_MATCH_FAILED reason=no_goals")
+            logger.info("GOAL_CONFIDENCE confidence=0.0 reason=no_goals")
+            return GoalMatchResult(
+                matched=False,
+                confidence=0.0,
+                goal_id=None,
+                goal_name=None,
+                reason="no_goals",
+                should_switch=False,
+            )
+
+        projects_by_goal: dict[str, list] = {}
+        if self.project_manager is not None:
+            for project in self.project_manager.list_projects(include_archived=False):
+                goal_id = getattr(project, "goal_id", None)
+                if goal_id:
+                    projects_by_goal.setdefault(str(goal_id), []).append(project)
+
+        # Snapshot only — does not count as the request-scoped WorkspaceState load.
+        snap = self.state_manager.snapshot()
+        summaries_by_goal: dict[str, str] = {}
+        if snap.active_goal_id and snap.active_goal_last_summary:
+            summaries_by_goal[str(snap.active_goal_id)] = str(
+                snap.active_goal_last_summary
+            )
+
+        active = self.goal_manager.get_active_goal()
+        outcome = match_goal(
+            message,
+            goals,
+            projects_by_goal=projects_by_goal,
+            summaries_by_goal=summaries_by_goal,
+            active_goal_id=active.id if active is not None else None,
+        )
+
+        logger.info(
+            "GOAL_CONFIDENCE confidence=%s reason=%s candidate=%s",
+            outcome.confidence,
+            outcome.reason,
+            outcome.goal_id,
+        )
+
+        if not outcome.matched:
+            logger.info(
+                "GOAL_MATCH_FAILED reason=%s confidence=%s candidate=%s",
+                outcome.reason,
+                outcome.confidence,
+                outcome.goal_id,
+            )
+            return outcome
+
+        logger.info(
+            "GOAL_MATCH_FOUND id=%s name=%r confidence=%s signals=%s",
+            outcome.goal_id,
+            outcome.goal_name,
+            outcome.confidence,
+            ",".join(outcome.signals) if outcome.signals else "-",
+        )
+        if outcome.should_switch and outcome.goal_id:
+            previous_id = active.id if active is not None else None
+            self.goal_manager.resume_goal(outcome.goal_id)
+            logger.info(
+                "GOAL_AUTO_SWITCH previous=%s new=%s confidence=%s",
+                previous_id,
+                outcome.goal_id,
+                outcome.confidence,
+            )
+        return outcome
+
+    def _maybe_auto_switch_project(self, message: str) -> None:
+        """Match the user request to a known project and switch when confident.
+
+        Uses in-memory ProjectManager / MissionManager data plus a StateManager
+        snapshot for the active project's recent summary — never a second
+        WorkspaceState ``load()``, and never creates a new project.
+        """
+        if self.project_manager is None:
+            return
+
+        logger.info("PROJECT_MATCH_STARTED")
+        projects = self.project_manager.list_projects(include_archived=False)
+        if not projects:
+            logger.info("PROJECT_MATCH_FAILED reason=no_projects")
+            return
+
+        missions_by_project: dict[str, list] = {}
+        for mission in self.mission_manager.list_missions(include_archived=False):
+            project_id = getattr(mission, "project_id", None)
+            if project_id:
+                missions_by_project.setdefault(str(project_id), []).append(mission)
+
+        # Snapshot only — does not count as the request-scoped WorkspaceState load.
+        snap = self.state_manager.snapshot()
+        summaries_by_project: dict[str, str] = {}
+        if snap.active_project_id and snap.active_project_last_summary:
+            summaries_by_project[str(snap.active_project_id)] = str(
+                snap.active_project_last_summary
+            )
+
+        active = self.project_manager.get_active_project()
+        outcome = match_project(
+            message,
+            projects,
+            missions_by_project=missions_by_project,
+            summaries_by_project=summaries_by_project,
+            active_project_id=active.id if active is not None else None,
+        )
+
+        if not outcome.matched:
+            logger.info(
+                "PROJECT_MATCH_FAILED reason=%s confidence=%s candidate=%s",
+                outcome.reason,
+                outcome.confidence,
+                outcome.project_id,
+            )
+            return
+
+        logger.info(
+            "PROJECT_MATCH_FOUND id=%s name=%r confidence=%s signals=%s",
+            outcome.project_id,
+            outcome.project_name,
+            outcome.confidence,
+            ",".join(outcome.signals) if outcome.signals else "-",
+        )
+        if outcome.should_switch and outcome.project_id:
+            previous_id = active.id if active is not None else None
+            self.project_manager.resume_project(outcome.project_id)
+            logger.info(
+                "PROJECT_SWITCHED previous=%s new=%s",
+                previous_id,
+                outcome.project_id,
+            )
+
+    def _end_think(self, ctx: ThinkContext) -> None:
+        """Persist request-scoped WorkspaceState and retain context (Phase 13.2)."""
+        deadline = get_request_deadline()
+        request_id = deadline.request_id if deadline else "-"
+        logger.info("STATE_SAVE_BEGIN request_id=%s", request_id)
+        self._persist_workspace_state(ctx)
+        logger.info("STATE_SAVE_DONE request_id=%s", request_id)
+        self._last_think_context = ctx
+
+    def _persist_workspace_state(self, ctx: ThinkContext) -> None:
+        """Write request WorkspaceState into StateManager then save().
+
+        StateManager.save() takes no arguments (Phase 13.1 API). Request-scoped
+        mutations live on ``ctx.workspace_state``; sync them via ``update()``
+        (which applies fields and persists), preserving the public API.
+        """
+        workspace = ctx.workspace_state
+        if workspace is None:
+            self.state_manager.save()
+            return
+        payload = workspace.to_dict()
+        payload.pop("schema_version", None)
+        self.state_manager.update(payload)
 
     def _log_chat_think_enter(self, skip_agents: bool) -> None:
         """Emit CHAT_THINK_ENTER with request_id and timing only."""
@@ -1785,18 +2095,20 @@ class Brain:
         priority: MissionPriority | str = MissionPriority.NORMAL,
     ) -> Mission:
         """Create a long-running mission with explicit steps."""
-        mission = self.mission_manager.runtime.create_mission(
+        return self.mission_manager.create_mission(
             title,
             objective,
             steps,
             priority=priority,
         )
-        self.mission_manager.mission = self.mission_manager.runtime.get_legacy_mission_view()
-        return mission
 
     def resume_mission(self, mission_id: str) -> Mission:
-        """Resume a paused or waiting mission."""
+        """Resume a paused or queued mission."""
         return self.mission_manager.resume_mission(mission_id)
+
+    def pause_mission(self, mission_id: str | None = None) -> Mission:
+        """Pause a mission (Phase 14.5)."""
+        return self.mission_manager.pause_mission(mission_id)
 
     def update_mission(self, mission_id: str, **kwargs) -> Mission:
         """Update mission fields (title, objective, state, priority, steps)."""
@@ -1806,9 +2118,17 @@ class Brain:
         """Mark a mission as completed."""
         return self.mission_manager.complete_mission(mission_id)
 
+    def archive_mission(self, mission_id: str) -> Mission:
+        """Archive a mission (Phase 14.5)."""
+        return self.mission_manager.archive_mission(mission_id)
+
     def list_active_missions(self) -> list[Mission]:
         """Return all missions not in a terminal state."""
         return self.mission_manager.list_active_missions()
+
+    def list_missions(self, **kwargs) -> list[Mission]:
+        """List missions owned by MissionManager (Phase 14.5)."""
+        return self.mission_manager.list_missions(**kwargs)
 
     def get_mission_progress(self, mission_id: str) -> MissionProgress:
         """Return computed progress for a mission."""

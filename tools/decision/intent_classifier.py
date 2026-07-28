@@ -140,7 +140,11 @@ _INTENT_RULES: tuple[IntentRule, ...] = (
             "how does the",
             "how does ",
             "résume",
-            "resume ",
+            # Avoid bare English "resume " (continue mission/project) — it is not
+            # French "résume". Keep accented + explicit summarize verbs only.
+            "resume le ",
+            "resume ce ",
+            "resume la ",
             "summarize",
             "summarise",
             "quels fichiers contrôlent",
@@ -508,6 +512,15 @@ class IntentClassifier:
 
         scores = _apply_intent_precedence(lowered, scores)
 
+        # Precedence may remove the last candidate (e.g. English "resume"
+        # matching summarize then being demoted). Never crash — fall back.
+        if not scores:
+            return IntentClassification(
+                intent=Intent.UNKNOWN,
+                confidence=0.35,
+                reason="Intent candidates cleared by precedence",
+            )
+
         best_intent = max(scores, key=lambda intent: scores[intent][0])
         best_score, best_reason = scores[best_intent]
         confidence = min(best_score, 1.0)
@@ -688,7 +701,16 @@ def _apply_intent_precedence(
         if any(kw in lowered for kw in ("liste", "list ", "montre les fichiers", "show files")):
             search_score = scores[Intent.FILE_SEARCH][0]
             scores[Intent.FILE_SEARCH] = (search_score * 0.55, scores[Intent.FILE_SEARCH][1])
-    explain_signals = ("explique", "explain", "résume", "resume", "summarize", "summarise")
+    explain_signals = (
+        "explique",
+        "explain",
+        "résume",
+        "resume le ",
+        "resume ce ",
+        "resume la ",
+        "summarize",
+        "summarise",
+    )
     if any(signal in lowered for signal in explain_signals):
         has_path = _PATH_PATTERN.search(lowered) is not None
         has_search = any(

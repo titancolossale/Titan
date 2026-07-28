@@ -63,7 +63,10 @@ def test_intent_label_sanitized() -> None:
 
 
 def test_handle_chat_stream_emits_live_pipeline_events(tmp_path) -> None:
-    """Integration — real think() path streams memory and intent events."""
+    """Integration — full think() path streams memory and intent events.
+
+    Avoid greeting fast-path messages (e.g. 'Bonjour Titan') which skip memory stages.
+    """
     reset_titan()
     tool_manager = ToolManager(project_root=tmp_path)
     titan = Titan()
@@ -79,8 +82,10 @@ def test_handle_chat_stream_emits_live_pipeline_events(tmp_path) -> None:
     def capture(event_type: str, data: dict) -> None:
         events.append(event_type)
 
-    handle_chat_stream("Bonjour Titan", emit=capture)
+    # QUESTION intent (not simple greeting) → conversation route with full think()+memory.
+    handle_chat_stream("What is the capital of France?", emit=capture)
 
+    assert "conversation_started" in events
     assert "thinking_started" in events
     assert "memory_lookup" in events
     assert "thinking_finished" in events

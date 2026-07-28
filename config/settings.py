@@ -30,7 +30,7 @@ MEMORY_DIR = _resolve_runtime_path(
 load_dotenv(ENV_FILE_PATH)
 
 TITAN_NAME = "Titan"
-VERSION = "0.44.0"
+VERSION = "0.45.0"
 CREATOR = "Nolan Hassing"
 
 LOG_LEVEL = os.getenv("TITAN_LOG_LEVEL", "INFO")
@@ -112,6 +112,27 @@ SESSIONS_DIR = _resolve_runtime_path(
 EXECUTION_MAX_AGENTS = int(os.getenv("TITAN_EXECUTION_MAX_AGENTS", "3"))
 EXECUTION_MAX_TOOLS = int(os.getenv("TITAN_EXECUTION_MAX_TOOLS", "3"))
 
+# Phase 18.4 — Execution recovery / retry / rollback
+EXECUTION_RETRY_MAX_ATTEMPTS = int(os.getenv("TITAN_EXECUTION_RETRY_MAX_ATTEMPTS", "3"))
+EXECUTION_RETRY_DELAY = float(os.getenv("TITAN_EXECUTION_RETRY_DELAY", "0.05"))
+EXECUTION_RETRY_BACKOFF_MULTIPLIER = float(
+    os.getenv("TITAN_EXECUTION_RETRY_BACKOFF_MULTIPLIER", "2.0")
+)
+EXECUTION_RETRY_ON_TIMEOUT = (
+    os.getenv("TITAN_EXECUTION_RETRY_ON_TIMEOUT", "true").lower() == "true"
+)
+_raw_execution_timeout = os.getenv("TITAN_EXECUTION_TIMEOUT_SECONDS", "").strip()
+EXECUTION_TIMEOUT_SECONDS: float | None = (
+    float(_raw_execution_timeout) if _raw_execution_timeout else None
+)
+EXECUTION_CHECKPOINT_PATH = _resolve_runtime_path(
+    os.getenv(
+        "TITAN_EXECUTION_CHECKPOINT_PATH",
+        str(DATA_DIR / "execution_checkpoint.json"),
+    ),
+    str(DATA_DIR / "execution_checkpoint.json"),
+)
+
 # Autonomy layer (Phase 9 — P9-001)
 AUTONOMY_PROACTIVE_LEVEL = os.getenv("TITAN_AUTONOMY_PROACTIVE", "off")
 AUTONOMY_AUTO_TOOL_USE = (
@@ -129,6 +150,39 @@ AUTONOMY_MAX_SCHEDULED_JOBS = int(os.getenv("TITAN_AUTONOMY_MAX_JOBS", "10"))
 LLM_MODEL_CLASSIFICATION = os.getenv("TITAN_LLM_MODEL_CLASSIFICATION", LLM_MODEL)
 LLM_MODEL_AGENT = os.getenv("TITAN_LLM_MODEL_AGENT", LLM_MODEL)
 LLM_MODEL_EVALUATION = os.getenv("TITAN_LLM_MODEL_EVALUATION", LLM_MODEL)
+
+# Live working state (Phase 13.1 — State Manager foundation)
+TITAN_STATE_PATH = _resolve_runtime_path(
+    os.getenv("TITAN_STATE_PATH", str(DATA_DIR / "titan_state.json")),
+    str(DATA_DIR / "titan_state.json"),
+)
+
+# Current execution missions (Phase 14.1 — Mission Manager foundation)
+TITAN_MISSION_PATH = _resolve_runtime_path(
+    os.getenv("TITAN_MISSION_PATH", str(DATA_DIR / "titan_mission.json")),
+    str(DATA_DIR / "titan_mission.json"),
+)
+
+# Multi-mission projects (Phase 15.1 — Project Manager foundation)
+TITAN_PROJECT_PATH = _resolve_runtime_path(
+    os.getenv("TITAN_PROJECT_PATH", str(DATA_DIR / "titan_projects.json")),
+    str(DATA_DIR / "titan_projects.json"),
+)
+
+# Multi-project goals (Phase 16.1 — Goal Manager foundation)
+TITAN_GOAL_PATH = _resolve_runtime_path(
+    os.getenv("TITAN_GOAL_PATH", str(DATA_DIR / "titan_goals.json")),
+    str(DATA_DIR / "titan_goals.json"),
+)
+
+# Decision feedback history (Phase 17.4 — Decision Learning & Feedback)
+TITAN_DECISION_HISTORY_PATH = _resolve_runtime_path(
+    os.getenv(
+        "TITAN_DECISION_HISTORY_PATH",
+        str(DATA_DIR / "titan_decision_history.json"),
+    ),
+    str(DATA_DIR / "titan_decision_history.json"),
+)
 
 # Scheduler persistence (Phase 9 — P9-040)
 SCHEDULED_JOBS_PATH = _resolve_runtime_path(
@@ -440,6 +494,17 @@ TITAN_CHAT_DIAGNOSTICS = (
 # Bounded wait for the process-global Brain lock (must stay below chat deadline).
 TITAN_BRAIN_LOCK_TIMEOUT_SECONDS = float(
     os.getenv("TITAN_BRAIN_LOCK_TIMEOUT_SECONDS", "5")
+)
+# Phase 19.6 — stale ownership reclaim (monotonic age / heartbeat).
+# stale must exceed wait timeout; heartbeat must be << stale (enforced in loader).
+TITAN_BRAIN_LOCK_STALE_SECONDS = float(
+    os.getenv("TITAN_BRAIN_LOCK_STALE_SECONDS", "45")
+)
+TITAN_BRAIN_LOCK_HEARTBEAT_SECONDS = float(
+    os.getenv("TITAN_BRAIN_LOCK_HEARTBEAT_SECONDS", "2")
+)
+TITAN_BRAIN_LOCK_RECLAIM_ENABLED = (
+    os.getenv("TITAN_BRAIN_LOCK_RECLAIM_ENABLED", "true").lower() == "true"
 )
 # Conversation DB connect / statement budgets (Postgres); SQLite ignores these.
 TITAN_DB_CONNECT_TIMEOUT_SECONDS = float(

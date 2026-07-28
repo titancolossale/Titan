@@ -68,6 +68,17 @@ def resolve_confirmed_tool_requests(
             confirmation_token=token,
         )
 
+    # Cognitive ExecutionEngine confirmations reuse ConfirmationGate tokens
+    # with a synthetic tool name — never dispatch them as real tools.
+    if pending.tool_name == "__execution__":
+        return [], ExecutionDispatchContext(
+            user=user,
+            session_id=session_id,
+            turn_id=turn_id,
+            confirmed=True,
+            confirmation_token=token,
+        )
+
     dispatch = ExecutionDispatchContext(
         user=user,
         session_id=session_id,

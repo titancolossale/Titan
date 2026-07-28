@@ -1,0 +1,95 @@
+﻿FFFFFFFF...FFFF....ssF....FF.s                                           [100%]
+================================== FAILURES ===================================
+______________________ test_phase9_settings_version_bump ______________________
+tests\test_web_v2_cognitive_os.py:270: in test_phase9_settings_version_bump
+    assert 'VERSION = "0.43.0"' in settings
+E   assert 'VERSION = "0.43.0"' in '# ==========================================\n# Titan Configuration\n# ==========================================\n\n...tenv("TITAN_SESSION_IDLE_MINUTES", "60"))\nTITAN_SESSION_MAX_HOURS = int(os.getenv("TITAN_SESSION_MAX_HOURS", "24"))\n'
+_______________________ test_chat_timing_logged_safely ________________________
+tests\test_web_v2_emergency_fluidity_11_p2.py:446: in test_chat_timing_logged_safely
+    assert "CHAT_RESPONSE_SENT" in joined
+E   AssertionError: assert 'CHAT_RESPONSE_SENT' in 'CHAT_API_RECEIVED request_id=corr-11p2-1 message_length=13 elapsed_ms=0 remaining_budget_ms=30000 stage=received\nCHA...id=corr-11p2-1 status=ok duration_ms=66 elapsed_ms=66 remaining_budget_ms=29933 stage=response model=gpt-5.2 attempt=1'
+------------------------------ Captured log call ------------------------------
+INFO     api.chat_service:chat_service.py:126 CHAT_API_RECEIVED request_id=corr-11p2-1 message_length=13 elapsed_ms=0 remaining_budget_ms=30000 stage=received
+INFO     api.chat_service:chat_service.py:126 CHAT_BRAIN_LOCK_WAIT request_id=corr-11p2-1 wait_ms=0 result=waiting remaining_budget_ms=29944 stage=lock_wait
+INFO     api.chat_service:chat_service.py:126 CHAT_BRAIN_LOCK_ACQUIRED request_id=corr-11p2-1 wait_ms=0 owner=corr-11p2-1 result=acquired remaining_budget_ms=29943 stage=lock
+INFO     api.chat_service:chat_service.py:126 CHAT_BRAIN_START request_id=corr-11p2-1 conversation_id=conv_sbgxClFenZUelh8rFkWkBomD elapsed_ms=57 remaining_budget_ms=29943 stage=brain model=gpt-5.2 attempt=1
+INFO     api.chat_service:chat_service.py:126 CHAT_BRAIN_END request_id=corr-11p2-1 elapsed_ms=57 remaining_budget_ms=29943 stage=brain status=ok model=gpt-5.2 attempt=1
+INFO     api.chat_service:chat_service.py:126 CHAT_BRAIN_LOCK_RELEASED request_id=corr-11p2-1 owner=corr-11p2-1 result=released held_ms=0 stage=lock
+INFO     api.chat_service:chat_service.py:126 CHAT_STREAM_COMPLETED request_id=corr-11p2-1 conversation_id=conv_sbgxClFenZU chars=8
+INFO     api.chat_service:chat_service.py:126 CHAT_RESPONSE_READY request_id=corr-11p2-1 elapsed_ms=66 remaining_budget_ms=29934 stage=serialize status=ok model=gpt-5.2 attempt=1
+INFO     api.chat_service:chat_service.py:126 CHAT_API_RESPONSE request_id=corr-11p2-1 status=ok duration_ms=66 elapsed_ms=66 remaining_budget_ms=29933 stage=response model=gpt-5.2 attempt=1
+________________ test_immersive_satellites_buried_core_markup _________________
+tests\test_web_v2_immersive_neural_stage.py:86: in test_immersive_satellites_buried_core_markup
+    assert "tdl-v2-satellite-core__filament" in satellites
+E   AssertionError: assert 'tdl-v2-satellite-core__filament' in '/** Titan Frontend V2 ù Cognitive Satellite system (Sprint 2 À Living Neural Core V1).\n *\n * Presentation layer for...move();\n    this._field = null;\n    this._svg = null;\n    this._packetSvg = null;\n    this._core = null;\n  }\n}\n'
+______________________ test_phase6_settings_version_bump ______________________
+tests\test_web_v2_living_orchestrator.py:227: in test_phase6_settings_version_bump
+    assert (
+E   assert ('VERSION = "0.43.0"' in '# ==========================================\n# Titan Configuration\n# ==========================================\n\n...tenv("TITAN_SESSION_IDLE_MINUTES", "60"))\nTITAN_SESSION_MAX_HOURS = int(os.getenv("TITAN_SESSION_MAX_HOURS", "24"))\n' or 'VERSION = "0.42.0"' in '# ==========================================\n# Titan Configuration\n# ==========================================\n\n...tenv("TITAN_SESSION_IDLE_MINUTES", "60"))\nTITAN_SESSION_MAX_HOURS = int(os.getenv("TITAN_SESSION_MAX_HOURS", "24"))\n' or 'VERSION = "0.41.0"' in '# ==========================================\n# Titan Configuration\n# ==========================================\n\n...tenv("TITAN_SESSION_IDLE_MINUTES", "60"))\nTITAN_SESSION_MAX_HOURS = int(os.getenv("TITAN_SESSION_MAX_HOURS", "24"))\n' or 'VERSION = "0.40.0"' in '# ==========================================\n# Titan Configuration\n# ==========================================\n\n...tenv("TITAN_SESSION_IDLE_MINUTES", "60"))\nTITAN_SESSION_MAX_HOURS = int(os.getenv("TITAN_SESSION_MAX_HOURS", "24"))\n')
+______________________ test_phase8_settings_version_bump ______________________
+tests\test_web_v2_living_presence.py:205: in test_phase8_settings_version_bump
+    assert 'VERSION = "0.43.0"' in settings or 'VERSION = "0.42.0"' in settings
+E   assert ('VERSION = "0.43.0"' in '# ==========================================\n# Titan Configuration\n# ==========================================\n\n...tenv("TITAN_SESSION_IDLE_MINUTES", "60"))\nTITAN_SESSION_MAX_HOURS = int(os.getenv("TITAN_SESSION_MAX_HOURS", "24"))\n' or 'VERSION = "0.42.0"' in '# ==========================================\n# Titan Configuration\n# ==========================================\n\n...tenv("TITAN_SESSION_IDLE_MINUTES", "60"))\nTITAN_SESSION_MAX_HOURS = int(os.getenv("TITAN_SESSION_MAX_HOURS", "24"))\n')
+______________________ test_phase7_settings_version_bump ______________________
+tests\test_web_v2_living_runtime.py:184: in test_phase7_settings_version_bump
+    assert (
+E   assert ('VERSION = "0.43.0"' in '# ==========================================\n# Titan Configuration\n# ==========================================\n\n...tenv("TITAN_SESSION_IDLE_MINUTES", "60"))\nTITAN_SESSION_MAX_HOURS = int(os.getenv("TITAN_SESSION_MAX_HOURS", "24"))\n' or 'VERSION = "0.42.0"' in '# ==========================================\n# Titan Configuration\n# ==========================================\n\n...tenv("TITAN_SESSION_IDLE_MINUTES", "60"))\nTITAN_SESSION_MAX_HOURS = int(os.getenv("TITAN_SESSION_MAX_HOURS", "24"))\n' or 'VERSION = "0.41.0"' in '# ==========================================\n# Titan Configuration\n# ==========================================\n\n...tenv("TITAN_SESSION_IDLE_MINUTES", "60"))\nTITAN_SESSION_MAX_HOURS = int(os.getenv("TITAN_SESSION_MAX_HOURS", "24"))\n')
+__________________ test_orchestrator_idle_presence_richness ___________________
+tests\test_web_v2_presence_os.py:69: in test_orchestrator_idle_presence_richness
+    assert "Current Objective" in orch
+E   assert 'Current Objective' in '/** Titan Frontend V2 ù Cognitive Operating System Runtime Monitor (Phase 9).\n * Presentation command center À reuse..."tdl-v2-orchestrator-neural-label",\n        text: "Signal synaptique",\n      }),\n    );\n    return wrap;\n  }\n}\n'
+_________________ test_topbar_telemetry_has_mode_and_runtime __________________
+tests\test_web_v2_presence_os.py:84: in test_topbar_telemetry_has_mode_and_runtime
+    assert "TITAN_UI_VERSION_LABEL" in topbar
+E   assert 'TITAN_UI_VERSION_LABEL' in '/** Titan Frontend V2 ù Top Bar (Canonical Final Reference + Phase 9 telemetry).\n * Presentation only: six cognitive...ton",\n      "aria-label": label,\n      title: label,\n    });\n    btn.appendChild(icon);\n    return btn;\n  }\n}\n'
+_____________________ test_full_sidebar_navigation_labels _____________________
+tests\test_web_v2_reference_composition.py:80: in test_full_sidebar_navigation_labels
+    assert "BIENTÈT" in sidebar
+E   AssertionError: assert 'BIENTÈT' in '/** Titan Frontend V2 ù Sidebar region (Phase 4 chrome À Phase 5 composition). */\n\nimport { appendChildren, div, el...  }\n\n  _startFpsTelemetry() {\n    // FPS lives in the bottom system strip; sidebar remains presence-only.\n  }\n}\n'
+__________________ test_permanent_desktop_orchestrator_panel __________________
+tests\test_web_v2_reference_composition.py:87: in test_permanent_desktop_orchestrator_panel
+    assert "Cognitive Orchestrator" in orch
+E   assert 'Cognitive Orchestrator' in '/** Titan Frontend V2 ù Cognitive Operating System Runtime Monitor (Phase 9).\n * Presentation command center À reuse..."tdl-v2-orchestrator-neural-label",\n        text: "Signal synaptique",\n      }),\n    );\n    return wrap;\n  }\n}\n'
+________________________ test_lower_floating_card_row _________________________
+tests\test_web_v2_reference_composition.py:109: in test_lower_floating_card_row
+    assert title in status
+E   assert 'Recent Memory' in '/** Titan Frontend V2 ù Floating Cognitive Workspaces (Phase 9 Cognitive OS).\n * Live cognitive surfaces ù Memory À ...);\n    if (memLine) {\n      memLine.textContent = state?.memoryStatusLine ?? "MÚmoire ù en veille";\n    }\n  }\n}\n'
+______________________ test_chat_composer_ids_preserved _______________________
+tests\test_web_v2_reference_composition.py:123: in test_chat_composer_ids_preserved
+    assert "SEND" in composer
+E   AssertionError: assert 'SEND' in '/** Titan Frontend V2 ù Composer region (premium command console). Sprint 2.7 / 2.9. */\n\nimport { appendChildren, d...onal hook ù overridden when store is wired via setBrain path. */\n  _storeChatPending() {\n    return false;\n  }\n}\n'
+__________________ test_orchestrator_story_hierarchy_titles ___________________
+tests\test_web_v2_reference_final.py:78: in test_orchestrator_story_hierarchy_titles
+    assert "Current Objective" in orch
+E   assert 'Current Objective' in '/** Titan Frontend V2 ù Cognitive Operating System Runtime Monitor (Phase 9).\n * Presentation command center À reuse..."tdl-v2-orchestrator-neural-label",\n        text: "Signal synaptique",\n      }),\n    );\n    return wrap;\n  }\n}\n'
+_____________ test_phase4_presence_merged_into_sidebar_structure ______________
+tests\test_web_v2_sidebar_phase4.py:86: in test_phase4_presence_merged_into_sidebar_structure
+    assert 'dataset.phase = "5"' in sidebar or 'dataset.phase = "4"' in sidebar
+E   assert ('dataset.phase = "5"' in '/** Titan Frontend V2 ù Sidebar region (Phase 4 chrome À Phase 5 composition). */\n\nimport { appendChildren, div, el...  }\n\n  _startFpsTelemetry() {\n    // FPS lives in the bottom system strip; sidebar remains presence-only.\n  }\n}\n' or 'dataset.phase = "4"' in '/** Titan Frontend V2 ù Sidebar region (Phase 4 chrome À Phase 5 composition). */\n\nimport { appendChildren, div, el...  }\n\n  _startFpsTelemetry() {\n    // FPS lives in the bottom system strip; sidebar remains presence-only.\n  }\n}\n')
+______________ test_phase4_navigation_remains_quiet_and_complete ______________
+tests\test_web_v2_sidebar_phase4.py:113: in test_phase4_navigation_remains_quiet_and_complete
+    assert "BIENTÈT" in sidebar
+E   AssertionError: assert 'BIENTÈT' in '/** Titan Frontend V2 ù Sidebar region (Phase 4 chrome À Phase 5 composition). */\n\nimport { appendChildren, div, el...  }\n\n  _startFpsTelemetry() {\n    // FPS lives in the bottom system strip; sidebar remains presence-only.\n  }\n}\n'
+============================== warnings summary ===============================
+..\..\..\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\testclient.py:1
+  C:\Users\nolan\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_web_v2_cognitive_os.py::test_phase9_settings_version_bump
+FAILED tests/test_web_v2_emergency_fluidity_11_p2.py::test_chat_timing_logged_safely
+FAILED tests/test_web_v2_immersive_neural_stage.py::test_immersive_satellites_buried_core_markup
+FAILED tests/test_web_v2_living_orchestrator.py::test_phase6_settings_version_bump
+FAILED tests/test_web_v2_living_presence.py::test_phase8_settings_version_bump
+FAILED tests/test_web_v2_living_runtime.py::test_phase7_settings_version_bump
+FAILED tests/test_web_v2_presence_os.py::test_orchestrator_idle_presence_richness
+FAILED tests/test_web_v2_presence_os.py::test_topbar_telemetry_has_mode_and_runtime
+FAILED tests/test_web_v2_reference_composition.py::test_full_sidebar_navigation_labels
+FAILED tests/test_web_v2_reference_composition.py::test_permanent_desktop_orchestrator_panel
+FAILED tests/test_web_v2_reference_composition.py::test_lower_floating_card_row
+FAILED tests/test_web_v2_reference_composition.py::test_chat_composer_ids_preserved
+FAILED tests/test_web_v2_reference_final.py::test_orchestrator_story_hierarchy_titles
+FAILED tests/test_web_v2_sidebar_phase4.py::test_phase4_presence_merged_into_sidebar_structure
+FAILED tests/test_web_v2_sidebar_phase4.py::test_phase4_navigation_remains_quiet_and_complete
+15 failed, 12 passed, 3 skipped, 1 warning in 3.72s

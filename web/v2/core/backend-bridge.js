@@ -851,6 +851,7 @@ export class BackendBridge {
       "reasoning",
       "status",
       "telemetry",
+      "workspace_state",
       "error",
       "orchestration_started",
       "orchestration_finished",

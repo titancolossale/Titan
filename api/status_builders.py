@@ -27,6 +27,14 @@ from tools.connectors.obsidian_validator import validate_obsidian_config
 from tools.connectors.trading_connector import TradingConnector
 
 
+def build_workspace_state(titan: Titan) -> dict[str, Any]:
+    """Return a read-only deep copy of the live WorkspaceState (Phase 13.4).
+
+    Does not mutate StateManager. Callers must treat the payload as immutable.
+    """
+    return titan.state.get_state()
+
+
 def build_system_status(titan: Titan) -> dict[str, Any]:
     """Return general Titan operational status."""
     titan.context.refresh()
@@ -47,7 +55,7 @@ def build_system_status(titan: Titan) -> dict[str, Any]:
             "title": mission.get("title", ""),
             "current_step": mission.get("current_step", ""),
         },
-        "state": titan.state.get_state(),
+        "state": build_workspace_state(titan),
     }
 
 

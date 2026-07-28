@@ -111,10 +111,12 @@ def test_brain_public_entry_points_remain_available(integrated_brain: Brain) -> 
 
 
 def test_nlo_invokes_reasoning_before_downstream_systems(integrated_brain: Brain) -> None:
-    """Informational requests must route through NLO → Reasoning → Brain systems."""
-    result = integrated_brain.process_request("What is Python?")
+    """Tool/research requests must route through NLO → Reasoning → Brain systems."""
+    result = integrated_brain.process_request(
+        "Search the web for FastAPI documentation",
+    )
 
-    assert result.detected_intent == DetectedIntent.QUESTION
+    assert result.detected_intent == DetectedIntent.RESEARCH
     assert SystemName.REASONING_ENGINE.value in result.systems_used.invoked
     assert result.final_response
     assert integrated_brain.last_orchestration_result is result

@@ -212,8 +212,10 @@ def test_google_find_free_time(google_provider: GoogleCalendarProvider, mock_ser
 
 
 def test_connector_with_google_backend(mock_service: MagicMock) -> None:
+    # Inject mocked Google API; pin provider=mock for config validation so process
+    # .env (TITAN_CALENDAR_PROVIDER=google) cannot require live OAuth credentials.
     provider = GoogleCalendarProvider(mock_service)
-    connector = CalendarConnector(enabled=True, backend=provider)
+    connector = CalendarConnector(enabled=True, backend=provider, provider="mock")
     outcome = connector.execute("list_calendars", {})
     assert outcome.success
     payload = json.loads(outcome.data)

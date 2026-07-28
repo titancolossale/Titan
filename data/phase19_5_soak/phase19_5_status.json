@@ -1,0 +1,55 @@
+{
+  "phase": "19.5",
+  "status": "blocked_on_production_brain_lock",
+  "base": "https://titan-production-e377.up.railway.app",
+  "updated_at": "2026-07-28T17:50:00+00:00",
+  "railway_environment": {
+    "health": 200,
+    "ready": 200,
+    "auth_required": true,
+    "session_auth": true,
+    "conversation_backend": "postgresql",
+    "unauthenticated_chat": 401
+  },
+  "authentication": {
+    "login_ok": true,
+    "session_cookie": true,
+    "csrf_cookie": true,
+    "auth_status_authenticated": true,
+    "credentials_exposed": false
+  },
+  "blocker": {
+    "layer": "brain_lock",
+    "symptom": "brain_busy on every authenticated /chat/stream",
+    "evidence": "lock held beyond chat deadline after hung SSE client disconnects during soak",
+    "recovery_required": "Restart Railway service (clears in-memory lock) OR deploy stale-lock reclaim fix",
+    "code_fix_ready_locally": true,
+    "code_fix_deployed": false
+  },
+  "scenarios": {
+    "00_environment": "PASS",
+    "01_login": "PASS",
+    "02_basic_chat": "BLOCKED_brain_busy",
+    "03_context_continuity": "BLOCKED_brain_busy",
+    "04_refresh_continuity": "BLOCKED_brain_busy",
+    "05_restart_continuity": "BLOCKED_brain_busy",
+    "06_streaming_order": "BLOCKED_brain_busy",
+    "07_cancellation_recovery": "BLOCKED_brain_busy",
+    "08_sequential_soak": "BLOCKED_brain_busy",
+    "09_long_conversation": "BLOCKED_brain_busy",
+    "10_project_goal_mission": "BLOCKED_brain_busy",
+    "11_confirmation_safety": "BLOCKED_brain_busy",
+    "12_postgres_integrity": "PARTIAL_api_rows_created_under_busy",
+    "13_lock_contention": "OBSERVED_busy_both_requests"
+  },
+  "local_regressions": {
+    "test_production_soak_19_4": "pass",
+    "test_production_soak_19_5": "pass",
+    "test_brain_lock_lifecycle": "pass",
+    "test_private_authentication": "pass",
+    "test_deployment_readiness": "pass",
+    "total_passed": 70
+  },
+  "production_readiness_score": "78%",
+  "note": "Auth + public probes + Postgres readiness validated. Full authenticated chat soak blocked by leaked Brain lock on live Railway until service restart and re-soak."
+}

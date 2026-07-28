@@ -15,6 +15,11 @@ from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any
 
+from api.brain_lock import (
+    BrainLockManager,
+    BrainLockState,
+    load_brain_lock_config,
+)
 from api.memory_activity import format_memory_activity
 from api.orchestrator_progress import (
     current_neural_state_from_context,
@@ -33,6 +38,9 @@ from brain.request_deadline import (
 )
 from config.settings import (
     LLM_MODEL,
+    TITAN_BRAIN_LOCK_HEARTBEAT_SECONDS,
+    TITAN_BRAIN_LOCK_RECLAIM_ENABLED,
+    TITAN_BRAIN_LOCK_STALE_SECONDS,
     TITAN_BRAIN_LOCK_TIMEOUT_SECONDS,
     TITAN_CHAT_DEADLINE_SECONDS,
     TITAN_CHAT_DIAGNOSTICS,
@@ -45,13 +53,140 @@ from core.web_conversations.service import get_conversation_service
 
 logger = logging.getLogger(__name__)
 
-# Process-global, non-reentrant lock serializing shared Titan Brain turns.
-# Held only around unsafe shared Brain/conversation mutations + process_request.
-_brain_lock = threading.Lock()
-_brain_lock_state_lock = threading.Lock()
-_brain_lock_owner: str | None = None
-_brain_lock_acquired_monotonic: float | None = None
-_LOCK_WAIT_SLICE_SECONDS = 0.05
+# Active deadlines for cancellation (request_id → deadline).
+_active_deadlines_lock = threading.Lock()
+_active_deadlines: dict[str, RequestDeadline] = {}
+
+
+def _active_request_info(request_id: str) -> dict[str, Any] | None:
+    """Safe ownership abandonability probe for stale reclaim (no secrets)."""
+    with _active_deadlines_lock:
+        deadline = _active_deadlines.get(request_id)
+    if deadline is None:
+        return None
+    return {
+        "cancelled": bool(deadline.cancelled),
+        "expired": deadline.remaining_ms() <= 0,
+        "terminal": bool(deadline.cancelled) or deadline.remaining_ms() <= 0,
+    }
+
+
+def _brain_lock_config():
+    return load_brain_lock_config(
+        wait_timeout=TITAN_BRAIN_LOCK_TIMEOUT_SECONDS,
+        stale_seconds=TITAN_BRAIN_LOCK_STALE_SECONDS,
+        heartbeat_seconds=TITAN_BRAIN_LOCK_HEARTBEAT_SECONDS,
+        reclaim_enabled=TITAN_BRAIN_LOCK_RECLAIM_ENABLED,
+    )
+
+
+def _chat_log(event: str, **fields: Any) -> None:
+    """Concise correlation logs — gated; never logs message content."""
+    if not TITAN_CHAT_DIAGNOSTICS:
+        return
+    parts = [f"{key}={value}" for key, value in fields.items() if value is not None]
+    logger.info("%s %s", event, " ".join(parts))
+
+
+_brain_lock_manager = BrainLockManager(
+    config_loader=_brain_lock_config,
+    active_request_checker=_active_request_info,
+    log_fn=_chat_log,
+)
+
+# Backward-compatible aliases for tests / soak helpers.
+_brain_lock = _brain_lock_manager.raw_lock
+_brain_lock_state_lock = _brain_lock_manager._state_lock
+
+
+def brain_lock_diagnostics() -> dict[str, Any]:
+    """Safe lock snapshot for authenticated diagnostics (no secrets)."""
+    return _brain_lock_manager.diagnostics()
+
+
+def _brain_lock_owner_snapshot() -> str | None:
+    return _brain_lock_manager.owner_snapshot()
+
+
+def _acquire_brain_lock(
+    request_id: str,
+    deadline: RequestDeadline,
+    *,
+    timeout_seconds: float | None = None,
+) -> int | None:
+    """Acquire the process-global Brain lock with a bounded, cancellable wait.
+
+    Returns ownership generation when acquired. Returns None on lock timeout
+    (caller should emit ``brain_busy``). Raises ``RequestCancelledError`` or
+    ``BrainTimeoutError`` when the request deadline ends during the wait.
+    """
+
+    def _deadline_check() -> None:
+        deadline.check("lock_wait")
+
+    return _brain_lock_manager.acquire(
+        request_id,
+        timeout_seconds=timeout_seconds,
+        deadline_check=_deadline_check,
+        remaining_budget_ms=deadline.remaining_ms,
+    )
+
+
+def _release_brain_lock(
+    request_id: str,
+    generation: int | None = None,
+    *,
+    reason: str = "released",
+) -> bool:
+    """Release the Brain lock only when owned by ``request_id`` + generation."""
+    return _brain_lock_manager.release(request_id, generation, reason=reason)
+
+
+def _heartbeat_brain_lock(
+    request_id: str,
+    generation: int | None,
+    *,
+    state: str | None = None,
+    force_log: bool = False,
+) -> bool:
+    if generation is None:
+        return False
+    return _brain_lock_manager.heartbeat(
+        request_id,
+        generation,
+        state=state,
+        force_log=force_log,
+    )
+
+
+def _ownership_still_valid(generation: int | None) -> bool:
+    return _brain_lock_manager.is_generation_valid(generation)
+
+
+def reset_brain_lock_for_tests() -> None:
+    """Test helper — drop ownership metadata and ensure the lock is free."""
+    _brain_lock_manager.reset_for_tests()
+
+
+def _get_brain_lock_acquired_monotonic() -> float | None:
+    with _brain_lock_manager._state_lock:
+        return _brain_lock_manager._ownership.acquired_at
+
+
+def _set_brain_lock_acquired_monotonic(value: float | None) -> None:
+    with _brain_lock_manager._state_lock:
+        _brain_lock_manager._ownership.acquired_at = value
+        if value is not None:
+            _brain_lock_manager._ownership.last_heartbeat_at = value
+
+
+def __getattr__(name: str) -> Any:
+    if name == "_brain_lock_acquired_monotonic":
+        return _get_brain_lock_acquired_monotonic()
+    if name == "_brain_lock_owner":
+        return _brain_lock_manager.owner_snapshot()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 # Idempotency: duplicate client request_id returns the cached payload (same turn).
 _IDEMPOTENCY_MAX = 256
@@ -112,18 +247,7 @@ BRAIN_BUSY_CODE = "brain_busy"
 BRAIN_BUSY_MESSAGE = (
     "Titan traite déjà une autre requête. Réessaie dans un instant."
 )
-
-# Active deadlines for cancellation (request_id → deadline).
-_active_deadlines_lock = threading.Lock()
-_active_deadlines: dict[str, RequestDeadline] = {}
-
-
-def _chat_log(event: str, **fields: Any) -> None:
-    """Concise correlation logs — gated; never logs message content."""
-    if not TITAN_CHAT_DIAGNOSTICS:
-        return
-    parts = [f"{key}={value}" for key, value in fields.items() if value is not None]
-    logger.info("%s %s", event, " ".join(parts))
+STALE_OWNER_CODE = "stale_owner"
 
 
 def cancel_chat_request(request_id: str | None) -> bool:
@@ -156,149 +280,6 @@ def unregister_active_deadline(request_id: str) -> None:
     with _active_deadlines_lock:
         _active_deadlines.pop(request_id, None)
 
-
-def _brain_lock_owner_snapshot() -> str | None:
-    with _brain_lock_state_lock:
-        return _brain_lock_owner
-
-
-def _acquire_brain_lock(
-    request_id: str,
-    deadline: RequestDeadline,
-    *,
-    timeout_seconds: float | None = None,
-) -> bool:
-    """Acquire the process-global Brain lock with a bounded, cancellable wait.
-
-    Returns True when acquired by ``request_id``. Returns False on lock timeout
-    (caller should emit ``brain_busy``). Raises ``RequestCancelledError`` or
-    ``BrainTimeoutError`` when the request deadline ends during the wait.
-    """
-    global _brain_lock_owner, _brain_lock_acquired_monotonic
-
-    budget = (
-        TITAN_BRAIN_LOCK_TIMEOUT_SECONDS
-        if timeout_seconds is None
-        else float(timeout_seconds)
-    )
-    budget = max(0.05, budget)
-    wait_started = time.monotonic()
-    owner_before = _brain_lock_owner_snapshot()
-    _chat_log(
-        "CHAT_BRAIN_LOCK_WAIT",
-        request_id=request_id,
-        wait_ms=0,
-        owner=owner_before,
-        result="waiting",
-        remaining_budget_ms=deadline.remaining_ms(),
-        stage="lock_wait",
-    )
-
-    while True:
-        deadline.check("lock_wait")
-        waited = time.monotonic() - wait_started
-        remaining_lock = budget - waited
-        if remaining_lock <= 0:
-            _chat_log(
-                "CHAT_BRAIN_LOCK_TIMEOUT",
-                request_id=request_id,
-                wait_ms=int(waited * 1000),
-                owner=_brain_lock_owner_snapshot(),
-                result="timeout",
-                remaining_budget_ms=deadline.remaining_ms(),
-                stage="lock_wait",
-            )
-            return False
-
-        slice_timeout = min(
-            _LOCK_WAIT_SLICE_SECONDS,
-            remaining_lock,
-            max(deadline.remaining_seconds(), 0.01),
-        )
-        if _brain_lock.acquire(timeout=slice_timeout):
-            waited_ms = int((time.monotonic() - wait_started) * 1000)
-            with _brain_lock_state_lock:
-                _brain_lock_owner = request_id
-                _brain_lock_acquired_monotonic = time.monotonic()
-            _chat_log(
-                "CHAT_BRAIN_LOCK_ACQUIRED",
-                request_id=request_id,
-                wait_ms=waited_ms,
-                owner=request_id,
-                result="acquired",
-                remaining_budget_ms=deadline.remaining_ms(),
-                stage="lock",
-            )
-            return True
-
-
-def _release_brain_lock(request_id: str) -> None:
-    """Release the Brain lock only when owned by ``request_id``."""
-    global _brain_lock_owner, _brain_lock_acquired_monotonic
-
-    with _brain_lock_state_lock:
-        owner = _brain_lock_owner
-        acquired_at = _brain_lock_acquired_monotonic
-        if owner != request_id:
-            _chat_log(
-                "CHAT_BRAIN_LOCK_RELEASED",
-                request_id=request_id,
-                owner=owner,
-                result="skipped_not_owner",
-                held_ms=None,
-                stage="lock",
-            )
-            return
-        held_ms = (
-            int((time.monotonic() - acquired_at) * 1000)
-            if acquired_at is not None
-            else None
-        )
-        _brain_lock_owner = None
-        _brain_lock_acquired_monotonic = None
-
-    try:
-        _brain_lock.release()
-    except RuntimeError:
-        logger.exception(
-            "CHAT_BRAIN_LOCK_RELEASED request_id=%s result=release_error",
-            request_id,
-        )
-        _chat_log(
-            "CHAT_BRAIN_LOCK_RELEASED",
-            request_id=request_id,
-            owner=request_id,
-            result="release_error",
-            held_ms=held_ms,
-            stage="lock",
-        )
-        return
-
-    _chat_log(
-        "CHAT_BRAIN_LOCK_RELEASED",
-        request_id=request_id,
-        owner=request_id,
-        result="released",
-        held_ms=held_ms,
-        stage="lock",
-    )
-
-
-def reset_brain_lock_for_tests() -> None:
-    """Test helper — drop ownership metadata and ensure the lock is free."""
-    global _brain_lock_owner, _brain_lock_acquired_monotonic
-    with _brain_lock_state_lock:
-        owned = _brain_lock_owner is not None
-        _brain_lock_owner = None
-        _brain_lock_acquired_monotonic = None
-    if owned:
-        try:
-            _brain_lock.release()
-        except RuntimeError:
-            pass
-    # Drain a stuck lock without blocking tests forever.
-    if _brain_lock.acquire(timeout=0.01):
-        _brain_lock.release()
 
 
 def _elapsed_ms(started: datetime) -> int:
@@ -965,16 +946,17 @@ def process_chat_message(
                 req_id,
             )
 
-    lock_acquired = False
+    lock_generation: int | None = None
     result: OrchestrationResult | None = None
     brain_error = False
     tool_activity: list[dict[str, Any]] = []
     memory_activity: list[dict[str, Any]] = []
     orchestrator_progress: list[dict[str, Any]] = []
+    stale_owner = False
 
     try:
         try:
-            lock_acquired = _acquire_brain_lock(req_id, deadline)
+            lock_generation = _acquire_brain_lock(req_id, deadline)
         except RequestCancelledError as exc:
             _chat_log(
                 "CHAT_BRAIN_LOCK_CANCELLED",
@@ -1007,7 +989,7 @@ def process_chat_message(
                 duration_seconds=deadline.elapsed_ms() / 1000.0,
             )
 
-        if result is None and not lock_acquired:
+        if result is None and lock_generation is None:
             _record_diag_error(BRAIN_BUSY_CODE, req_id)
             result = _fallback_orchestration_result(
                 titan,
@@ -1019,7 +1001,7 @@ def process_chat_message(
                 duration_seconds=deadline.elapsed_ms() / 1000.0,
             )
 
-        if result is None and lock_acquired:
+        if result is None and lock_generation is not None:
             try:
                 if user:
                     titan.context.session.set_user(user)
@@ -1046,6 +1028,12 @@ def process_chat_message(
                 if llm is not None:
                     setattr(llm, "_active_request_id", req_id)
 
+                _heartbeat_brain_lock(
+                    req_id,
+                    lock_generation,
+                    state=BrainLockState.RUNNING.value,
+                    force_log=True,
+                )
                 _chat_log(
                     "CHAT_BRAIN_START",
                     request_id=req_id,
@@ -1055,6 +1043,7 @@ def process_chat_message(
                     stage="brain",
                     model=model_name,
                     attempt=1,
+                    generation=lock_generation,
                 )
                 if stream is not None:
                     try:
@@ -1068,11 +1057,39 @@ def process_chat_message(
                         )
                     except Exception:
                         logger.debug("acknowledged emit failed", exc_info=True)
+                    _heartbeat_brain_lock(
+                        req_id,
+                        lock_generation,
+                        state=BrainLockState.STREAMING.value,
+                    )
                     _chat_log(
                         "CHAT_STREAM_STARTED",
                         request_id=req_id,
                         conversation_id=durable_conv_id[:16],
                     )
+                    # Throttled heartbeats on progressive deltas (not per token).
+                    _orig_emit = getattr(stream, "emit", None)
+                    _delta_hb_at = {"t": 0.0}
+
+                    if callable(_orig_emit):
+                        def _emit_with_heartbeat(event_type: str, data: dict) -> None:
+                            _orig_emit(event_type, data)
+                            if event_type in {"text_delta", "token", "response_started"}:
+                                now = time.monotonic()
+                                force = event_type == "response_started" or (
+                                    _delta_hb_at["t"] == 0.0
+                                )
+                                cfg_hb = _brain_lock_config().heartbeat_seconds
+                                if force or (now - _delta_hb_at["t"]) >= cfg_hb:
+                                    _delta_hb_at["t"] = now
+                                    _heartbeat_brain_lock(
+                                        req_id,
+                                        lock_generation,
+                                        state=BrainLockState.STREAMING.value,
+                                        force_log=force,
+                                    )
+
+                        stream.emit = _emit_with_heartbeat  # type: ignore[method-assign]
 
                 try:
                     deadline.check("brain")
@@ -1151,19 +1168,47 @@ def process_chat_message(
                         setattr(llm, "_active_request_id", None)
 
                 assert result is not None
+                if not _ownership_still_valid(lock_generation):
+                    stale_owner = True
+                    _chat_log(
+                        "CHAT_BRAIN_STALE_OWNER_RESUMED",
+                        request_id=req_id,
+                        generation=lock_generation,
+                        stage="brain",
+                    )
+                    result = _fallback_orchestration_result(
+                        titan,
+                        text,
+                        reason="cancelled",
+                        response="Requête annulée.",
+                        error_code=CANCELLED_CODE,
+                        last_stage="stale_owner",
+                        duration_seconds=deadline.elapsed_ms() / 1000.0,
+                    )
+                    _record_diag_error(STALE_OWNER_CODE, req_id)
+
+                _heartbeat_brain_lock(
+                    req_id,
+                    lock_generation,
+                    state=BrainLockState.RUNNING.value,
+                    force_log=True,
+                )
                 _chat_log(
                     "CHAT_BRAIN_END",
                     request_id=req_id,
                     elapsed_ms=deadline.elapsed_ms(),
                     remaining_budget_ms=deadline.remaining_ms(),
                     stage="brain",
-                    status="error" if brain_error else "ok",
+                    status="error" if brain_error or stale_owner else "ok",
                     model=model_name,
                     attempt=1,
+                    generation=lock_generation,
                 )
 
                 response_text = result.final_response
-                if _is_brain_timeout(result):
+                if stale_owner:
+                    response_text = "Requête annulée."
+                elif _is_brain_timeout(result):
                     response_text = BRAIN_TIMEOUT_MESSAGE
                     _record_diag_error(BRAIN_TIMEOUT_CODE, req_id)
                     _chat_log(
@@ -1210,23 +1255,34 @@ def process_chat_message(
                         attempt=1,
                     )
 
-                # Abandoned/cancelled/busy turns must not pollute history.
-                if not _is_cancelled(result) and not _is_brain_busy(result):
+                # Abandoned/cancelled/busy/stale turns must not pollute history.
+                if (
+                    not stale_owner
+                    and not _is_cancelled(result)
+                    and not _is_brain_busy(result)
+                ):
                     titan.conversation.add_message("Titan", response_text)
 
                 tool_activity, memory_activity, orchestrator_progress = (
                     _collect_activity(titan, audit_start)
                 )
             finally:
-                if lock_acquired:
-                    _release_brain_lock(req_id)
-                    lock_acquired = False
+                if lock_generation is not None:
+                    _heartbeat_brain_lock(
+                        req_id,
+                        lock_generation,
+                        state=BrainLockState.RELEASING.value,
+                    )
+                    _release_brain_lock(req_id, lock_generation)
+                    lock_generation = None
 
         assert result is not None
 
         # Finalize durable assistant row outside the Brain lock.
         response_text = result.final_response
-        if _is_brain_timeout(result):
+        if stale_owner:
+            response_text = "Requête annulée."
+        elif _is_brain_timeout(result):
             response_text = BRAIN_TIMEOUT_MESSAGE
         elif _is_provider_timeout(result):
             response_text = PROVIDER_TIMEOUT_MESSAGE
@@ -1239,7 +1295,17 @@ def process_chat_message(
 
         if conv_service is not None and assistant_message_id:
             try:
-                if _is_cancelled(result):
+                if stale_owner:
+                    status = MessageStatus.CANCELLED.value
+                    err = STALE_OWNER_CODE
+                    response_text = ""
+                    _chat_log(
+                        "CHAT_BRAIN_STALE_OWNER_IGNORED",
+                        request_id=req_id,
+                        stage="persist",
+                        result="finalize_cancelled",
+                    )
+                elif _is_cancelled(result):
                     status = MessageStatus.CANCELLED.value
                     err = CANCELLED_CODE
                     _chat_log(
@@ -1283,7 +1349,11 @@ def process_chat_message(
                     user_id=speaker,
                     content=(
                         response_text
-                        if not _is_cancelled(result) and not _is_brain_busy(result)
+                        if (
+                            not stale_owner
+                            and not _is_cancelled(result)
+                            and not _is_brain_busy(result)
+                        )
                         else ""
                     ),
                     status=status,
@@ -1412,8 +1482,9 @@ def process_chat_message(
             message_id=message_id,
         )
     finally:
-        if lock_acquired:
-            _release_brain_lock(req_id)
+        if lock_generation is not None:
+            _release_brain_lock(req_id, lock_generation, reason="finally")
+            lock_generation = None
         unregister_active_deadline(req_id)
         reset_request_deadline(deadline_token)
 

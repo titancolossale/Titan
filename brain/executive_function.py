@@ -42,13 +42,17 @@ _PRIORITY_WEIGHTS: dict[MissionPriority, float] = {
 _STATE_WEIGHTS: dict[MissionState, float] = {
     MissionState.BLOCKED: 35.0,
     MissionState.RUNNING: 28.0,
+    MissionState.ACTIVE: 28.0,
     MissionState.WAITING: 18.0,
     MissionState.READY: 16.0,
+    MissionState.QUEUED: 16.0,
     MissionState.PLANNING: 14.0,
+    MissionState.PAUSED: 14.0,
     MissionState.CREATED: 12.0,
     MissionState.FAILED: 0.0,
     MissionState.COMPLETED: 0.0,
     MissionState.CANCELLED: 0.0,
+    MissionState.ARCHIVED: 0.0,
 }
 
 # Idle when no update for this many hours (WAITING / READY / CREATED).

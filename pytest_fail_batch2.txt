@@ -1,0 +1,29 @@
+﻿FFFF                                                                     [100%]
+================================== FAILURES ===================================
+____________________ test_nlo_runs_reasoning_in_awareness _____________________
+tests\test_reasoning_engine.py:442: in test_nlo_runs_reasoning_in_awareness
+    assert "reasoning" in result.artifacts
+E   AssertionError: assert 'reasoning' in {'awareness': {'user': 'Nolan', 'project_id': 'Titan', 'context': '============================\nTITAN CONTEXT\n======...wa0\\TitanReason', 'modules': ['brain', 'core', 'memory', 'tools']}, ...}, 'skip_agents': True, 'think_response': True}
+E    +  where {'awareness': {'user': 'Nolan', 'project_id': 'Titan', 'context': '============================\nTITAN CONTEXT\n======...wa0\\TitanReason', 'modules': ['brain', 'core', 'memory', 'tools']}, ...}, 'skip_agents': True, 'think_response': True} = OrchestrationResult(request_analysis=RequestAnalysis(request='What is the safest way to implement caching?', normalize...State.ACTIVE'}, 'executive': None}, 'skip_agents': True, 'think_response': True}, duration_seconds=0.07552450010553002).artifacts
+_____________________ test_nlo_reasoning_summary_enriched _____________________
+tests\test_reasoning_engine.py:449: in test_nlo_reasoning_summary_enriched
+    assert "Reasoning:" in result.reasoning_summary or "reasoning" in result.artifacts
+E   assert ('Reasoning:' in "Detected intent=question (default question fallback) confidence=0.50. Selected systems=['context_manager', 'workspace...ager', 'workspace_awareness', 'memory', 'mission_runtime', 'development_session', 'executive_function', 'brain_think']" or 'reasoning' in {'awareness': {'user': 'Nolan', 'project_id': 'Titan', 'context': '============================\nTITAN CONTEXT\n======...nr0\\TitanReason', 'modules': ['brain', 'core', 'memory', 'tools']}, ...}, 'skip_agents': True, 'think_response': True})
+E    +  where "Detected intent=question (default question fallback) confidence=0.50. Selected systems=['context_manager', 'workspace...ager', 'workspace_awareness', 'memory', 'mission_runtime', 'development_session', 'executive_function', 'brain_think']" = OrchestrationResult(request_analysis=RequestAnalysis(request='Compare two approaches for memory retrieval', normalized...tate.ACTIVE'}, 'executive': None}, 'skip_agents': True, 'think_response': True}, duration_seconds=0.038415499962866306).reasoning_summary
+E    +  and   {'awareness': {'user': 'Nolan', 'project_id': 'Titan', 'context': '============================\nTITAN CONTEXT\n======...nr0\\TitanReason', 'modules': ['brain', 'core', 'memory', 'tools']}, ...}, 'skip_agents': True, 'think_response': True} = OrchestrationResult(request_analysis=RequestAnalysis(request='Compare two approaches for memory retrieval', normalized...tate.ACTIVE'}, 'executive': None}, 'skip_agents': True, 'think_response': True}, duration_seconds=0.038415499962866306).artifacts
+_____________ test_brain_think_executes_agents_once_per_task_list _____________
+tests\test_single_agent_path.py:33: in test_brain_think_executes_agents_once_per_task_list
+    assert mock_execute.call_count == expected_count
+E   AssertionError: assert 2 == 3
+E    +  where 2 = <MagicMock id='2091920627696'>.call_count
+____________ test_search_then_read_multiple_matches_clarification _____________
+tests\test_workspace_intelligence.py:348: in test_search_then_read_multiple_matches_clarification
+    assert result.tool_results[-1].success is False
+           ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: list index out of range
+=========================== short test summary info ===========================
+FAILED tests/test_reasoning_engine.py::test_nlo_runs_reasoning_in_awareness
+FAILED tests/test_reasoning_engine.py::test_nlo_reasoning_summary_enriched - ...
+FAILED tests/test_single_agent_path.py::test_brain_think_executes_agents_once_per_task_list
+FAILED tests/test_workspace_intelligence.py::test_search_then_read_multiple_matches_clarification
+4 failed in 4.88s

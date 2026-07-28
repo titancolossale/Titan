@@ -50,11 +50,15 @@ def lifecycle_brain(brain: Brain, tmp_path: Path) -> Brain:
 
 
 def test_flow1_simple_informational_via_nlo(lifecycle_brain: Brain) -> None:
-    """Request → NLO → Reasoning → Brain systems → response."""
+    """Request → NLO conversation route → Brain.think (reasoning intentionally skipped)."""
     result = lifecycle_brain.process_request("What is the capital of France?")
 
     assert result.detected_intent == DetectedIntent.QUESTION
-    assert SystemName.REASONING_ENGINE.value in result.systems_used.invoked
+    assert SystemName.REASONING_ENGINE.value not in result.systems_used.invoked
+    assert (
+        f"{SystemName.REASONING_ENGINE.value} (conversation_route)"
+        in result.systems_used.skipped
+    )
     assert result.confidence > 0.0
     assert result.final_response
 
