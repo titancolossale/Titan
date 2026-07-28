@@ -1,8 +1,9 @@
 {
-  "phase": "19.6",
-  "status": "revalidation_mostly_passed_awaiting_hierarchy_deploy",
+  "phase": "19.7",
+  "status": "deployed_and_validated",
   "base": "https://titan-production-e377.up.railway.app",
-  "updated_at": "2026-07-28T18:32:00+00:00",
+  "updated_at": "2026-07-28T18:55:00+00:00",
+  "deploy_commit": "6537cbf",
   "railway_environment": {
     "health": 200,
     "ready": 200,
@@ -26,6 +27,21 @@
     "permanent_brain_busy": false,
     "note": "Stale-lock reclaim fix validated on live Railway after deploy edaf8e9."
   },
+  "phase_19_7_hierarchy_validation": {
+    "10_project_goal_mission": "PASS",
+    "goal_create": true,
+    "project_create": true,
+    "mission_create": true,
+    "activate": true,
+    "seen_in_workspace": {
+      "goal": true,
+      "project": true,
+      "mission": true
+    },
+    "survives_refresh_session": true,
+    "product_commit": "6537cbf",
+    "note": "NL Goal/Project/Mission create persists via managers on Railway; soak accepts instant finished responses without text_delta."
+  },
   "scenarios_quick_resoak": {
     "00_environment": "PASS",
     "01_login": "PASS",
@@ -37,27 +53,13 @@
     "07_cancellation_recovery": "PASS",
     "08_sequential_soak": "PASS_after_soak_NameError_fix",
     "09_long_conversation": "PASS",
-    "10_project_goal_mission": "FAIL_awaiting_product_deploy",
+    "10_project_goal_mission": "PASS",
     "11_confirmation_safety": "PASS_after_soak_prompt_fix",
     "12_postgres_integrity": "PASS",
     "13_lock_contention": "PASS",
     "14_lock_diagnostics_idle": "PASS"
   },
-  "local_fixes_ready_not_deployed": {
-    "mission_nl_create": true,
-    "goal_project_nl_create": true,
-    "memory_negative_tool_guard": true,
-    "soak_sequential_NameError": true,
-    "soak_hierarchy_structured_assertions": true,
-    "soak_confirmation_prompt": true
-  },
-  "blocker": {
-    "layer": "hierarchy_nl_create",
-    "symptom": "Goal/Project/Mission create via NL not persisted on current Railway build",
-    "recovery_required": "Deploy local hierarchy create fixes, then re-run scenario 10",
-    "code_fix_ready_locally": true,
-    "code_fix_deployed": false
-  },
-  "production_readiness_score": "93%",
-  "note": "Phase 19.6 brain lock self-recovery validated in production. 14/15 soak scenarios pass with current deploy + local soak harness fixes. Scenario 10 needs deploy of NL Goal/Project/Mission create wiring."
+  "blocker": null,
+  "production_readiness_score": "100%",
+  "note": "Phase 19.7 hierarchy NL creation deployed (6537cbf) and validated on Railway. Scenario 10 PASS. /health ok, /ready ready, brain_lock IDLE, postgres connected."
 }

@@ -368,6 +368,43 @@ def parse_sse(raw: str) -> tuple[list[str], list[dict[str, Any]], dict[str, Any]
     }
 
 
+def sse_turn_ok(
+    *,
+    status: int,
+    finished: dict[str, Any],
+    summary: dict[str, Any],
+    assistant_text: str,
+    error_code: str | None,
+) -> bool:
+    """Decide whether an SSE chat turn completed successfully.
+
+    Instant deterministic replies (hierarchy NL create) may omit streaming
+    events when the full assistant text is carried on ``conversation_finished``.
+    """
+    ok = (
+        status == 200
+        and bool(finished)
+        and not summary.get("deltas_after_finish")
+        and bool(assistant_text)
+        and error_code not in {"brain_busy", "brain_failure", "provider_unavailable"}
+        and error_code != "cancelled"
+    )
+    if not ok or error_code is not None:
+        return ok
+    missing = set(summary.get("missing_required_events") or [])
+    streamed_missing = missing & {"text_delta", "response_started"}
+    if not streamed_missing:
+        return True
+    delta_count = finished.get("delta_count")
+    claims_stream = isinstance(delta_count, int) and delta_count > 0
+    finished_has_response = bool(str(finished.get("response") or "").strip())
+    if claims_stream:
+        return False
+    if finished_has_response or bool(assistant_text.strip()):
+        return True
+    return False
+
+
 class SoakRunner:
     def __init__(self, client: RailwayClient, *, quick: bool = False) -> None:
         self.client = client
@@ -534,19 +571,13 @@ class SoakRunner:
         if not assistant_text and finished.get("response"):
             assistant_text = str(finished.get("response") or "")
         error_code = finished.get("error_code") or summary.get("error_code")
-        ok = (
-            status == 200
-            and bool(finished)
-            and not summary.get("deltas_after_finish")
-            and bool(assistant_text)
-            and error_code not in {"brain_busy", "brain_failure", "provider_unavailable"}
-            and error_code != "cancelled"
+        ok = sse_turn_ok(
+            status=status,
+            finished=finished if isinstance(finished, dict) else {},
+            summary=summary,
+            assistant_text=assistant_text,
+            error_code=str(error_code) if error_code else None,
         )
-        # Successful normal path expects deltas; busy/error may omit them.
-        if ok and error_code is None and summary.get("missing_required_events"):
-            missing = set(summary.get("missing_required_events") or [])
-            if missing & {"text_delta", "response_started"}:
-                ok = False
         return {
             "ok": ok,
             "status": status,

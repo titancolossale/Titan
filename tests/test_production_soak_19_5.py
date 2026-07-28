@@ -16,6 +16,7 @@ from scripts.phase19_5_railway_soak import (
     _redact,
     parse_sse,
     require_credentials,
+    sse_turn_ok,
 )
 
 
@@ -93,6 +94,47 @@ def test_parse_sse_detects_delta_after_finish() -> None:
     )
     _order, _events, summary = parse_sse(raw)
     assert summary["deltas_after_finish"] is True
+
+
+def test_sse_turn_ok_allows_instant_finished_response() -> None:
+    """Hierarchy NL create may finish without streamed text_delta events."""
+    finished = {
+        "ok": True,
+        "response": "Goal créé et activé: P195-Goal-x (id=abc).",
+        "delta_count": 0,
+    }
+    summary = {
+        "deltas_after_finish": False,
+        "missing_required_events": ["response_started", "text_delta"],
+    }
+    assert (
+        sse_turn_ok(
+            status=200,
+            finished=finished,
+            summary=summary,
+            assistant_text=str(finished["response"]),
+            error_code=None,
+        )
+        is True
+    )
+
+
+def test_sse_turn_ok_rejects_claimed_stream_without_deltas() -> None:
+    finished = {"ok": True, "response": "partial", "delta_count": 3}
+    summary = {
+        "deltas_after_finish": False,
+        "missing_required_events": ["text_delta"],
+    }
+    assert (
+        sse_turn_ok(
+            status=200,
+            finished=finished,
+            summary=summary,
+            assistant_text="partial",
+            error_code=None,
+        )
+        is False
+    )
 
 
 def test_redact_never_keeps_password_material() -> None:
