@@ -71,12 +71,23 @@ function createChatPanel() {
 }
 
 function createVoicePanel() {
-  const panel = createScreenPanel(
-    "Voice",
-    "Interaction vocale avec Titan",
-    "Le mode vocal sera disponible ici.",
-  );
-  panel.classList.add("tdl-v2-panel-view--voice");
+  const panel = document.createElement("section");
+  panel.className = "tdl-v2-panel-view tdl-v2-panel-view--surface tdl-v2-panel-view--voice";
+  panel.setAttribute("role", "region");
+  panel.setAttribute("aria-label", "Voice");
+  panel.id = "tdl-v2-voice-panel-root";
+  const host = document.createElement("div");
+  host.className = "tdl-v2-voice-panel-host";
+  host.innerHTML = `
+    <header class="tdl-v2-screen-header">
+      <h2 class="tdl-v2-screen-header__title">Voice</h2>
+      <p class="tdl-v2-screen-header__subtitle">Enrollment et session vocale</p>
+    </header>
+    <div class="tdl-v2-screen-body">
+      <p class="tdl-v2-empty-state">Chargement du module vocal…</p>
+    </div>
+  `;
+  panel.appendChild(host);
   return panel;
 }
 

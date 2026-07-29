@@ -7,8 +7,22 @@ playwright>=1.40  # Phase 13.2 — Browser Playwright backend
 fastapi>=0.115  # Phase 17.1 — Private web API
 uvicorn>=0.32  # Phase 17.1 — Local web server
 httpx>=0.27  # Phase 17.1 — FastAPI TestClient / API tests
+websocket-client>=1.6  # Phase 20.8 — live outbound provider WebSocket sockets
 argon2-cffi>=23.1  # Phase 10.3 — Argon2id password hashing
 bcrypt>=4.0  # Phase 10.3 — bcrypt fallback password verification
 sqlalchemy>=2.0  # Phase 12.1 — Durable conversation store
 psycopg2-binary>=2.9  # Phase 12.1 — PostgreSQL DBAPI for SQLAlchemy postgresql:// (Railway)
 pytest>=8.0  # test runner for CI and local dev
+cryptography>=42.0  # Phase 20.12 — AES-GCM authenticated embedding storage
+# Phase 20.12 — optional real speaker biometrics (CPU). Install when enabling
+# TITAN_VOICE_EMBEDDING_PROVIDER=ecapa or resemblyzer. Missing deps keep Titan
+# healthy; biometric readiness is reported separately and never fails /ready.
+# Validated on this host (Phase 20.12B / Python 3.14 Windows CPU):
+#   torch==2.11.0
+#   torchaudio==2.11.0
+#   speechbrain==1.1.0
+# torch>=2.1
+# torchaudio>=2.1
+# speechbrain>=1.0
+# resemblyzer>=0.1.1
+# numpy>=1.24  # pulled by resemblyzer / torch when installed

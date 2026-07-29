@@ -390,6 +390,14 @@ export function wireSettingsAuthControls() {
     } catch {
       /* ignore */
     }
+    try {
+      // Release microphone / cancel live voice before leaving.
+      window.dispatchEvent(new CustomEvent("titan:logout"));
+      const voice = /** @type {any} */ (window).__titanVoiceController;
+      await voice?.destroy?.();
+    } catch {
+      /* ignore */
+    }
     await logoutSession();
     try {
       const { clearConversationSession } = await import("./conversation-session.js");

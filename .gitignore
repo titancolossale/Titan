@@ -30,6 +30,16 @@ data/knowledge_learning.json
 data/development_sessions.json
 data/proactive_intelligence.json
 data/voice_sessions.json
+data/voice_models/
+data/voice_enrollment_tmp/
+data/voice_live_tmp/
+data/voice_speaker_profiles.json
+# Phase 20.x — local soak / status artifacts (never commit biometrics or runtime dumps)
+data/phase20_*/
+data/phase20_*.json
+data/phase19_5_soak/*.log
+data/conversations.db
+data/conversations.db-*
 data/tradingview_alerts.json
 data/scheduled_jobs.json
 data/tool_runs.json

@@ -30,7 +30,7 @@ MEMORY_DIR = _resolve_runtime_path(
 load_dotenv(ENV_FILE_PATH)
 
 TITAN_NAME = "Titan"
-VERSION = "0.45.0"
+VERSION = "0.59.0"
 CREATOR = "Nolan Hassing"
 
 LOG_LEVEL = os.getenv("TITAN_LOG_LEVEL", "INFO")
@@ -554,6 +554,257 @@ TITAN_VOICE_CONVERSATION_MODE = os.getenv(
 TITAN_VOICE_SESSIONS_PATH = _resolve_runtime_path(
     os.getenv("TITAN_VOICE_SESSIONS_PATH", str(DATA_DIR / "voice_sessions.json")),
     str(DATA_DIR / "voice_sessions.json"),
+)
+# Phase 20.1 — speaker identification + live provider models
+TITAN_VOICE_SPEAKER_ID_ENABLED = (
+    os.getenv("TITAN_VOICE_SPEAKER_ID_ENABLED", "true").lower() == "true"
+)
+TITAN_VOICE_SPEAKER_MIN_CONFIDENCE = float(
+    os.getenv("TITAN_VOICE_SPEAKER_MIN_CONFIDENCE", "0.72")
+)
+TITAN_VOICE_SPEAKER_PROFILES_PATH = _resolve_runtime_path(
+    os.getenv(
+        "TITAN_VOICE_SPEAKER_PROFILES_PATH",
+        str(DATA_DIR / "voice_speaker_profiles.json"),
+    ),
+    str(DATA_DIR / "voice_speaker_profiles.json"),
+)
+TITAN_VOICE_OPENAI_STT_MODEL = os.getenv(
+    "TITAN_VOICE_OPENAI_STT_MODEL", "whisper-1"
+).strip()
+TITAN_VOICE_OPENAI_TTS_MODEL = os.getenv(
+    "TITAN_VOICE_OPENAI_TTS_MODEL", "gpt-4o-mini-tts"
+).strip()
+# Phase 20.2 — guided voice enrollment
+TITAN_VOICE_ENROLLMENT_MIN_SAMPLES = int(
+    os.getenv("TITAN_VOICE_ENROLLMENT_MIN_SAMPLES", "3")
+)
+TITAN_VOICE_ENROLLMENT_MAX_SAMPLES = int(
+    os.getenv("TITAN_VOICE_ENROLLMENT_MAX_SAMPLES", "8")
+)
+TITAN_VOICE_ENROLLMENT_MIN_DURATION = float(
+    os.getenv("TITAN_VOICE_ENROLLMENT_MIN_DURATION", "1.0")
+)
+TITAN_VOICE_ENROLLMENT_MAX_DURATION = float(
+    os.getenv("TITAN_VOICE_ENROLLMENT_MAX_DURATION", "30.0")
+)
+TITAN_VOICE_ENROLLMENT_MIN_QUALITY = float(
+    os.getenv("TITAN_VOICE_ENROLLMENT_MIN_QUALITY", "0.45")
+)
+TITAN_VOICE_ENROLLMENT_MIN_CONFIDENCE = float(
+    os.getenv("TITAN_VOICE_ENROLLMENT_MIN_CONFIDENCE", "0.72")
+)
+TITAN_VOICE_SPEAKER_MEDIUM_CONFIDENCE = float(
+    os.getenv("TITAN_VOICE_SPEAKER_MEDIUM_CONFIDENCE", "0.55")
+)
+TITAN_VOICE_SPEAKER_AMBIGUITY_DELTA = float(
+    os.getenv("TITAN_VOICE_SPEAKER_AMBIGUITY_DELTA", "0.05")
+)
+TITAN_VOICE_ENROLLMENT_MAX_VERIFY_RETRIES = int(
+    os.getenv("TITAN_VOICE_ENROLLMENT_MAX_VERIFY_RETRIES", "3")
+)
+TITAN_VOICE_ENROLLMENT_TEMP_DIR = _resolve_runtime_path(
+    os.getenv(
+        "TITAN_VOICE_ENROLLMENT_TEMP_DIR",
+        str(DATA_DIR / "voice_enrollment_tmp"),
+    ),
+    str(DATA_DIR / "voice_enrollment_tmp"),
+)
+# Phase 20.3 — live voice session orchestration
+TITAN_VOICE_VAD_SPEECH_START = float(os.getenv("TITAN_VOICE_VAD_SPEECH_START", "0.035"))
+TITAN_VOICE_VAD_SPEECH_END = float(os.getenv("TITAN_VOICE_VAD_SPEECH_END", "0.018"))
+TITAN_VOICE_VAD_SILENCE_TIMEOUT = float(
+    os.getenv("TITAN_VOICE_VAD_SILENCE_TIMEOUT", str(TITAN_VOICE_SILENCE_TIMEOUT))
+)
+TITAN_VOICE_VAD_MIN_UTTERANCE = float(os.getenv("TITAN_VOICE_VAD_MIN_UTTERANCE", "0.35"))
+TITAN_VOICE_VAD_MAX_UTTERANCE = float(os.getenv("TITAN_VOICE_VAD_MAX_UTTERANCE", "30.0"))
+TITAN_VOICE_VAD_NOISE_TOLERANCE = float(
+    os.getenv("TITAN_VOICE_VAD_NOISE_TOLERANCE", "0.012")
+)
+TITAN_VOICE_VAD_SENSITIVITY = float(os.getenv("TITAN_VOICE_VAD_SENSITIVITY", "0.55"))
+TITAN_VOICE_TTS_STRATEGY = os.getenv(
+    "TITAN_VOICE_TTS_STRATEGY", "sentence_buffered"
+).strip().lower()
+TITAN_VOICE_TTS_MIN_CHUNK_CHARS = int(
+    os.getenv("TITAN_VOICE_TTS_MIN_CHUNK_CHARS", "24")
+)
+TITAN_VOICE_TTS_VOICE_FR = os.getenv("TITAN_VOICE_TTS_VOICE_FR", "alloy").strip()
+TITAN_VOICE_TTS_VOICE_EN = os.getenv("TITAN_VOICE_TTS_VOICE_EN", "verse").strip()
+TITAN_VOICE_IDENTITY_CONFIRM_TIMEOUT = float(
+    os.getenv("TITAN_VOICE_IDENTITY_CONFIRM_TIMEOUT", "45.0")
+)
+TITAN_VOICE_PROVIDER_TIMEOUT = float(os.getenv("TITAN_VOICE_PROVIDER_TIMEOUT", "60.0"))
+TITAN_VOICE_LIVE_TEMP_DIR = _resolve_runtime_path(
+    os.getenv("TITAN_VOICE_LIVE_TEMP_DIR", str(DATA_DIR / "voice_live_tmp")),
+    str(DATA_DIR / "voice_live_tmp"),
+)
+TITAN_VOICE_ALWAYS_LISTENING = (
+    os.getenv("TITAN_VOICE_ALWAYS_LISTENING", "false").lower() == "true"
+)
+TITAN_VOICE_WAKE_WORD_ENABLED = (
+    os.getenv("TITAN_VOICE_WAKE_WORD_ENABLED", "false").lower() == "true"
+)
+# Phase 20.5 — real-time conversation engine
+TITAN_VOICE_IDLE_TIMEOUT = float(os.getenv("TITAN_VOICE_IDLE_TIMEOUT", "90.0"))
+TITAN_VOICE_CONVERSATION_TIMEOUT = float(
+    os.getenv("TITAN_VOICE_CONVERSATION_TIMEOUT", "1800.0")
+)
+TITAN_VOICE_RECOVERY_TTL = float(os.getenv("TITAN_VOICE_RECOVERY_TTL", "600.0"))
+TITAN_VOICE_STREAMING_STT = (
+    os.getenv("TITAN_VOICE_STREAMING_STT", "true").lower() == "true"
+)
+TITAN_VOICE_STREAMING_TTS = (
+    os.getenv("TITAN_VOICE_STREAMING_TTS", "true").lower() == "true"
+)
+# Phase 20.6 — true provider-level realtime streaming
+TITAN_VOICE_REALTIME_STREAMING = (
+    os.getenv("TITAN_VOICE_REALTIME_STREAMING", "false").lower() == "true"
+)
+TITAN_VOICE_REALTIME_STT_PROVIDER = os.getenv(
+    "TITAN_VOICE_REALTIME_STT_PROVIDER", "mock_realtime_stt"
+).strip().lower()
+TITAN_VOICE_REALTIME_TTS_PROVIDER = os.getenv(
+    "TITAN_VOICE_REALTIME_TTS_PROVIDER", "mock_realtime_tts"
+).strip().lower()
+TITAN_VOICE_REALTIME_STT_FALLBACK = os.getenv(
+    "TITAN_VOICE_REALTIME_STT_FALLBACK",
+    "openai_whisper_streaming,deepgram_streaming,mock_realtime_stt",
+).strip()
+TITAN_VOICE_REALTIME_TTS_FALLBACK = os.getenv(
+    "TITAN_VOICE_REALTIME_TTS_FALLBACK",
+    "elevenlabs_streaming,mock_realtime_tts",
+).strip()
+TITAN_VOICE_TRANSPORT = os.getenv(
+    "TITAN_VOICE_TRANSPORT", "websocket"
+).strip().lower()
+TITAN_VOICE_TRANSPORT_HEARTBEAT = float(
+    os.getenv("TITAN_VOICE_TRANSPORT_HEARTBEAT", "15.0")
+)
+TITAN_VOICE_TRANSPORT_RECONNECT_MAX = int(
+    os.getenv("TITAN_VOICE_TRANSPORT_RECONNECT_MAX", "5")
+)
+TITAN_VOICE_PROVIDER_RETRY_MAX = int(
+    os.getenv("TITAN_VOICE_PROVIDER_RETRY_MAX", "3")
+)
+TITAN_VOICE_DEEPGRAM_MODEL = os.getenv("TITAN_VOICE_DEEPGRAM_MODEL", "nova-2").strip()
+TITAN_VOICE_ELEVENLABS_VOICE = os.getenv(
+    "TITAN_VOICE_ELEVENLABS_VOICE", "Rachel"
+).strip()
+TITAN_VOICE_ELEVENLABS_MODEL = os.getenv(
+    "TITAN_VOICE_ELEVENLABS_MODEL", "eleven_multilingual_v2"
+).strip()
+TITAN_VOICE_OPENAI_REALTIME_MODEL = os.getenv(
+    "TITAN_VOICE_OPENAI_REALTIME_MODEL", "gpt-4o-realtime-preview"
+).strip()
+TITAN_VOICE_AUDIO_COALESCE_BYTES = int(
+    os.getenv("TITAN_VOICE_AUDIO_COALESCE_BYTES", "3200")
+)
+TITAN_VOICE_TTS_BUFFER_MS = float(os.getenv("TITAN_VOICE_TTS_BUFFER_MS", "80.0"))
+
+# Phase 20.7 — live experience polish (mic calibration, silence, turn timing)
+TITAN_VOICE_MIC_CALIBRATION_SECONDS = float(
+    os.getenv("TITAN_VOICE_MIC_CALIBRATION_SECONDS", "1.25")
+)
+TITAN_VOICE_MIC_LOW_VOLUME_RMS = float(
+    os.getenv("TITAN_VOICE_MIC_LOW_VOLUME_RMS", "0.025")
+)
+TITAN_VOICE_MIC_CLIPPING_RATIO = float(
+    os.getenv("TITAN_VOICE_MIC_CLIPPING_RATIO", "0.02")
+)
+TITAN_VOICE_MIC_TARGET_RMS = float(os.getenv("TITAN_VOICE_MIC_TARGET_RMS", "0.18"))
+TITAN_VOICE_LONG_PAUSE_TIMEOUT = float(
+    os.getenv("TITAN_VOICE_LONG_PAUSE_TIMEOUT", "8.0")
+)
+TITAN_VOICE_FALSE_SPEECH_MAX = float(
+    os.getenv("TITAN_VOICE_FALSE_SPEECH_MAX", "0.22")
+)
+TITAN_VOICE_NATURAL_PAUSE_MS = float(
+    os.getenv("TITAN_VOICE_NATURAL_PAUSE_MS", "280.0")
+)
+TITAN_VOICE_MIN_TURN_GAP_MS = float(os.getenv("TITAN_VOICE_MIN_TURN_GAP_MS", "180.0"))
+TITAN_VOICE_BARGE_IN_DEBOUNCE_MS = float(
+    os.getenv("TITAN_VOICE_BARGE_IN_DEBOUNCE_MS", "120.0")
+)
+TITAN_VOICE_RESUME_GRACE_MS = float(os.getenv("TITAN_VOICE_RESUME_GRACE_MS", "200.0"))
+
+# Phase 20.8 — live providers + browser WebSocket + enrollment prep
+TITAN_VOICE_LIVE_SOCKETS = (
+    os.getenv("TITAN_VOICE_LIVE_SOCKETS", "true").lower() == "true"
+)
+TITAN_VOICE_WS_ENABLED = (
+    os.getenv("TITAN_VOICE_WS_ENABLED", "true").lower() == "true"
+)
+TITAN_VOICE_WS_HEARTBEAT = float(os.getenv("TITAN_VOICE_WS_HEARTBEAT", "12.0"))
+TITAN_VOICE_WS_HEARTBEAT_TIMEOUT = float(
+    os.getenv("TITAN_VOICE_WS_HEARTBEAT_TIMEOUT", "40.0")
+)
+TITAN_VOICE_WS_BACKPRESSURE_MAX_QUEUE = int(
+    os.getenv("TITAN_VOICE_WS_BACKPRESSURE_MAX_QUEUE", "64")
+)
+TITAN_VOICE_WS_BACKPRESSURE_MAX_BYTES = int(
+    os.getenv("TITAN_VOICE_WS_BACKPRESSURE_MAX_BYTES", str(512_000))
+)
+TITAN_VOICE_WS_MAX_CONNECTIONS = int(
+    os.getenv("TITAN_VOICE_WS_MAX_CONNECTIONS", "32")
+)
+TITAN_VOICE_ENROLLMENT_DUPLICATE_THRESHOLD = float(
+    os.getenv("TITAN_VOICE_ENROLLMENT_DUPLICATE_THRESHOLD", "0.92")
+)
+TITAN_VOICE_EMBEDDING_VERSION = os.getenv(
+    "TITAN_VOICE_EMBEDDING_VERSION", "histogram_v1"
+).strip()
+
+# Phase 20.9 — real enrollment readiness + live provider soak
+TITAN_VOICE_EMBEDDING_PROVIDER = os.getenv(
+    "TITAN_VOICE_EMBEDDING_PROVIDER", "histogram"
+).strip()
+TITAN_VOICE_ENROLLMENT_REQUIRE_CONSENT = (
+    os.getenv("TITAN_VOICE_ENROLLMENT_REQUIRE_CONSENT", "true").lower() == "true"
+)
+TITAN_VOICE_ENROLLMENT_CONSENT_VERSION = os.getenv(
+    "TITAN_VOICE_ENROLLMENT_CONSENT_VERSION", "v1"
+).strip()
+TITAN_VOICE_ENROLLMENT_RECOVERY_TTL = float(
+    os.getenv("TITAN_VOICE_ENROLLMENT_RECOVERY_TTL", "3600")
+)
+TITAN_VOICE_ENROLLMENT_SAME_USER_DUP_THRESHOLD = float(
+    os.getenv("TITAN_VOICE_ENROLLMENT_SAME_USER_DUP_THRESHOLD", "0.97")
+)
+
+# Phase 20.11 — production speaker embeddings & identity security
+TITAN_VOICE_EMBEDDING_REQUIRE_PRODUCTION_TRUST = (
+    os.getenv("TITAN_VOICE_EMBEDDING_REQUIRE_PRODUCTION_TRUST", "false").lower()
+    == "true"
+)
+TITAN_VOICE_EMBEDDING_ALLOW_DEV_IDENTITY = (
+    os.getenv("TITAN_VOICE_EMBEDDING_ALLOW_DEV_IDENTITY", "true").lower() == "true"
+)
+TITAN_VOICE_EMBEDDING_ENCRYPTION = (
+    os.getenv("TITAN_VOICE_EMBEDDING_ENCRYPTION", "false").lower() == "true"
+)
+TITAN_VOICE_EMBEDDING_RETAIN_RAW_AUDIO = (
+    os.getenv("TITAN_VOICE_EMBEDDING_RETAIN_RAW_AUDIO", "false").lower() == "true"
+)
+TITAN_VOICE_ANTI_SPOOF_PROVIDER = os.getenv(
+    "TITAN_VOICE_ANTI_SPOOF_PROVIDER", "null"
+).strip()
+TITAN_VOICE_EMBEDDING_AGGREGATION = os.getenv(
+    "TITAN_VOICE_EMBEDDING_AGGREGATION", "max_centroid"
+).strip()
+
+# Phase 20.12 — real speaker biometric backend
+TITAN_VOICE_BIOMETRIC_TRUST_MODE = os.getenv(
+    "TITAN_VOICE_BIOMETRIC_TRUST_MODE", ""
+).strip().lower()
+TITAN_VOICE_EMBEDDING_KEY_ID = os.getenv(
+    "TITAN_VOICE_EMBEDDING_KEY_ID", "primary"
+).strip() or "primary"
+TITAN_VOICE_ECAPA_MODEL_DIR = os.getenv(
+    "TITAN_VOICE_ECAPA_MODEL_DIR", "data/voice_models/ecapa"
+).strip()
+TITAN_VOICE_ECAPA_DEVICE = os.getenv("TITAN_VOICE_ECAPA_DEVICE", "cpu").strip() or "cpu"
+TITAN_VOICE_ECAPA_INIT_TIMEOUT = float(
+    os.getenv("TITAN_VOICE_ECAPA_INIT_TIMEOUT", "120")
 )
 
 # Phase 10 — Cloud deployment (TITAN_APP_ENV / PORT / PUBLIC_BASE_URL)

@@ -24,7 +24,7 @@ from voice.audio_devices import (
     MockAudioCapture,
     MockAudioPlayback,
 )
-from voice.exceptions import VoiceConfigurationError, VoiceInterruptedError, VoiceStateError
+from voice.exceptions import VoiceConfigurationError, VoiceStateError
 from voice.models import (
     ConversationMode,
     ConversationTurn,
@@ -33,6 +33,12 @@ from voice.models import (
     VoiceSession,
     VoiceState,
     VoiceTurnResult,
+)
+from voice.providers.registry_bootstrap import register_default_voice_providers
+from voice.speaker_identifier import (
+    UNKNOWN_SPEAKER_PROMPT,
+    SpeakerIdentificationResult,
+    SpeakerIdentifier,
 )
 from voice.speech_to_text import SpeechToTextRegistry, get_stt_registry, transcribe_audio
 from voice.text_to_speech import TextToSpeechRegistry, get_tts_registry, synthesize_speech
@@ -65,6 +71,23 @@ def voice_config_from_settings() -> VoiceConfig:
     )
 
 
+def speaker_identifier_from_settings() -> SpeakerIdentifier:
+    """Build speaker identifier from settings (Phase 20.1 + 20.2 store)."""
+    from voice.speaker_profile_store import SpeakerProfileStore
+
+    store = SpeakerProfileStore(
+        file_path=app_settings.TITAN_VOICE_SPEAKER_PROFILES_PATH
+    )
+    return SpeakerIdentifier(
+        file_path=app_settings.TITAN_VOICE_SPEAKER_PROFILES_PATH,
+        min_confidence=app_settings.TITAN_VOICE_SPEAKER_MIN_CONFIDENCE,
+        medium_confidence=app_settings.TITAN_VOICE_SPEAKER_MEDIUM_CONFIDENCE,
+        ambiguity_delta=app_settings.TITAN_VOICE_SPEAKER_AMBIGUITY_DELTA,
+        enabled=app_settings.TITAN_VOICE_SPEAKER_ID_ENABLED,
+        profile_store=store,
+    )
+
+
 class VoiceRuntime:
     """Provider-agnostic voice interface — always routes through Brain.process_request()."""
 
@@ -88,20 +111,29 @@ class VoiceRuntime:
         device_manager: AudioDeviceManager | None = None,
         audio_capture: AudioCapture | None = None,
         audio_playback: AudioPlayback | None = None,
+        speaker_identifier: SpeakerIdentifier | None = None,
+        register_live_providers: bool = False,
     ) -> None:
         self._brain = brain
         self._config = config or voice_config_from_settings()
         self._session_store = session_store or VoiceSessionStore()
         self._stt_registry = stt_registry or get_stt_registry()
         self._tts_registry = tts_registry or get_tts_registry()
+        if register_live_providers:
+            register_default_voice_providers(
+                stt_registry=self._stt_registry,
+                tts_registry=self._tts_registry,
+            )
         self._device_manager = device_manager or AudioDeviceManager()
         self._capture = audio_capture or MockAudioCapture()
         self._playback = audio_playback or MockAudioPlayback()
+        self._speaker_identifier = speaker_identifier or speaker_identifier_from_settings()
         self._session: VoiceSession | None = None
         self._state = VoiceState.IDLE
         self._interrupt_requested = False
         self._speaking_cancelled = False
         self._response_queue: deque[str] = deque()
+        self._last_speaker_result: SpeakerIdentificationResult | None = None
 
     @property
     def state(self) -> VoiceState:
@@ -114,6 +146,15 @@ class VoiceRuntime:
     @property
     def session(self) -> VoiceSession | None:
         return self._session
+
+    @property
+    def speaker_identifier(self) -> SpeakerIdentifier:
+        return self._speaker_identifier
+
+    def enroll_speaker(self, user: str, audio_samples: list[bytes]) -> dict[str, Any]:
+        """Enroll voice samples for Nolan or Ibrahim."""
+        profile = self._speaker_identifier.enroll(user, audio_samples)
+        return profile.to_dict()
 
     def start_session(
         self,
@@ -146,6 +187,7 @@ class VoiceRuntime:
         self.stop_playback()
         ended = self._session_store.end_session(self._session.conversation_id)
         self._session = None
+        self._last_speaker_result = None
         self._set_state(VoiceState.IDLE)
         return ended
 
@@ -174,6 +216,10 @@ class VoiceRuntime:
         metrics = LatencyMetrics()
         turn_started = time.perf_counter()
 
+        gate = self._resolve_speaker_for_text(request)
+        if gate is not None:
+            return gate
+
         self._set_state(VoiceState.THINKING)
         brain_started = time.perf_counter()
         result = self._brain.process_request(request)
@@ -183,7 +229,14 @@ class VoiceRuntime:
         interrupted = self._consume_interrupt()
         if interrupted:
             self._queue_response(response_text)
-            return self._build_turn_result(request, response_text, metrics, turn_started, interrupted=True)
+            return self._build_turn_result(
+                request,
+                response_text,
+                metrics,
+                turn_started,
+                interrupted=True,
+                brain_invoked=True,
+            )
 
         self._set_state(VoiceState.SPEAKING)
         tts_started = time.perf_counter()
@@ -212,16 +265,25 @@ class VoiceRuntime:
         self._record_turn(request, response_text, metrics)
         self._set_state(VoiceState.IDLE)
         self._log_turn_metrics(request, metrics)
-        return self._build_turn_result(request, response_text, metrics, turn_started, interrupted=interrupted)
+        return self._build_turn_result(
+            request,
+            response_text,
+            metrics,
+            turn_started,
+            interrupted=interrupted,
+            brain_invoked=True,
+        )
 
     def process_audio_turn(self, audio_bytes: bytes) -> VoiceTurnResult:
-        """Full STT → Brain → TTS pipeline for raw audio."""
+        """Full STT → speaker ID → Brain → TTS pipeline for raw audio."""
         self._ensure_session()
         metrics = LatencyMetrics()
         turn_started = time.perf_counter()
         metrics.speech_start = datetime.now(timezone.utc)
 
         self._set_state(VoiceState.LISTENING)
+        speaker_result = self._identify_from_audio(audio_bytes)
+
         stt_started = time.perf_counter()
         transcription = transcribe_audio(
             audio_bytes,
@@ -238,6 +300,28 @@ class VoiceRuntime:
             metrics.transcription_seconds,
             len(transcription.text),
         )
+
+        # Unknown speaker: confirmation utterance binds identity without Brain memory.
+        if (
+            self._speaker_identifier.enabled
+            and speaker_result.requires_confirmation
+            and not speaker_result.is_known
+        ):
+            confirmation = self._speaker_identifier.confirm_from_text(transcription.text)
+            if confirmation.is_known:
+                self._apply_speaker_result(confirmation)
+                return self._identity_ack_turn(
+                    transcription.text,
+                    metrics,
+                    turn_started,
+                    speaker_result=confirmation,
+                )
+            return self._confirmation_turn(
+                transcription.text,
+                metrics,
+                turn_started,
+                speaker_result=speaker_result,
+            )
 
         turn_result = self.process_text_turn(transcription.text)
         turn_result.metrics.speech_start = metrics.speech_start
@@ -333,6 +417,7 @@ class VoiceRuntime:
             "output_devices": [d.to_dict() for d in self._device_manager.list_output_devices()],
             "queue_depth": len(self._response_queue),
             "interrupt_requested": self._interrupt_requested,
+            "speaker_identification": self._speaker_identifier.status(),
         }
 
     def _ensure_session(self) -> VoiceSession:
@@ -353,6 +438,146 @@ class VoiceRuntime:
             self._session.state = new_state
             self._session_store.update_session(self._session)
         logger.debug("Voice state %s → %s", old.value, new_state.value)
+
+    def _identify_from_audio(self, audio_bytes: bytes) -> SpeakerIdentificationResult:
+        result = self._speaker_identifier.identify(audio_bytes)
+        if result.is_known:
+            self._apply_speaker_result(result)
+        else:
+            self._last_speaker_result = result
+            if self._session is not None:
+                self._session.speaker_confirmation_required = result.requires_confirmation
+                self._session_store.update_session(self._session)
+        return result
+
+    def _apply_speaker_result(self, result: SpeakerIdentificationResult) -> None:
+        self._last_speaker_result = result
+        session_mgr = getattr(self._brain.context_manager, "session", None)
+        if session_mgr is not None and result.is_known:
+            self._speaker_identifier.bind_session_user(session_mgr, result)
+        if self._session is not None:
+            self._session.identified_user = result.matched_user
+            self._session.speaker_confidence = result.confidence
+            self._session.speaker_confirmation_required = False
+            self._session_store.update_session(self._session)
+
+    def _resolve_speaker_for_text(self, text: str) -> VoiceTurnResult | None:
+        """Gate Brain access only when confirmation was requested (audio unknown)."""
+        if not self._speaker_identifier.enabled:
+            return None
+        session = self._session
+        if session is not None and session.identified_user:
+            return None
+        needs_confirm = self._speaker_identifier.pending_confirmation or (
+            session is not None and session.speaker_confirmation_required
+        )
+        if not needs_confirm:
+            return None
+        confirmation = self._speaker_identifier.confirm_from_text(text)
+        if confirmation.is_known:
+            self._apply_speaker_result(confirmation)
+            metrics = LatencyMetrics()
+            return self._identity_ack_turn(
+                text,
+                metrics,
+                time.perf_counter(),
+                speaker_result=confirmation,
+            )
+        metrics = LatencyMetrics()
+        return self._confirmation_turn(
+            text,
+            metrics,
+            time.perf_counter(),
+            speaker_result=confirmation,
+        )
+
+    def _identity_ack_turn(
+        self,
+        user_text: str,
+        metrics: LatencyMetrics,
+        turn_started: float,
+        *,
+        speaker_result: SpeakerIdentificationResult,
+    ) -> VoiceTurnResult:
+        """Acknowledge confirmed identity without treating the phrase as a Brain task."""
+        user = speaker_result.matched_user or "utilisateur"
+        response_text = f"Identité confirmée : {user}. Je t'écoute."
+        if self._state == VoiceState.LISTENING:
+            self._set_state(VoiceState.THINKING)
+        self._set_state(VoiceState.SPEAKING)
+        tts_started = time.perf_counter()
+        synthesis = synthesize_speech(
+            response_text,
+            locale=self._config.language,
+            voice=self._config.voice,
+            speed=self._config.speed,
+            volume=self._config.volume,
+            provider_id=self._config.tts_provider,
+            registry=self._tts_registry,
+        )
+        metrics.tts_seconds = time.perf_counter() - tts_started
+        if not self._speaking_cancelled:
+            self._playback.play(
+                synthesis.audio_bytes,
+                device_id=self._config.speaker_device,
+                volume=self._config.volume,
+            )
+        metrics.total_seconds = time.perf_counter() - turn_started
+        self._record_turn(user_text, response_text, metrics)
+        self._set_state(VoiceState.IDLE)
+        return self._build_turn_result(
+            user_text,
+            response_text,
+            metrics,
+            turn_started,
+            interrupted=False,
+            brain_invoked=False,
+            speaker_result=speaker_result,
+        )
+
+    def _confirmation_turn(
+        self,
+        user_text: str,
+        metrics: LatencyMetrics,
+        turn_started: float,
+        *,
+        speaker_result: SpeakerIdentificationResult,
+    ) -> VoiceTurnResult:
+        """Speak the unknown-speaker prompt without invoking Brain personal memory."""
+        response_text = UNKNOWN_SPEAKER_PROMPT
+        if self._state == VoiceState.LISTENING:
+            self._set_state(VoiceState.THINKING)
+        self._set_state(VoiceState.SPEAKING)
+        tts_started = time.perf_counter()
+        synthesis = synthesize_speech(
+            response_text,
+            locale=self._config.language,
+            voice=self._config.voice,
+            speed=self._config.speed,
+            volume=self._config.volume,
+            provider_id=self._config.tts_provider,
+            registry=self._tts_registry,
+        )
+        metrics.tts_seconds = time.perf_counter() - tts_started
+        if not self._speaking_cancelled:
+            self._playback.play(
+                synthesis.audio_bytes,
+                device_id=self._config.speaker_device,
+                volume=self._config.volume,
+            )
+        metrics.total_seconds = time.perf_counter() - turn_started
+        self._record_turn(user_text, response_text, metrics)
+        self._set_state(VoiceState.IDLE)
+        self._last_speaker_result = speaker_result
+        return self._build_turn_result(
+            user_text,
+            response_text,
+            metrics,
+            turn_started,
+            interrupted=False,
+            brain_invoked=False,
+            speaker_result=speaker_result,
+        )
 
     def _record_turn(self, user_text: str, assistant_text: str, metrics: LatencyMetrics) -> None:
         if self._session is None:
@@ -376,10 +601,13 @@ class VoiceRuntime:
         turn_started: float,
         *,
         interrupted: bool,
+        brain_invoked: bool = True,
+        speaker_result: SpeakerIdentificationResult | None = None,
     ) -> VoiceTurnResult:
         if metrics.total_seconds <= 0:
             metrics.total_seconds = time.perf_counter() - turn_started
         session_id = self._session.conversation_id if self._session else ""
+        speaker = speaker_result or self._last_speaker_result
         return VoiceTurnResult(
             session_id=session_id,
             user_text=user_text,
@@ -387,6 +615,20 @@ class VoiceRuntime:
             state=self._state,
             metrics=metrics,
             interrupted=interrupted,
+            speaker_identity=speaker.identity.value if speaker else (
+                self._session.identified_user if self._session else None
+            ),
+            speaker_confidence=(
+                speaker.confidence
+                if speaker is not None
+                else (self._session.speaker_confidence if self._session else None)
+            ),
+            speaker_confirmation_required=(
+                speaker.requires_confirmation
+                if speaker is not None
+                else bool(self._session and self._session.speaker_confirmation_required)
+            ),
+            brain_invoked=brain_invoked,
         )
 
     def _queue_response(self, text: str) -> None:

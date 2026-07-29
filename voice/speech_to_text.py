@@ -74,6 +74,10 @@ class MockSpeechToTextProvider(SpeechToTextProvider):
     def set_response(self, audio_bytes: bytes, text: str) -> None:
         """Map specific audio input to transcript (test helper)."""
         self._responses[audio_bytes] = text
+        # Also key by PCM body so WAV-wrapped browser/PTT streams still match.
+        pcm = _strip_wav_header(audio_bytes)
+        if pcm != audio_bytes:
+            self._responses[pcm] = text
 
     def transcribe(
         self,
@@ -83,7 +87,9 @@ class MockSpeechToTextProvider(SpeechToTextProvider):
         **kwargs: Any,
     ) -> TranscriptionResult:
         started = time.perf_counter()
-        text = self._responses.get(audio_bytes, self._default_text)
+        text = self._responses.get(audio_bytes)
+        if text is None:
+            text = self._responses.get(_strip_wav_header(audio_bytes), self._default_text)
         duration = time.perf_counter() - started
         logger.debug("Mock STT locale=%s text=%r duration=%.4fs", locale, text, duration)
         return TranscriptionResult(
@@ -93,6 +99,16 @@ class MockSpeechToTextProvider(SpeechToTextProvider):
             locale=locale,
             confidence=1.0,
         )
+
+
+def _strip_wav_header(audio_bytes: bytes) -> bytes:
+    if (
+        len(audio_bytes) > 44
+        and audio_bytes[:4] == b"RIFF"
+        and audio_bytes[8:12] == b"WAVE"
+    ):
+        return audio_bytes[44:]
+    return audio_bytes
 
 
 class SpeechToTextRegistry:

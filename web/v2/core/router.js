@@ -96,7 +96,7 @@ export const ROUTES = Object.freeze([
     path: "/voice",
     hash: "#voice",
     label: "Voice",
-    nav: false,
+    nav: true,
     centerPanel: "voice",
     orchestratorFocus: ["state"],
     cognitiveModules: ["core", "communication"],

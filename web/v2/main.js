@@ -2,8 +2,10 @@
 
 import { TitanAppV2 } from "./core/app.js";
 import { ensureAuthenticated } from "./core/web-auth.js";
+import { registerVoiceExtension } from "./voice/register.js";
 
 const app = new TitanAppV2();
+registerVoiceExtension(app.extensions);
 
 ensureAuthenticated()
   .then(() => app.start())

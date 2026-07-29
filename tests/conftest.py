@@ -48,7 +48,59 @@ from memory.memory_service import MemoryService
 from tools.tool_manager import ToolManager
 
 
+@pytest.fixture(autouse=True)
+def _isolate_voice_production_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prevent local production enrollment activation from leaking into tests.
 
+    Host Phase 20.10B-1 writes production flags into ``.env``. ``load_dotenv``
+    can re-apply those values after a bare ``delenv``, so tests force explicit
+    development defaults instead.
+    """
+    # Import settings first (may call load_dotenv), then override.
+    try:
+        from config import settings as app_settings
+    except Exception:
+        app_settings = None
+
+    monkeypatch.setenv("TITAN_VOICE_EMBEDDING_PROVIDER", "histogram")
+    monkeypatch.setenv("TITAN_VOICE_EMBEDDING_VERSION", "histogram_v1")
+    monkeypatch.setenv("TITAN_VOICE_BIOMETRIC_TRUST_MODE", "development")
+    monkeypatch.setenv("TITAN_VOICE_EMBEDDING_REQUIRE_PRODUCTION_TRUST", "false")
+    monkeypatch.setenv("TITAN_VOICE_EMBEDDING_ALLOW_DEV_IDENTITY", "true")
+    monkeypatch.setenv("TITAN_VOICE_EMBEDDING_ENCRYPTION", "false")
+    monkeypatch.setenv("TITAN_VOICE_EMBEDDING_RETAIN_RAW_AUDIO", "false")
+    monkeypatch.setenv("TITAN_VOICE_EMBEDDING_KEY_ID", "primary")
+    monkeypatch.delenv("TITAN_VOICE_EMBEDDING_STORAGE_KEY", raising=False)
+
+    if app_settings is not None:
+        monkeypatch.setattr(app_settings, "TITAN_VOICE_EMBEDDING_PROVIDER", "histogram")
+        monkeypatch.setattr(app_settings, "TITAN_VOICE_EMBEDDING_VERSION", "histogram_v1")
+        monkeypatch.setattr(app_settings, "TITAN_VOICE_BIOMETRIC_TRUST_MODE", "development")
+        monkeypatch.setattr(
+            app_settings, "TITAN_VOICE_EMBEDDING_REQUIRE_PRODUCTION_TRUST", False
+        )
+        monkeypatch.setattr(
+            app_settings, "TITAN_VOICE_EMBEDDING_ALLOW_DEV_IDENTITY", True
+        )
+        monkeypatch.setattr(app_settings, "TITAN_VOICE_EMBEDDING_ENCRYPTION", False)
+        monkeypatch.setattr(app_settings, "TITAN_VOICE_EMBEDDING_KEY_ID", "primary")
+        monkeypatch.setattr(
+            app_settings, "TITAN_VOICE_EMBEDDING_RETAIN_RAW_AUDIO", False
+        )
+
+    try:
+        from voice.embedding_provider import (
+            reset_embedding_registry_for_tests,
+            set_embedding_provider,
+        )
+
+        reset_embedding_registry_for_tests()
+        set_embedding_provider(None)
+        yield
+        reset_embedding_registry_for_tests()
+        set_embedding_provider(None)
+    except Exception:
+        yield
 
 
 @pytest.fixture

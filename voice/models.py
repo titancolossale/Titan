@@ -157,6 +157,10 @@ class VoiceSession:
     config: VoiceConfig = field(default_factory=VoiceConfig)
     state: VoiceState = VoiceState.IDLE
     active: bool = True
+    # Phase 20.1 — speaker identification binding
+    identified_user: str | None = None
+    speaker_confidence: float | None = None
+    speaker_confirmation_required: bool = False
 
     @property
     def session_duration_seconds(self) -> float:
@@ -183,6 +187,13 @@ class VoiceSession:
             "state": self.state.value,
             "active": self.active,
             "session_duration_seconds": round(self.session_duration_seconds, 3),
+            "identified_user": self.identified_user,
+            "speaker_confidence": (
+                round(self.speaker_confidence, 4)
+                if self.speaker_confidence is not None
+                else None
+            ),
+            "speaker_confirmation_required": self.speaker_confirmation_required,
         }
 
     @classmethod
@@ -198,6 +209,7 @@ class VoiceSession:
         config = VoiceConfig.from_dict(data.get("config", {}))
         state_raw = data.get("state", VoiceState.IDLE.value)
         state = VoiceState(state_raw) if isinstance(state_raw, str) else VoiceState.IDLE
+        confidence_raw = data.get("speaker_confidence")
         return cls(
             conversation_id=str(data.get("conversation_id", str(uuid4()))),
             created_at=created,
@@ -211,6 +223,17 @@ class VoiceSession:
             config=config,
             state=state,
             active=bool(data.get("active", True)),
+            identified_user=(
+                str(data["identified_user"])
+                if data.get("identified_user") is not None
+                else None
+            ),
+            speaker_confidence=(
+                float(confidence_raw) if confidence_raw is not None else None
+            ),
+            speaker_confirmation_required=bool(
+                data.get("speaker_confirmation_required", False)
+            ),
         )
 
 
@@ -224,6 +247,10 @@ class VoiceTurnResult:
     state: VoiceState
     metrics: LatencyMetrics
     interrupted: bool = False
+    speaker_identity: str | None = None
+    speaker_confidence: float | None = None
+    speaker_confirmation_required: bool = False
+    brain_invoked: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -233,4 +260,12 @@ class VoiceTurnResult:
             "state": self.state.value,
             "metrics": self.metrics.to_dict(),
             "interrupted": self.interrupted,
+            "speaker_identity": self.speaker_identity,
+            "speaker_confidence": (
+                round(self.speaker_confidence, 4)
+                if self.speaker_confidence is not None
+                else None
+            ),
+            "speaker_confirmation_required": self.speaker_confirmation_required,
+            "brain_invoked": self.brain_invoked,
         }

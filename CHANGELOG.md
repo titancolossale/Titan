@@ -8,10 +8,200 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Version policy
 
 - **Semver:** `MAJOR.MINOR.PATCH` — breaking changes, new features, and bug fixes respectively.
-- **Current codebase version:** `0.43.1` (see `config/settings.py`).
+- **Current codebase version:** `0.59.0` (see `config/settings.py`).
 - **Phase 1 target release:** `0.1.0` — Titan V2 Phase 1 (Architecture Cleanup). **Shipped 2026-06-27.**
 - **Phase 10A release:** `0.10.0` — Tool Runtime V2 default. **Shipped 2026-06-28.**
 - **Future milestone:** `2.0.0` — full Titan V2 release after all planned phases.
+
+## [0.59.0] — 2026-07-29
+
+### Added
+
+- **Phase 20.13 — Commit, Deploy & Validate Voice Production**
+  - Ship Phase 20.x voice stack to `origin/main` for Railway deployment
+  - Harden `.gitignore` for voice models, enrollment temps, speaker profiles, soak dumps, local conversation DB
+  - Production validation checklist: `/health`, `/ready`, auth, Postgres, text chat, Voice panel, enrollment UI
+  - Does **not** collect Nolan/Ibrahim real voices; wake-word / always-listening remain off
+  - Railway production ECAPA/AES-GCM requires manual Variables (names only — never commit secrets)
+
+## [0.58.0] — 2026-07-29
+
+### Added
+
+- **Phase 20.10B-1 — Production Enrollment Activation**
+  - Activate host ECAPA production biometric path (`TITAN_VOICE_EMBEDDING_PROVIDER=ecapa`) with production trust + AES-GCM
+  - Enrollment pre-flight (`voice/enrollment_preflight.py`) — ECAPA / trust / AES-GCM / storage / mic / consent / Nolan+Ibrahim slots — **no recording**
+  - Safe key bootstrap: `scripts/ensure_voice_embedding_storage_key.py` (never prints the key)
+  - Production env activation: `scripts/activate_production_enrollment_env.py`
+  - Preflight CLI: `scripts/phase20_10b1_enrollment_preflight.py`
+  - Guided enrollment entry (instructions + Web App path): `scripts/phase20_10b1_guided_enroll.py`
+  - API `GET /voice/enrollment/preflight` + Voice panel preflight status (no UI redesign)
+  - Tests: `tests/test_voice_phase20_10b1.py`
+
+### Notes
+
+- Does **not** collect Nolan/Ibrahim real voices yet (Phase 20.10B-2). Wake-word / always-listening remain off. Trading/Obsidian untouched. No commit of encryption secrets.
+
+## [0.57.0] — 2026-07-29
+
+### Added
+
+- **Phase 20.12 — Real Speaker Biometric Backend**
+  - Real ECAPA-TDNN provider (`voice/ecapa_provider.py`) — SpeechBrain `spkrec-ecapa-voxceleb` when deps installed; lazy CPU load; L2-normalized embeddings; graceful unavailable
+  - Resemblyzer fallback (`voice/resemblyzer_provider.py`) — optional GE2E VoiceEncoder
+  - Explicit biometric trust modes: `DEVELOPMENT` / `PRODUCTION` (`voice/biometric_trust.py`) — histogram never trusted in production
+  - Verification decision `VERIFIED` (+ UNKNOWN / AMBIGUOUS); production rejects histogram identity
+  - AES-GCM authenticated embedding storage (envelope v2, key id, nonce, legacy XOR migration) (`voice/embedding_storage.py`)
+  - CLAIMED_IDENTITY vs VERIFIED_IDENTITY — spoken/UI confirmation never auto-verifies biometrics
+  - Separate biometric readiness on `/ready` — missing model deps never fail process readiness
+  - Optional deps documented in `requirements.txt` (`torch` / `speechbrain` / `resemblyzer`); `cryptography` required for AES-GCM
+  - Config: `TITAN_VOICE_BIOMETRIC_TRUST_MODE`, `TITAN_VOICE_EMBEDDING_KEY_ID`, `TITAN_VOICE_ECAPA_*`
+  - Tests: `tests/test_voice_phase20_12.py`
+
+### Notes
+
+- Does **not** collect Nolan/Ibrahim real voices (Phase 20.10B still deferred); wake-word remains disabled; Trading/Obsidian untouched; no UI redesign; authentication not weakened.
+- Phase 20.12B (this host): installed `torch==2.11.0`, `torchaudio==2.11.0`, `speechbrain==1.1.0`; live ECAPA model load + synthetic inference validated. Windows uses SpeechBrain `LocalStrategy.COPY` by default (`TITAN_VOICE_ECAPA_LOCAL_STRATEGY`) to avoid symlink privilege errors.
+
+## [0.56.0] — 2026-07-29
+
+### Added
+
+- **Phase 20.11 — Production Speaker Embeddings & Identity Security**
+  - Production embedding abstraction: ECAPA-TDNN / Resemblyzer / external / local providers with capability detection, trust levels, and versioning (`voice/embedding_provider.py`, `voice/embedding_capabilities.py`)
+  - Histogram remains **development/test fallback only** — never silently production-trusted
+  - Deterministic local provider for production-path drills (`local_deterministic` / `local_det_v1`)
+  - Speaker verification engine: cosine/provider similarity, configurable thresholds, UNKNOWN / AMBIGUOUS, multi-sample aggregation, prefer UNKNOWN over false ID (`voice/speaker_verification.py`)
+  - Identity security boundary: voice ID selects user context only; never authorizes destructive/financial/admin/high-risk actions (`voice/identity_security.py`)
+  - Encryption-ready embedding storage + integrity seals, corruption detection, duplicate-user protection (`voice/embedding_storage.py`; profile store schema v4)
+  - Extensible anti-spoof / liveness layer (null + heuristic stub) — unavailable never weakens verification (`voice/anti_spoof.py`)
+  - Explicit migration path: histogram profiles blocked from auto-trust; re-enrollment required (`voice/embedding_migration.py`)
+  - Safe diagnostics: provider/version/verification/confidence/threshold/profile/migration/liveness — never raw embeddings (`voice/embedding_diagnostics.py`)
+  - Config: `TITAN_VOICE_EMBEDDING_REQUIRE_PRODUCTION_TRUST`, `TITAN_VOICE_EMBEDDING_ALLOW_DEV_IDENTITY`, `TITAN_VOICE_EMBEDDING_ENCRYPTION`, `TITAN_VOICE_EMBEDDING_RETAIN_RAW_AUDIO`, `TITAN_VOICE_ANTI_SPOOF_PROVIDER`, `TITAN_VOICE_EMBEDDING_AGGREGATION`
+  - Tests: `tests/test_voice_phase20_11.py`
+
+### Notes
+
+- Does **not** collect Nolan/Ibrahim real voices (Phase 20.10B still deferred); wake-word remains disabled; Trading/Obsidian untouched; no UI redesign; authentication not weakened.
+
+## [0.55.0] — 2026-07-29
+
+### Added
+
+- **Phase 20.10A — Production Voice Enrollment System**
+  - Production enrollment state machine: `WAITING_CONSENT` → `CONSENT_GRANTED` → `READY_TO_RECORD` → `RECORDING` → `VERIFYING` → `SUCCESS` / `FAILED` / `CANCELLED` / `RECOVERY` (`voice/enrollment_workflow.py`)
+  - Session features: multiple attempts, resume after interruption, safe cancellation, replacement enrollment, profile versioning, duplicate protection, append-only audit history
+  - Production quality metrics: signal level, background noise, speech duration, language independence, duplicate recordings, clipping, microphone quality
+  - Verification pipeline with confidence thresholds + retry workflow (`voice/enrollment_verification.py`) — ready for future production embedding backends
+  - Security: embeddings/raw audio never exposed; explicit consent required; enrollment revocation supported
+  - Diagnostics: workflow state counts, failures, quality metrics, verification confidence, audit trail
+  - API: `/voice/enrollment/workflow`, `/voice/enrollment/audit` (+ enriched `/diagnostics` / `/status`)
+  - Tests: `tests/test_voice_phase20_10a.py`
+
+### Notes
+
+- Does **not** collect Nolan/Ibrahim real voices; wake-word remains disabled; Trading/Obsidian untouched; no UI redesign.
+
+## [0.54.0] — 2026-07-28
+
+### Added
+
+- **Phase 20.9 — Real Speaker Enrollment & Live Provider Soak**
+  - Server-side enrollment consent gate (`AWAITING_CONSENT`), multi-language consent (FR/EN/ES), recovery tokens, `CANCELLED` status, session quality scoring, same-user near-duplicate + replace plans
+  - Embedding provider registry: histogram default + ECAPA / Resemblyzer / OpenAI-compatible stubs (not enabled)
+  - Multi-language enrollment scripts: Spanish + bilingual FR/EN
+  - Enrollment diagnostics aggregator + APIs: `/voice/enrollment/consent`, `/recover`, `/scripts`, `/diagnostics`
+  - Live provider soak scenarios: voice verification, consent/recovery, live provider recovery, multiple consecutive conversations
+  - Performance: enrollment processing latency marks, batch embedding extract
+  - Config: `TITAN_VOICE_EMBEDDING_PROVIDER`, `TITAN_VOICE_ENROLLMENT_REQUIRE_CONSENT`, `TITAN_VOICE_ENROLLMENT_CONSENT_VERSION`, `TITAN_VOICE_ENROLLMENT_RECOVERY_TTL`, `TITAN_VOICE_ENROLLMENT_SAME_USER_DUP_THRESHOLD`
+  - Tests: `tests/test_voice_phase20_9.py`; soak CLI: `scripts/phase20_9_voice_soak.py`
+
+### Notes
+
+- Does **not** collect Nolan/Ibrahim real voices; wake-word remains disabled; Trading/Obsidian untouched; no UI redesign.
+
+## [0.53.0] — 2026-07-28
+
+### Added
+
+- **Phase 20.8 — Live Providers & Real Voice Preparation**
+  - Live provider readiness: OpenAI Realtime (registry STT/TTS adapters + base64 wire framing), Deepgram PCM query params, ElevenLabs live key + base64 audio decode, Whisper streaming retained
+  - Optional `websocket-client` outbound sockets via `voice/transport/socket_backends.py` (offline InMemory fallback preserved)
+  - Native browser ↔ Titan WebSocket: `api/voice_ws_routes.py`, `voice/transport/browser_hub.py` / `browser_protocol.py`, `web/v2/voice/voice-socket.js` (reconnect, heartbeat, backpressure, sync) — HTTP remains fallback; no UI redesign
+  - Enrollment prep: pluggable `voice/embedding_provider.py`, multi-session history + labels, embedding quality scoring, language-independent features, cross-user duplicate detection, safe profile replacement plans
+  - Provider health aggregator + diagnostics API: `/voice/session/diagnostics/providers`, `/voice/session/diagnostics/transport`
+  - Production soak scenarios: browser reconnect, concurrent sessions, provider fallback, Railway config readiness (`scripts/phase20_8_voice_soak.py`)
+  - Performance: reused failover reconnect policy; live session wires `TransportManager` into provider failover
+  - Config: `TITAN_VOICE_LIVE_SOCKETS`, `TITAN_VOICE_WS_*`, `TITAN_VOICE_ENROLLMENT_DUPLICATE_THRESHOLD`, `TITAN_VOICE_EMBEDDING_VERSION`
+  - Tests: `tests/test_voice_phase20_8.py`
+
+### Notes
+
+- Does **not** collect Nolan/Ibrahim real voices; wake-word remains disabled; Trading/Obsidian untouched.
+
+## [0.52.0] — 2026-07-28
+
+### Added
+
+- **Phase 20.7 — Live Voice Experience & Production Soak**
+  - Conversation flow polish: natural pauses, turn timing, barge-in debounce, resume-after-interrupt, confirmation prompts
+  - Mic calibration: noise floor, speech threshold, gain estimate, clipping / low-volume warnings
+  - Silence detection: automatic end-of-turn, long-pause timeout, background noise tolerance, false-speech rejection
+  - Session statistics: speech / turn / mic / provider / brain / TTS latency aggregates
+  - Production soak harness: long conversation, provider reconnect, network drop, rapid start/stop, consecutive sessions, enrollment persistence, speaker switching
+  - Authenticated API: `/voice/session/calibrate/*`, `/voice/session/stats`
+  - Web helpers (no UI redesign): mic metrics/gain, permission flow, calibrate/stats client APIs
+  - Diagnostics: `VOICE_MIC_*`, `VOICE_END_OF_TURN`, `VOICE_LONG_PAUSE`, `VOICE_FALSE_SPEECH_REJECTED`, `VOICE_NATURAL_PAUSE`, `VOICE_RESUME_AFTER_INTERRUPT`, `VOICE_TURN_TIMING`, `VOICE_SESSION_STATS`, `VOICE_SOAK_SCENARIO`
+  - Config: `TITAN_VOICE_MIC_*`, `TITAN_VOICE_LONG_PAUSE_TIMEOUT`, `TITAN_VOICE_FALSE_SPEECH_MAX`, `TITAN_VOICE_NATURAL_PAUSE_MS`, barge-in / resume grace
+  - Tests: `tests/test_voice_phase20_7.py`; soak CLI: `scripts/phase20_7_voice_soak.py`
+  - Always-listening remains hard-disabled; wake-word not activated; Trading/Obsidian untouched
+
+## [0.51.0] — 2026-07-28
+
+### Added
+
+- **Phase 20.6 — True Real-Time Streaming Providers**
+  - Generic streaming transport: WebSocket, SSE, HTTP fallback, reconnect, heartbeat, graceful shutdown
+  - Realtime provider abstraction + registry (configurable selection / fallback chains)
+  - Providers: OpenAI Realtime (bidirectional), OpenAI Whisper Streaming, Deepgram Streaming, ElevenLabs Streaming, mocks
+  - Realtime STT: partial / stable / final hypotheses, confidence, language switch, timestamps, speaker tracking
+  - Realtime TTS: audio chunks, incremental synthesis, buffer smoothing, provider cancellation
+  - Failover: disconnect / network loss / timeout / retry / fallback / manual switch
+  - Latency marks: mic, provider, brain, TTS, first audio, conversation turnaround
+  - Stream performance controller: coalesce, buffer caps, bandwidth, sync skew
+  - Diagnostics: `PROVIDER_*` / `PROVIDER_TRANSPORT_*` events
+  - Config: `TITAN_VOICE_REALTIME_*`, transport / retry / Deepgram / ElevenLabs settings
+  - Tests: `tests/test_voice_phase20_6.py`
+  - Always-listening remains hard-disabled; UI unchanged; Trading/Obsidian untouched
+
+## [0.50.0] — 2026-07-28
+
+### Added
+
+- **Phase 20.5 — Real-Time Voice Conversation Engine**
+  - Continuous multi-turn conversation with idle / conversation timeouts + recovery tokens
+  - Incremental STT stages: partial (UI-only) → stable → final (Brain-safe)
+  - Streaming Brain adapter: response deltas, sentence completion, cancel, no duplicate turns
+  - Streaming TTS: sentence streaming, FR/EN voice selection, barge-in cancel
+  - Latency tracker: first audio / transcript / Brain token / TTS audio / idle delay
+  - Stream diagnostics: `VOICE_STREAM_*`, `BRAIN_STREAM_*`, `TTS_STREAM_*`, idle/resume/recover/closed
+  - Authenticated API: `/voice/session/recover`, `/heartbeat`, `/events`
+  - Web client continuity: session reuse, refresh recovery, heartbeat, progressive TTS enqueue
+  - Always-listening remains hard-disabled; text chat unchanged
+  - Tests: `tests/test_voice_phase20_5.py`
+
+## [0.49.0] — 2026-07-28
+
+### Added
+
+- **Phase 20.4 — Web App Voice UI & Real Microphone Integration**
+  - Browser mic permission, PCM/MediaRecorder capture, push-to-talk composer control
+  - Guided enrollment UI (consent, Nolan/Ibrahim, verify, revoke) in Voice panel
+  - TTS playback queue + barge-in (`Interrompre`) wired to `/voice/session/*`
+  - Safe identity badge + medium-confidence confirm/reject UI
+  - Client diagnostics `VOICE_UI_*` (no raw audio / secrets)
+  - Live session HTTP responses include ordered `tts_audio_chunks` for web playback
+  - Tests: `tests/test_voice_phase20_4.py`
 
 ## [0.43.1] — 2026-07-15
 
@@ -93,6 +283,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+- **Phase 20.3 — Live Voice Session Orchestration:**
+  production session lifecycle connecting mic chunks → VAD → segmentation →
+  speaker gate → STT → Brain → streamed response → TTS → playback.
+  - `voice/live_session.py` — `LiveVoiceSessionOrchestrator`
+  - `voice/vad.py` — configurable voice activity detection
+  - `voice/speech_segmenter.py` — ordered utterance assembly + bounded buffers
+  - `voice/session_lifecycle.py` — explicit IDLE…COMPLETED state machine
+  - `voice/tts_strategy.py` — full-response / sentence-buffered TTS + markdown cleanup
+  - `voice/diagnostics.py` — structured VOICE_* diagnostics (no raw audio/embeddings)
+  - `api/voice_session_routes.py` — authenticated `/voice/session/*` API
+  - WorkspaceState safe mirrors: `voice_session_state`, input level, speech detected,
+    speaker, confidence band, transcription/brain/tts status, interrupted
+  - Barge-in, identity confirm/reject with timeout, restricted unknown-speaker path
+  - Wake-word / always-listening prepared but disabled by default
+  - Settings: `TITAN_VOICE_VAD_*`, `TITAN_VOICE_TTS_STRATEGY`, identity/provider timeouts
+  - Tests: `tests/test_voice_phase20_3.py`
+
+- **Phase 20.2 — Voice Enrollment & Identity Profiles:**
+  guided enrollment architecture for Nolan/Ibrahim without requiring real
+  recordings in this phase.
+  - `voice/voice_enrollment.py` — start/submit/validate/finish/verify/cancel/revoke
+  - `voice/speaker_profile_store.py` — durable profiles (activate/deactivate/revoke/replace)
+  - `voice/sample_validator.py` + `voice/enrollment_scripts.py` (FR/EN)
+  - Recognition policy bands (high/medium/low/ambiguous); revoked profiles blocked
+  - Authenticated API `/voice/enrollment/*`; WorkspaceState enrollment mirrors
+  - Privacy: transient temp audio only; no embeddings in logs/LLM/Obsidian/memory
+  - Settings: `TITAN_VOICE_ENROLLMENT_*`, medium confidence + ambiguity delta
+  - Tests: `tests/test_voice_phase20_2.py` (Phase 20.1 suite still green)
+  - Version `0.47.0`
+
+- **Phase 20.1 — Voice Provider Integration & Speaker Recognition (foundation):**
+  first architecture phase after production validation 19.7.
+  - `voice/speaker_identifier.py` — Nolan/Ibrahim enrollment, voiceprint match,
+    confirm-on-unknown before personal memory (Constitution Art. 1.5).
+  - `voice/providers/` — OpenAI Whisper STT + OpenAI TTS adapters; registry bootstrap.
+  - `VoiceRuntime` binds `SessionManager.current_user` on known speakers; unknown
+    speakers receive a French confirmation prompt without `Brain.process_request()`.
+  - Settings: `TITAN_VOICE_SPEAKER_ID_*`, `TITAN_VOICE_OPENAI_*_MODEL`.
+  - Docs: `docs/VOICE_RUNTIME.md`, `docs/ROADMAP.md`.
+  - Tests: `tests/test_speaker_identifier.py`, `tests/test_voice_phase20_1.py`.
 
 - **Web App Phase 5.3 — Reference Scene Reconstruction** (frontend only)
   - Entire composition rebuilt around Titan Core as visual gravity (not a background)

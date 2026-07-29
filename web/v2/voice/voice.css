@@ -1,0 +1,264 @@
+/** Titan Voice UI — black/red integrated styles (Phase 20.4). */
+
+.tdl-v2-voice-mic--listening,
+.tdl-v2-voice-mic--recording {
+  color: var(--tdl-red-core, #ef4444);
+  box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.45), 0 0 18px rgba(220, 38, 38, 0.25);
+}
+
+.tdl-v2-voice-mic--recording .tdl-v2-voice-mic__ring {
+  opacity: 1;
+  animation: tdl-v2-voice-pulse 1.2s ease-in-out infinite;
+}
+
+.tdl-v2-voice-mic--busy {
+  color: var(--tdl-red-primary, #dc2626);
+  opacity: 0.92;
+}
+
+.tdl-v2-voice-mic--error {
+  color: #fca5a5;
+}
+
+.tdl-v2-voice-mic__level {
+  position: absolute;
+  left: 50%;
+  bottom: 18%;
+  width: 3px;
+  height: 40%;
+  transform: translateX(-50%) scaleY(0.15);
+  transform-origin: bottom center;
+  background: var(--tdl-red-core, #ef4444);
+  border-radius: 2px;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.tdl-v2-voice-live {
+  position: fixed;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.tdl-v2-voice-interrupt {
+  position: absolute;
+  right: 18px;
+  bottom: calc(100% + 10px);
+  z-index: 40;
+  min-height: 40px;
+  min-width: 112px;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid rgba(220, 38, 38, 0.55);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.92);
+  color: #fecaca;
+  font: inherit;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.tdl-v2-voice-interrupt:hover,
+.tdl-v2-voice-interrupt:focus-visible {
+  background: rgba(220, 38, 38, 0.18);
+  outline: 1px solid var(--tdl-red-primary, #dc2626);
+}
+
+#tdl-v2-dock-composer,
+.tdl-v2-composer {
+  position: relative;
+}
+
+.tdl-v2-voice-identity-badge {
+  margin-left: auto;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  border-radius: 3px;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fecaca;
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.tdl-v2-voice-identity-badge[data-state="known"] {
+  border-color: rgba(220, 38, 38, 0.7);
+  color: #fff;
+}
+
+.tdl-v2-voice-identity-badge[data-state="unknown"] {
+  border-style: dashed;
+  color: #fca5a5;
+}
+
+.tdl-v2-voice-identity-badge[data-state="confirm"] {
+  border-color: #fbbf24;
+  color: #fde68a;
+}
+
+.tdl-v2-voice-confirm {
+  position: fixed;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  max-width: min(520px, 92vw);
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(220, 38, 38, 0.45);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.94);
+  color: #f8fafc;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+}
+
+.tdl-v2-voice-confirm__text {
+  margin: 0;
+  flex: 1 1 220px;
+  font-size: 0.9rem;
+}
+
+.tdl-v2-voice-confirm__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tdl-v2-voice-panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 0.5rem 0 1rem;
+}
+
+.tdl-v2-voice-enroll {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 560px;
+}
+
+.tdl-v2-voice-enroll__label,
+.tdl-v2-voice-enroll__locale label {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(248, 250, 252, 0.62);
+}
+
+.tdl-v2-voice-enroll__user-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tdl-v2-voice-enroll__user-row .is-selected {
+  border-color: var(--tdl-red-primary, #dc2626);
+  color: #fff;
+  background: rgba(220, 38, 38, 0.16);
+}
+
+.tdl-v2-voice-enroll__consent,
+.tdl-v2-voice-enroll__wizard {
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(10, 10, 10, 0.9);
+}
+
+.tdl-v2-voice-enroll__consent-text {
+  margin: 0 0 0.75rem;
+  white-space: pre-line;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: rgba(248, 250, 252, 0.86);
+}
+
+.tdl-v2-voice-enroll__consent-check {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+  font-size: 0.86rem;
+}
+
+.tdl-v2-voice-enroll__phrase {
+  margin: 0.5rem 0 0.75rem;
+  padding: 0.85rem 1rem;
+  border-left: 2px solid var(--tdl-red-primary, #dc2626);
+  background: rgba(220, 38, 38, 0.06);
+  font-size: 1.05rem;
+  line-height: 1.4;
+}
+
+.tdl-v2-voice-enroll__feedback[data-kind="error"] {
+  color: #fca5a5;
+}
+
+.tdl-v2-voice-enroll__feedback[data-kind="ok"] {
+  color: #86efac;
+}
+
+.tdl-v2-voice-enroll__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tdl-v2-voice-enroll__actions .tdl-v2-btn {
+  min-height: 44px;
+}
+
+.tdl-v2-voice-live-hint {
+  font-size: 0.85rem;
+  color: rgba(248, 250, 252, 0.65);
+}
+
+.tdl-v2-satellite-core--voice-listening {
+  filter: drop-shadow(0 0 10px rgba(220, 38, 38, 0.35));
+}
+
+.tdl-v2-satellite-core--voice-speaking {
+  filter: drop-shadow(0 0 14px rgba(239, 68, 68, 0.45));
+}
+
+@keyframes tdl-v2-voice-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tdl-v2-voice-mic--recording .tdl-v2-voice-mic__ring,
+  .tdl-v2--reduced-motion .tdl-v2-voice-mic--recording .tdl-v2-voice-mic__ring {
+    animation: none;
+  }
+
+  .tdl-v2-satellite-core--voice-listening,
+  .tdl-v2-satellite-core--voice-speaking {
+    filter: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .tdl-v2-voice-confirm {
+    bottom: 120px;
+    width: calc(100vw - 1.5rem);
+  }
+
+  .tdl-v2-voice-interrupt {
+    right: 8px;
+    min-width: 96px;
+  }
+}

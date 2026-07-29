@@ -100,6 +100,23 @@ _WORKSPACE_FIELD_NAMES = frozenset(
         "rollback_available",
         "execution_recovered",
         "last_failure_reason",
+        # Phase 20.2 — voice enrollment mirror (no embeddings / raw audio)
+        "voice_enrollment_status",
+        "voice_enrollment_user",
+        "voice_samples_collected",
+        "voice_samples_required",
+        "voice_quality_status",
+        "voice_verification_status",
+        # Phase 20.3 — live voice session mirror (safe fields only)
+        "voice_session_state",
+        "voice_input_level",
+        "voice_speech_detected",
+        "voice_current_speaker",
+        "voice_identity_confidence_band",
+        "voice_transcription_status",
+        "voice_brain_status",
+        "voice_tts_status",
+        "voice_interrupted",
         "updated_at",
     }
 )
@@ -214,6 +231,23 @@ class WorkspaceState:
     rollback_available: bool = False
     execution_recovered: bool = False
     last_failure_reason: str | None = None
+    # Phase 20.2 — voice enrollment progress (safe public fields only).
+    voice_enrollment_status: str | None = None
+    voice_enrollment_user: str | None = None
+    voice_samples_collected: int = 0
+    voice_samples_required: int = 0
+    voice_quality_status: str | None = None
+    voice_verification_status: str | None = None
+    # Phase 20.3 — live voice session (no raw audio / embeddings / secrets).
+    voice_session_state: str | None = None
+    voice_input_level: float = 0.0
+    voice_speech_detected: bool = False
+    voice_current_speaker: str | None = None
+    voice_identity_confidence_band: str | None = None
+    voice_transcription_status: str | None = None
+    voice_brain_status: str | None = None
+    voice_tts_status: str | None = None
+    voice_interrupted: bool = False
     updated_at: str | None = None
 
     def to_dict(self) -> dict[str, Any]:

@@ -25,6 +25,7 @@ from tools.tool_manager import ToolManager
 from voice.audio_devices import AudioDeviceManager, MockAudioCapture, MockAudioPlayback
 from voice.exceptions import VoiceConfigurationError, VoiceDeviceError, VoiceSessionError, VoiceStateError
 from voice.models import ConversationMode, VoiceConfig, VoiceState
+from voice.speaker_identifier import SpeakerIdentifier
 from voice.speech_to_text import (
     MockSpeechToTextProvider,
     SpeechToTextRegistry,
@@ -78,6 +79,8 @@ def _make_runtime(
         tts_registry=tts,
         audio_capture=capture,
         audio_playback=playback,
+        speaker_identifier=SpeakerIdentifier(enabled=False),
+        register_live_providers=False,
     )
 
 

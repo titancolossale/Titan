@@ -71,6 +71,24 @@
  * @property {number | null} lastHttpStatus
  * @property {number | null} providerDurationMs
  * @property {object | null} workspaceState
+ * @property {string | null} voiceSessionState
+ * @property {number} voiceInputLevel
+ * @property {boolean} voiceSpeechDetected
+ * @property {string | null} voiceCurrentSpeaker
+ * @property {string | null} voiceIdentityConfidenceBand
+ * @property {string | null} voiceTranscriptionStatus
+ * @property {string | null} voiceBrainStatus
+ * @property {string | null} voiceTtsStatus
+ * @property {boolean} voiceInterrupted
+ * @property {string | null} voiceEnrollmentStatus
+ * @property {number | null} voiceSamplesCollected
+ * @property {number | null} voiceSamplesRequired
+ * @property {string | null} voiceVerificationStatus
+ * @property {string | null} voiceUiPhase
+ * @property {string | null} voiceMicPermission
+ * @property {string | null} voiceUiError
+ * @property {object | null} voicePendingConfirmation
+ * @property {string | null} voiceTranscriptPreview
  */
 
 /** @type {AppState} */
@@ -140,6 +158,24 @@ const DEFAULT_STATE = Object.freeze({
   lastHttpStatus: null,
   providerDurationMs: null,
   workspaceState: null,
+  voiceSessionState: null,
+  voiceInputLevel: 0,
+  voiceSpeechDetected: false,
+  voiceCurrentSpeaker: null,
+  voiceIdentityConfidenceBand: null,
+  voiceTranscriptionStatus: null,
+  voiceBrainStatus: null,
+  voiceTtsStatus: null,
+  voiceInterrupted: false,
+  voiceEnrollmentStatus: null,
+  voiceSamplesCollected: null,
+  voiceSamplesRequired: null,
+  voiceVerificationStatus: null,
+  voiceUiPhase: "idle",
+  voiceMicPermission: "unknown",
+  voiceUiError: null,
+  voicePendingConfirmation: null,
+  voiceTranscriptPreview: null,
 });
 
 export class StateStore {

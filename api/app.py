@@ -172,6 +172,15 @@ def create_app() -> FastAPI:
     from api.conversation_routes import router as conversation_router
 
     app.include_router(conversation_router)
+    from api.voice_enrollment_routes import router as voice_enrollment_router
+
+    app.include_router(voice_enrollment_router)
+    from api.voice_session_routes import router as voice_session_router
+
+    app.include_router(voice_session_router)
+    from api.voice_ws_routes import router as voice_ws_router
+
+    app.include_router(voice_ws_router)
 
     # Apply conversation migrations at startup when persistence is enabled.
     try:

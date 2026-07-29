@@ -12,6 +12,10 @@ class VoiceError(Exception):
 class VoiceConfigurationError(VoiceError):
     """Invalid or incomplete voice configuration."""
 
+    def __init__(self, message: str, *, code: str = "configuration_error") -> None:
+        super().__init__(message)
+        self.code = code
+
 
 class VoiceProviderError(VoiceError):
     """STT or TTS provider failure."""
@@ -31,3 +35,19 @@ class VoiceStateError(VoiceError):
 
 class VoiceInterruptedError(VoiceError):
     """Operation cancelled due to user interruption."""
+
+
+class VoiceEnrollmentError(VoiceError):
+    """Guided enrollment lifecycle failure (Phase 20.2)."""
+
+    def __init__(self, message: str, *, code: str = "enrollment_error") -> None:
+        super().__init__(message)
+        self.code = code
+
+
+class VoiceLiveSessionError(VoiceError):
+    """Live voice session orchestration failure (Phase 20.3)."""
+
+    def __init__(self, message: str, *, code: str = "live_session_error") -> None:
+        super().__init__(message)
+        self.code = code

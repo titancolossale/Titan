@@ -169,6 +169,47 @@ def build_readiness_payload(*, include_subsystems: bool = True) -> dict[str, Any
             "message": "Brain lock diagnostics unavailable.",
         }
 
+    # Phase 20.12 — biometric provider readiness is optional; never fails /ready.
+    try:
+        from voice.embedding_diagnostics import collect_biometric_readiness
+
+        bio = collect_biometric_readiness()
+        optional_subsystems.append(
+            {
+                "name": bio.get("name", "voice_biometric"),
+                "status": bio.get("status", "unavailable"),
+                "required": False,
+                "healthy": bio.get("healthy"),
+                "message": bio.get("message", ""),
+                "affects_ready": False,
+                "provider_id": bio.get("provider_id"),
+                "init_status": bio.get("init_status"),
+            }
+        )
+        checks["voice_biometric"] = {
+            "ok": True,  # optional — always ok for process readiness
+            "required": False,
+            "status": bio.get("status"),
+            "message": bio.get("message"),
+            "affects_ready": False,
+        }
+    except Exception:
+        optional_subsystems.append(
+            _optional_subsystem_status(
+                name="voice_biometric",
+                enabled=True,
+                healthy=False,
+                message="Voice biometric diagnostics unavailable.",
+            )
+        )
+        checks["voice_biometric"] = {
+            "ok": True,
+            "required": False,
+            "status": "unknown",
+            "message": "Voice biometric diagnostics unavailable.",
+            "affects_ready": False,
+        }
+
     return {
         "status": status,
         "http_status": http_status,
