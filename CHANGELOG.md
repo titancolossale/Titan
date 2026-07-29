@@ -8,10 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Version policy
 
 - **Semver:** `MAJOR.MINOR.PATCH` — breaking changes, new features, and bug fixes respectively.
-- **Current codebase version:** `0.59.0` (see `config/settings.py`).
+- **Current codebase version:** `0.59.1` (see `config/settings.py`).
 - **Phase 1 target release:** `0.1.0` — Titan V2 Phase 1 (Architecture Cleanup). **Shipped 2026-06-27.**
 - **Phase 10A release:** `0.10.0` — Tool Runtime V2 default. **Shipped 2026-06-28.**
 - **Future milestone:** `2.0.0` — full Titan V2 release after all planned phases.
+
+## [0.59.1] — 2026-07-29
+
+### Added
+
+- **Phase 20.13 — Railway ECAPA production dependencies**
+  - `requirements-prod.txt` — pinned CPU wheels `torch==2.11.0+cpu`, `torchaudio==2.11.0+cpu`, `speechbrain==1.1.0` (PyTorch CPU index) for Docker/Railway
+  - Dockerfile installs prod requirements + `libgomp1` / `libsndfile1`; sets non-secret production enrollment ENV defaults (ECAPA, trust, AES-GCM flags, wake-word off)
+  - `/ready` voice_biometric check exposes safe `ecapa_deps` flag (never storage keys / embeddings)
+  - `probe_ecapa_dependencies()` also reports `torchaudio`
+  - Does **not** commit `TITAN_VOICE_EMBEDDING_STORAGE_KEY` — still requires manual Railway Variables setup
 
 ## [0.59.0] — 2026-07-29
 

@@ -14,15 +14,13 @@ sqlalchemy>=2.0  # Phase 12.1 — Durable conversation store
 psycopg2-binary>=2.9  # Phase 12.1 — PostgreSQL DBAPI for SQLAlchemy postgresql:// (Railway)
 pytest>=8.0  # test runner for CI and local dev
 cryptography>=42.0  # Phase 20.12 — AES-GCM authenticated embedding storage
-# Phase 20.12 — optional real speaker biometrics (CPU). Install when enabling
-# TITAN_VOICE_EMBEDDING_PROVIDER=ecapa or resemblyzer. Missing deps keep Titan
-# healthy; biometric readiness is reported separately and never fails /ready.
-# Validated on this host (Phase 20.12B / Python 3.14 Windows CPU):
-#   torch==2.11.0
-#   torchaudio==2.11.0
-#   speechbrain==1.1.0
-# torch>=2.1
-# torchaudio>=2.1
-# speechbrain>=1.0
+# Phase 20.12 / 20.13 — real speaker biometrics (CPU).
+# Railway/Docker production installs pinned CPU wheels via requirements-prod.txt:
+#   torch==2.11.0+cpu, torchaudio==2.11.0+cpu, speechbrain==1.1.0
+#   (PyTorch CPU index: https://download.pytorch.org/whl/cpu)
+# Local optional install when enabling TITAN_VOICE_EMBEDDING_PROVIDER=ecapa:
+#   pip install torch==2.11.0 torchaudio==2.11.0 speechbrain==1.1.0
+# Missing deps keep Titan healthy; biometric readiness never fails /ready.
+# Optional Resemblyzer fallback (not required for production ECAPA path):
 # resemblyzer>=0.1.1
 # numpy>=1.24  # pulled by resemblyzer / torch when installed

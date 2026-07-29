@@ -57,8 +57,10 @@ class ProviderInitStatus(str, Enum):
 def probe_ecapa_dependencies() -> dict[str, Any]:
     """Detect optional ECAPA runtime deps without loading the model."""
     torch_ok = False
+    torchaudio_ok = False
     speechbrain_ok = False
     torch_error: str | None = None
+    torchaudio_error: str | None = None
     speechbrain_error: str | None = None
     try:
         import torch  # noqa: F401
@@ -67,6 +69,12 @@ def probe_ecapa_dependencies() -> dict[str, Any]:
     except Exception as exc:  # pragma: no cover — env dependent
         torch_error = type(exc).__name__
     try:
+        import torchaudio  # noqa: F401
+
+        torchaudio_ok = True
+    except Exception as exc:  # pragma: no cover — env dependent
+        torchaudio_error = type(exc).__name__
+    try:
         import speechbrain  # noqa: F401
 
         speechbrain_ok = True
@@ -74,9 +82,13 @@ def probe_ecapa_dependencies() -> dict[str, Any]:
         speechbrain_error = type(exc).__name__
     return {
         "torch": torch_ok,
+        "torchaudio": torchaudio_ok,
         "speechbrain": speechbrain_ok,
+        # SpeechBrain ECAPA needs torch + speechbrain; torchaudio is strongly
+        # recommended and reported separately for production diagnostics.
         "available": torch_ok and speechbrain_ok,
         "torch_error": torch_error,
+        "torchaudio_error": torchaudio_error,
         "speechbrain_error": speechbrain_error,
         "model_source": ECAPA_MODEL_SOURCE,
         "model_version": ECAPA_MODEL_VERSION,

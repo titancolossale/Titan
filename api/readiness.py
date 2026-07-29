@@ -184,6 +184,8 @@ def build_readiness_payload(*, include_subsystems: bool = True) -> dict[str, Any
                 "affects_ready": False,
                 "provider_id": bio.get("provider_id"),
                 "init_status": bio.get("init_status"),
+                # Safe dep flags only — never embeddings or storage keys.
+                "ecapa_deps": bio.get("ecapa_deps"),
             }
         )
         checks["voice_biometric"] = {
@@ -192,6 +194,8 @@ def build_readiness_payload(*, include_subsystems: bool = True) -> dict[str, Any
             "status": bio.get("status"),
             "message": bio.get("message"),
             "affects_ready": False,
+            "provider_id": bio.get("provider_id"),
+            "ecapa_deps": bio.get("ecapa_deps"),
         }
     except Exception:
         optional_subsystems.append(

@@ -110,6 +110,38 @@ Use either the `TITAN_*` name or the shorter alias — both work.
 | `TITAN_CONVERSATION_PERSISTENCE_REQUIRED` | `true` in production | `/ready` fails if DB unreachable |
 | `TITAN_CONVERSATION_STREAM_ENABLED` | `true` | Provider token streaming |
 
+### 4.3b Phase 20.13 — Voice enrollment (non-secret)
+
+These are set as **Dockerfile defaults** for the production image. You may also set
+them in Railway Variables (Variables override image ENV). Do **not** put the
+storage key in Git or `.env.example`.
+
+| Variable | Production value | Secret? |
+|----------|------------------|---------|
+| `TITAN_VOICE_EMBEDDING_PROVIDER` | `ecapa` | No |
+| `TITAN_VOICE_EMBEDDING_REQUIRE_PRODUCTION_TRUST` | `true` | No |
+| `TITAN_VOICE_EMBEDDING_ALLOW_DEV_IDENTITY` | `false` | No |
+| `TITAN_VOICE_EMBEDDING_ENCRYPTION` | `true` | No |
+| `TITAN_VOICE_EMBEDDING_RETAIN_RAW_AUDIO` | `false` | No |
+| `TITAN_VOICE_EMBEDDING_KEY_ID` | `primary` | No |
+| `TITAN_VOICE_ENROLLMENT_REQUIRE_CONSENT` | `true` | No |
+| `TITAN_VOICE_ALWAYS_LISTENING` | `false` | No |
+| `TITAN_VOICE_WAKE_WORD_ENABLED` | `false` | No |
+| `TITAN_VOICE_EMBEDDING_STORAGE_KEY` | Generate locally — never commit | **Yes** |
+
+Generate the storage key on your PC (never prints the value into reports):
+
+```powershell
+cd C:\Users\nolan\OneDrive\Desktop\Titan
+python scripts\ensure_voice_embedding_storage_key.py
+```
+
+Then open local `.env`, copy the `TITAN_VOICE_EMBEDDING_STORAGE_KEY` value, and
+paste it in **Railway → your service → Variables**.
+
+ECAPA Python packages are installed from `requirements-prod.txt` in the Docker
+build (`torch` / `torchaudio` / `speechbrain`).
+
 ### 4.4 Generate a strong secret (Windows PowerShell)
 
 Run locally (do **not** commit the result):

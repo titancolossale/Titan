@@ -1,0 +1,19 @@
+# =====================================
+# Titan production dependencies (Railway / Docker)
+# =====================================
+#
+# Used by Dockerfile for Linux production images.
+# Includes the base requirements plus pinned ECAPA biometric runtime deps.
+# Do NOT put secrets here.
+#
+# torch/torchaudio use the official PyTorch CPU wheel index (+cpu) so Railway
+# does not pull the much larger default CUDA-capable manylinux wheels.
+
+-r requirements.txt
+
+# Phase 20.13 — real ECAPA-TDNN speaker biometrics (SpeechBrain, CPU)
+# Validated locally Phase 20.12B (Windows CPU) with matching 2.11.0 / 1.1.0 pins.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.11.0+cpu
+torchaudio==2.11.0+cpu
+speechbrain==1.1.0

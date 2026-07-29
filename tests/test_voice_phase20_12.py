@@ -181,6 +181,9 @@ def test_probe_dependencies_safe():
     ecapa = probe_ecapa_dependencies()
     assert "available" in ecapa
     assert "model_source" in ecapa
+    assert "torch" in ecapa
+    assert "torchaudio" in ecapa
+    assert "speechbrain" in ecapa
     rz = probe_resemblyzer_dependencies()
     assert "available" in rz
 
