@@ -30,7 +30,7 @@ MEMORY_DIR = _resolve_runtime_path(
 load_dotenv(ENV_FILE_PATH)
 
 TITAN_NAME = "Titan"
-VERSION = "0.59.2"
+VERSION = "0.59.3"
 CREATOR = "Nolan Hassing"
 
 LOG_LEVEL = os.getenv("TITAN_LOG_LEVEL", "INFO")

@@ -52,6 +52,8 @@ const FR_ERRORS = Object.freeze({
     "Le mode écoute continue n’est pas activé. Utilise le bouton micro (push-to-talk).",
   consent_required:
     "Le consentement est requis avant l’enregistrement d’échantillons vocaux.",
+  enrollment_use_enregistrer:
+    "Enrollment biométrique actif — utilise le bouton Enregistrer (pas le micro du compositeur).",
   recording_failed:
     "Échec de l’enregistrement. Réessaie.",
   default:

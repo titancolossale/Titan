@@ -145,6 +145,45 @@ def test_enrollment_consent_required() -> None:
     assert "consent" in text.lower()
     assert "tdl-v2-voice-consent-check" in text
     assert "consent_required" in text or "CONSENT" in text
+    # Continuer must send explicit consent only after the checkbox is checked.
+    assert "consent_accepted: true" in text or "consent_accepted:true" in text
+    assert "consentCheck.checked" in text
+    assert "grantEnrollmentConsent" in text
+    api = (VOICE_JS / "voice-api.js").read_text(encoding="utf-8")
+    assert "consent_accepted" in api or "grantEnrollmentConsent" in api
+    assert "/voice/enrollment/consent" in api
+
+
+def test_enrollment_recording_uses_sample_endpoint_not_composer_mic() -> None:
+    """Enregistrer → /voice/enrollment/sample; composer mic is gated during enrollment."""
+    enroll = (VOICE_JS / "enrollment-ui.js").read_text(encoding="utf-8")
+    ctrl = (VOICE_JS / "voice-controller.js").read_text(encoding="utf-8")
+    api = (VOICE_JS / "voice-api.js").read_text(encoding="utf-8")
+    assert "tdl-v2-voice-record-sample" in enroll
+    assert "submitEnrollmentSample" in enroll
+    assert "recordSampleWav" in enroll
+    assert "/voice/enrollment/sample" in api
+    assert "voiceEnrollmentCollecting" in enroll
+    assert "voiceEnrollmentCollecting" in ctrl
+    assert "enrollment_use_enregistrer" in ctrl
+    assert "Utilise le micro du compositeur pour le push-to-talk" not in enroll
+    assert "Enregistrer" in enroll
+    assert "micro du compositeur est désactivé" in enroll.lower() or "Désactivé pendant" in enroll
+
+
+def test_live_session_failed_does_not_mark_enrollment_failed() -> None:
+    enroll = (VOICE_JS / "enrollment-ui.js").read_text(encoding="utf-8")
+    # Live PTT FAILED must stay labeled as conversation, not enrollment failure.
+    assert "n’annule pas l’enrollment biométrique" in enroll or "n'annule pas l’enrollment" in enroll
+    assert "Enrollment biométrique :" in enroll
+    assert "Conversation (push-to-talk)" in enroll
+    # _fail sets voiceSessionState FAILED only — enrollment status is separate.
+    ctrl = (VOICE_JS / "voice-controller.js").read_text(encoding="utf-8")
+    assert 'voiceSessionState: "FAILED"' in ctrl
+    # Ensure FAILED assignment is not coupled to enrollment status in the fail path.
+    idx = ctrl.index('voiceSessionState: "FAILED"')
+    window = ctrl[max(0, idx - 400) : idx + 200]
+    assert "voiceEnrollmentStatus" not in window
 
 
 def test_push_to_talk_and_barge_in_controls() -> None:
@@ -179,6 +218,7 @@ def test_voice_nav_and_composer_mic_wired() -> None:
         "voiceInputLevel",
         "voiceCurrentSpeaker",
         "voiceEnrollmentStatus",
+        "voiceEnrollmentCollecting",
         "voicePendingConfirmation",
     ):
         assert field in store
