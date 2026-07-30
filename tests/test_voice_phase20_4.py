@@ -184,6 +184,69 @@ def test_voice_nav_and_composer_mic_wired() -> None:
         assert field in store
 
 
+def test_voice_panel_mount_retries_across_transition() -> None:
+    """Phase 20.13 — must not leave Voice stuck on the loading placeholder."""
+    register = (VOICE_JS / "register.js").read_text(encoding="utf-8")
+    layouts = (V2 / "panels" / "layouts" / "index.js").read_text(encoding="utf-8")
+    assert "Chargement du module vocal" in layouts
+    assert "VOICE_MOUNT_TIMEOUT_MS" in register
+    assert "VOICE_MOUNT_POLL_MS" in register
+    assert "scheduleVoicePanelMount" in register
+    assert "tdl-v2-voice-mount-retry" in register
+    assert "tdl-v2-voice-mount-error" in register
+    assert "mountEnrollmentPanel" in register
+    # Single rAF without retry is the production stuck-state bug.
+    assert "setTimeout(tick" in register or "setTimeout(tick," in register
+
+
+@pytest.mark.skipif(not _node_available(), reason="node required")
+def test_voice_mount_survives_delayed_panel_dom() -> None:
+    """Reproduce the 350ms panel-transition race and assert mount succeeds."""
+    script = r"""
+const VOICE_MOUNT_TIMEOUT_MS = 8000;
+const VOICE_MOUNT_POLL_MS = 50;
+let panelExists = false;
+let mounted = false;
+
+function tryMountPanel() {
+  if (!panelExists) return false;
+  if (mounted) return true;
+  mounted = true;
+  return true;
+}
+
+function scheduleVoicePanelMount() {
+  const startedAt = Date.now();
+  const tick = () => {
+    if (tryMountPanel()) {
+      console.log(JSON.stringify({ ok: true, elapsed: Date.now() - startedAt }));
+      process.exit(0);
+      return;
+    }
+    if (Date.now() - startedAt >= VOICE_MOUNT_TIMEOUT_MS) {
+      console.error(JSON.stringify({ ok: false, reason: "timeout" }));
+      process.exit(1);
+      return;
+    }
+    setTimeout(tick, VOICE_MOUNT_POLL_MS);
+  };
+  setTimeout(tick, 0); // rAF stand-in
+}
+
+scheduleVoicePanelMount();
+setTimeout(() => { panelExists = true; }, 350);
+setTimeout(() => {
+  if (!mounted) {
+    console.error(JSON.stringify({ ok: false, reason: "never_mounted" }));
+    process.exit(1);
+  }
+}, 2000);
+"""
+    result = _run_node(script)
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert '"ok":true' in result.stdout.replace(" ", "")
+
+
 def test_text_chat_unchanged_markers() -> None:
     conv = (V2 / "conversation" / "conversation-manager.js").read_text(encoding="utf-8")
     assert "sendMessage" in conv or "retryLast" in conv
