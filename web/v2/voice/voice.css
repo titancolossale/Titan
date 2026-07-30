@@ -252,6 +252,40 @@
   }
 }
 
+/* Mount timeout / retry — keep shell styling; no redesign. */
+.tdl-v2-voice-mount-error {
+  color: #fecaca;
+}
+
+#tdl-v2-voice-mount-retry {
+  margin-top: 0.85rem;
+}
+
+/* Enrollment recording — dedicated Enregistrer path (not composer mic). */
+.tdl-v2-voice-enroll__record-hint {
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  border-radius: 4px;
+  background: rgba(220, 38, 38, 0.08);
+  color: #fecaca;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.tdl-v2-voice-live-hint__enroll {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: var(--tdl-text-secondary, #cbd5e1);
+}
+
+.tdl-v2-voice-mic--enrollment-locked,
+.tdl-v2-root[data-voice-enrollment-active="true"] .tdl-v2-voice-mic {
+  opacity: 0.42;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tdl-v2-voice-mic--recording .tdl-v2-voice-mic__ring,
   .tdl-v2--reduced-motion .tdl-v2-voice-mic--recording .tdl-v2-voice-mic__ring {

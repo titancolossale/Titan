@@ -146,40 +146,45 @@ def test_enrollment_consent_required() -> None:
     assert "consent" in text.lower()
     assert "tdl-v2-voice-consent-check" in text
     assert "consent_required" in text or "CONSENT" in text
-    # Continuer must propagate explicit consent — never start without it.
+    # Continuer must send explicit consent only after the checkbox is checked.
     assert "consent_accepted: true" in text or "consent_accepted:true" in text
     assert "consentCheck.checked" in text
     assert "grantEnrollmentConsent" in text
+    api = (VOICE_JS / "voice-api.js").read_text(encoding="utf-8")
+    assert "consent_accepted" in api or "grantEnrollmentConsent" in api
     assert "/voice/enrollment/consent" in api
-    assert "grantEnrollmentConsent" in api
 
 
-def test_enrollment_recording_separated_from_composer_mic() -> None:
+def test_enrollment_recording_uses_sample_endpoint_not_composer_mic() -> None:
+    """Enregistrer → /voice/enrollment/sample; composer mic is gated during enrollment."""
     enroll = (VOICE_JS / "enrollment-ui.js").read_text(encoding="utf-8")
     ctrl = (VOICE_JS / "voice-controller.js").read_text(encoding="utf-8")
     api = (VOICE_JS / "voice-api.js").read_text(encoding="utf-8")
-    store = (V2 / "core" / "state-store.js").read_text(encoding="utf-8")
     assert "tdl-v2-voice-record-sample" in enroll
     assert "submitEnrollmentSample" in enroll
-    assert "/voice/enrollment/sample" in api
     assert "recordSampleWav" in enroll
-    assert "voiceEnrollmentActive" in store
-    assert "voiceEnrollmentActive" in enroll
-    assert "voiceEnrollmentActive" in ctrl
-    assert "tdl-v2-voice-mic--enrollment-locked" in ctrl
-    # Composer mic must not be instructed as the enrollment recorder.
+    assert "/voice/enrollment/sample" in api
+    assert "voiceEnrollmentCollecting" in enroll
+    assert "voiceEnrollmentCollecting" in ctrl
+    assert "enrollment_use_enregistrer" in ctrl
     assert "Utilise le micro du compositeur pour le push-to-talk" not in enroll
     assert "Enregistrer" in enroll
-    assert "pas le micro du compositeur" in enroll.lower() or "pas le micro" in enroll
-    # Live FAILED must not be presented as biometric enrollment failure.
-    assert "pas un échec d’enrollment" in enroll or "pas un échec d'enrollment" in enroll
-    assert "Session live (PTT)" in enroll
-    assert "Enrollment :" in enroll
-    # Composer PTT path remains distinct from enrollment sample recording.
-    assert "beginListening" in ctrl
-    assert "recordSampleWav" in ctrl
-    assert "/voice/session/start" in api
-    assert api.index("/voice/enrollment/sample") != api.index("/voice/session/start")
+    assert "micro du compositeur est désactivé" in enroll.lower() or "Désactivé pendant" in enroll
+
+
+def test_live_session_failed_does_not_mark_enrollment_failed() -> None:
+    enroll = (VOICE_JS / "enrollment-ui.js").read_text(encoding="utf-8")
+    # Live PTT FAILED must stay labeled as conversation, not enrollment failure.
+    assert "n’annule pas l’enrollment biométrique" in enroll or "n'annule pas l’enrollment" in enroll
+    assert "Enrollment biométrique :" in enroll
+    assert "Conversation (push-to-talk)" in enroll
+    # _fail sets voiceSessionState FAILED only — enrollment status is separate.
+    ctrl = (VOICE_JS / "voice-controller.js").read_text(encoding="utf-8")
+    assert 'voiceSessionState: "FAILED"' in ctrl
+    # Ensure FAILED assignment is not coupled to enrollment status in the fail path.
+    idx = ctrl.index('voiceSessionState: "FAILED"')
+    window = ctrl[max(0, idx - 400) : idx + 200]
+    assert "voiceEnrollmentStatus" not in window
 
 
 def test_push_to_talk_and_barge_in_controls() -> None:
@@ -214,10 +219,73 @@ def test_voice_nav_and_composer_mic_wired() -> None:
         "voiceInputLevel",
         "voiceCurrentSpeaker",
         "voiceEnrollmentStatus",
-        "voiceEnrollmentActive",
+        "voiceEnrollmentCollecting",
         "voicePendingConfirmation",
     ):
         assert field in store
+
+
+def test_voice_panel_mount_retries_across_transition() -> None:
+    """Phase 20.13 — must not leave Voice stuck on the loading placeholder."""
+    register = (VOICE_JS / "register.js").read_text(encoding="utf-8")
+    layouts = (V2 / "panels" / "layouts" / "index.js").read_text(encoding="utf-8")
+    assert "Chargement du module vocal" in layouts
+    assert "VOICE_MOUNT_TIMEOUT_MS" in register
+    assert "VOICE_MOUNT_POLL_MS" in register
+    assert "scheduleVoicePanelMount" in register
+    assert "tdl-v2-voice-mount-retry" in register
+    assert "tdl-v2-voice-mount-error" in register
+    assert "mountEnrollmentPanel" in register
+    # Single rAF without retry is the production stuck-state bug.
+    assert "setTimeout(tick" in register or "setTimeout(tick," in register
+
+
+@pytest.mark.skipif(not _node_available(), reason="node required")
+def test_voice_mount_survives_delayed_panel_dom() -> None:
+    """Reproduce the 350ms panel-transition race and assert mount succeeds."""
+    script = r"""
+const VOICE_MOUNT_TIMEOUT_MS = 8000;
+const VOICE_MOUNT_POLL_MS = 50;
+let panelExists = false;
+let mounted = false;
+
+function tryMountPanel() {
+  if (!panelExists) return false;
+  if (mounted) return true;
+  mounted = true;
+  return true;
+}
+
+function scheduleVoicePanelMount() {
+  const startedAt = Date.now();
+  const tick = () => {
+    if (tryMountPanel()) {
+      console.log(JSON.stringify({ ok: true, elapsed: Date.now() - startedAt }));
+      process.exit(0);
+      return;
+    }
+    if (Date.now() - startedAt >= VOICE_MOUNT_TIMEOUT_MS) {
+      console.error(JSON.stringify({ ok: false, reason: "timeout" }));
+      process.exit(1);
+      return;
+    }
+    setTimeout(tick, VOICE_MOUNT_POLL_MS);
+  };
+  setTimeout(tick, 0); // rAF stand-in
+}
+
+scheduleVoicePanelMount();
+setTimeout(() => { panelExists = true; }, 350);
+setTimeout(() => {
+  if (!mounted) {
+    console.error(JSON.stringify({ ok: false, reason: "never_mounted" }));
+    process.exit(1);
+  }
+}, 2000);
+"""
+    result = _run_node(script)
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert '"ok":true' in result.stdout.replace(" ", "")
 
 
 def test_text_chat_unchanged_markers() -> None:

@@ -1,4 +1,4 @@
-/** Titan Voice UI — guided enrollment panel (Phase 20.4). */
+/** Titan Voice UI — guided enrollment panel (Phase 20.4 / 20.13). */
 
 import { emitVoiceUiDiagnostic } from "./diagnostics.js";
 import { normalizeVoiceError, voiceErrorMessage } from "./errors.js";
@@ -69,8 +69,8 @@ export function mountEnrollmentPanel(root, ctx) {
       </div>
       <div class="tdl-v2-voice-enroll__wizard" id="tdl-v2-voice-wizard" hidden>
         <p class="tdl-v2-voice-enroll__record-hint" id="tdl-v2-voice-record-hint">
-          Enrollment biométrique : utilise uniquement le bouton <strong>Enregistrer</strong> ci-dessous.
-          Le micro du compositeur est réservé au push-to-talk conversationnel et est désactivé pendant l’enrollment.
+          Pour chaque phrase, utilise uniquement le bouton <strong>Enregistrer</strong> ci-dessous.
+          Le micro du compositeur est désactivé pendant l’enrollment biométrique.
         </p>
         <p class="tdl-v2-voice-enroll__progress" id="tdl-v2-voice-progress"></p>
         <blockquote class="tdl-v2-voice-enroll__phrase" id="tdl-v2-voice-phrase"></blockquote>
@@ -99,13 +99,13 @@ export function mountEnrollmentPanel(root, ctx) {
         </button>
       </div>
     </section>
-    <section class="tdl-v2-voice-live-hint" aria-label="Session vocale">
-      <p id="tdl-v2-voice-live-hint-copy">
-        Hors enrollment : le micro du compositeur sert au push-to-talk conversationnel.
-        Pendant l’enrollment biométrique, enregistre uniquement via <strong>Enregistrer</strong> — pas le micro du compositeur.
-        Le mode écoute continue n’est pas activé.
+    <section class="tdl-v2-voice-live-hint" aria-label="Session vocale conversationnelle">
+      <p id="tdl-v2-voice-live-copy">
+        Le micro du compositeur sert uniquement au push-to-talk conversationnel
+        (après enrollment). Il n’enregistre pas les échantillons biométriques.
       </p>
-      <p class="tdl-v2-voice-live-hint__state" id="tdl-v2-voice-session-hint"></p>
+      <p class="tdl-v2-voice-live-hint__enroll" id="tdl-v2-voice-enroll-hint" aria-live="polite"></p>
+      <p class="tdl-v2-voice-live-hint__state" id="tdl-v2-voice-session-hint" aria-live="polite"></p>
     </section>
   `;
 
@@ -138,6 +138,8 @@ export function mountEnrollmentPanel(root, ctx) {
   const cancelBtn = body.querySelector("#tdl-v2-voice-cancel-enroll");
   const revokeBtn = /** @type {HTMLButtonElement} */ (body.querySelector("#tdl-v2-voice-revoke"));
   const sessionHint = body.querySelector("#tdl-v2-voice-session-hint");
+  const enrollHint = body.querySelector("#tdl-v2-voice-enroll-hint");
+  const liveCopy = body.querySelector("#tdl-v2-voice-live-copy");
 
   function locale() {
     return localeEl.value || "fr-FR";
@@ -147,6 +149,55 @@ export function mountEnrollmentPanel(root, ctx) {
     if (!feedbackEl) return;
     feedbackEl.textContent = msg || "";
     feedbackEl.dataset.kind = kind;
+  }
+
+  /** Gate composer push-to-talk while biometric samples are being collected. */
+  function setEnrollmentCollecting(active) {
+    const on = Boolean(active);
+    store.setState({ voiceEnrollmentCollecting: on });
+    const appRoot = document.getElementById("titan-v2-root");
+    if (appRoot) {
+      appRoot.dataset.voiceEnrollmentActive = on ? "true" : "false";
+    }
+    const mic = document.getElementById("tdl-v2-voice-mic");
+    if (mic) {
+      mic.toggleAttribute("disabled", on);
+      mic.setAttribute("aria-disabled", on ? "true" : "false");
+      mic.title = on
+        ? "Désactivé pendant l’enrollment — utilise Enregistrer"
+        : "Maintenir pour parler";
+    }
+    if (liveCopy) {
+      liveCopy.textContent = on
+        ? "Enrollment biométrique en cours — utilise uniquement Enregistrer ci-dessus. Le micro du compositeur est désactivé."
+        : "Le micro du compositeur sert uniquement au push-to-talk conversationnel (après enrollment). Il n’enregistre pas les échantillons biométriques.";
+    }
+  }
+
+  function syncEnrollmentHint(state) {
+    if (!enrollHint) return;
+    const status = state.voiceEnrollmentStatus || "—";
+    const collected = state.voiceSamplesCollected;
+    const required = state.voiceSamplesRequired;
+    const progress =
+      collected != null && required != null ? `${collected}/${required}` : "—";
+    enrollHint.textContent = `Enrollment biométrique : ${status} · échantillons ${progress}`;
+  }
+
+  function syncLiveSessionHint(state) {
+    if (!sessionHint) return;
+    const phase = state.voiceUiPhase || "idle";
+    const speaker = state.voiceCurrentSpeaker || "—";
+    const live = state.voiceSessionState || "IDLE";
+    // Live PTT FAILED is conversational only — never imply enrollment failed.
+    if (live === "FAILED") {
+      sessionHint.textContent =
+        `Conversation (push-to-talk) : FAILED · UI : ${phase} · Locuteur : ${speaker}` +
+        " — ceci n’annule pas l’enrollment biométrique.";
+      return;
+    }
+    sessionHint.textContent =
+      `Conversation (push-to-talk) : ${live} · UI : ${phase} · Locuteur : ${speaker}`;
   }
 
   async function refreshStatus(user) {
@@ -216,6 +267,7 @@ export function mountEnrollmentPanel(root, ctx) {
   function showConsent(user) {
     selectedUser = user;
     consented = false;
+    setEnrollmentCollecting(false);
     consentCheck.checked = false;
     consentStart.disabled = true;
     setEnrollmentActive(false);
@@ -252,18 +304,18 @@ export function mountEnrollmentPanel(root, ctx) {
   });
 
   consentStart.addEventListener("click", async () => {
-    // Explicit checkbox action required — never auto-consent.
+    // Explicit checkbox required — never auto-consent.
     if (!consentCheck.checked || !selectedUser) {
       setFeedback(voiceErrorMessage("consent_required"), "error");
       return;
     }
-    consentStart.disabled = true;
     try {
       // Propagate explicit user consent to the backend (production require_consent).
       let data = await api.startEnrollment({
         user: selectedUser,
         locale: locale(),
         replace_existing: true,
+        // Persist consent on the backend only after the user checked the box.
         consent_accepted: true,
       });
       let session = data.session || null;
@@ -287,18 +339,45 @@ export function mountEnrollmentPanel(root, ctx) {
       consented = true;
       sessionId = session.session_id || null;
       script = data.script || null;
+
+      // Belt-and-suspenders: if start deferred consent, grant via dedicated API.
+      if (sessionId && data.session && data.session.consent_given === false) {
+        const granted = await api.grantEnrollmentConsent({
+          session_id: sessionId,
+          accepted: true,
+          locale: locale(),
+        });
+        if (granted?.session) {
+          data.session = granted.session;
+          if (granted.next_phrase) data.next_phrase = granted.next_phrase;
+          if (granted.script) script = granted.script;
+        }
+      }
+
+      if (!data.session?.consent_given && data.consent_required !== false) {
+        consented = false;
+        setEnrollmentCollecting(false);
+        setFeedback(voiceErrorMessage("consent_required"), "error");
+        return;
+      }
+
+      consented = true;
       consentBox.hidden = true;
       wizard.hidden = false;
-      updateWizard(session, data.next_phrase);
-      setEnrollmentActive(true);
+      setEnrollmentCollecting(true);
+      updateWizard(data.session, data.next_phrase);
       store.setState({
         voiceEnrollmentStatus: session.status || "COLLECTING",
         voiceSamplesCollected: session.samples_collected ?? 0,
         voiceSamplesRequired: session.samples_required ?? 3,
       });
+      emitVoiceUiDiagnostic("VOICE_UI_ENROLLMENT_CONSENT_ACCEPTED", {
+        user: selectedUser,
+        consent_given: true,
+      });
     } catch (err) {
       consented = false;
-      setEnrollmentActive(false);
+      setEnrollmentCollecting(false);
       setFeedback(normalizeVoiceError(err).message, "error");
     } finally {
       consentStart.disabled = !consentCheck.checked;
@@ -341,7 +420,7 @@ export function mountEnrollmentPanel(root, ctx) {
     stopBtn.hidden = false;
     setFeedback(locale().startsWith("en") ? "Recording…" : "Enregistrement…", "info");
     try {
-      // Fixed window; Stop ends early.
+      // Dedicated enrollment recorder — never the composer mic /voice/session path.
       const samplePromise = recordSampleWav(7000);
       const sample = await samplePromise;
       if (verifyBtn && !verifyBtn.hidden && sessionId) {
@@ -356,7 +435,7 @@ export function mountEnrollmentPanel(root, ctx) {
               : "Vérification réussie — profil activé.",
             "ok",
           );
-          setEnrollmentActive(false);
+          setEnrollmentCollecting(false);
           store.setState({
             voiceEnrollmentStatus: "ENROLLED",
             voiceVerificationStatus: "passed",
@@ -432,10 +511,9 @@ export function mountEnrollmentPanel(root, ctx) {
   });
 
   verifyBtn.addEventListener("click", () => {
-    // Verification uses the same record button path when verify is visible.
     setFeedback(
       locale().startsWith("en")
-        ? "Press Record for a fresh verification sample."
+        ? "Press Enregistrer for a fresh verification sample."
         : "Appuie sur Enregistrer pour la vérification.",
       "info",
     );
@@ -451,7 +529,7 @@ export function mountEnrollmentPanel(root, ctx) {
     }
     sessionId = null;
     consented = false;
-    setEnrollmentActive(false);
+    setEnrollmentCollecting(false);
     wizard.hidden = true;
     consentBox.hidden = true;
     setFeedback("");
@@ -474,21 +552,17 @@ export function mountEnrollmentPanel(root, ctx) {
   });
 
   store.subscribe((state) => {
-    if (!sessionHint) return;
-    const enrollStatus = state.voiceEnrollmentStatus || "—";
-    const liveState = state.voiceSessionState || "IDLE";
-    const phase = state.voiceUiPhase || "idle";
-    const speaker = state.voiceCurrentSpeaker || "—";
-    // Keep live PTT status visually separate from biometric enrollment status.
-    const liveNote =
-      liveState === "FAILED"
-        ? "Session live (PTT) : FAILED — ce n’est pas un échec d’enrollment biométrique"
-        : `Session live (PTT) : ${liveState}`;
-    sessionHint.textContent =
-      `Enrollment : ${enrollStatus}` +
-      (state.voiceEnrollmentActive ? " (Enregistrer uniquement)" : "") +
-      ` · ${liveNote} · UI : ${phase} · Locuteur : ${speaker}`;
-  });
+    syncEnrollmentHint(state);
+    syncLiveSessionHint(state);
+  }, "voiceSessionState");
+  store.subscribe((state) => syncEnrollmentHint(state), "voiceEnrollmentStatus");
+  store.subscribe((state) => syncEnrollmentHint(state), "voiceSamplesCollected");
+  store.subscribe((state) => syncLiveSessionHint(state), "voiceUiPhase");
+  store.subscribe((state) => syncLiveSessionHint(state), "voiceCurrentSpeaker");
+
+  syncEnrollmentHint(store.getState());
+  syncLiveSessionHint(store.getState());
+  setEnrollmentCollecting(false);
 
   void refreshStatus();
   void refreshPreflight();

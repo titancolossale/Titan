@@ -209,6 +209,43 @@ def test_consent_required_and_cross_user_protection(monkeypatch, tmp_path: Path)
         )
     assert blocked.value.code in {"consent_required", "invalid_state"}
 
+    # Explicit consent_accepted=True (Web Continuer path) unlocks collection.
+    consented = service.start_enrollment(
+        target_user="Nolan",
+        authenticated_user="Nolan",
+        consent_accepted=True,
+        replace_existing=True,
+    )
+    assert consented["session"].get("consent_given") is True
+    status = consented["session"]["status"]
+    assert status == "COLLECTING" or getattr(status, "value", status) == "COLLECTING"
+    assert store.get_active_profile("Nolan") is None
+
+
+def test_grant_consent_api_unlocks_samples(monkeypatch, tmp_path: Path):
+    store = _activate_production_env(monkeypatch, tmp_path)
+    service = VoiceEnrollmentService(
+        store=store,
+        config=EnrollmentConfig(require_consent=True, min_sample_count=3, min_quality_score=0.1),
+        temp_dir=tmp_path / "tmp",
+    )
+    started = service.start_enrollment(
+        target_user="Nolan",
+        authenticated_user="Nolan",
+        consent_accepted=False,
+    )
+    sid = started["session"]["session_id"]
+    granted = service.grant_consent(
+        session_id=sid,
+        authenticated_user="Nolan",
+        accepted=True,
+        locale="fr-FR",
+    )
+    assert granted.get("accepted") is True or granted["session"].get("consent_given") is True
+    assert granted["session"].get("consent_given") is True
+    # Still unenrolled — no embeddings until samples are accepted + verified.
+    assert store.get_active_profile("Nolan") is None
+
 
 def test_separate_nolan_ibrahim_slots(monkeypatch, tmp_path: Path):
     store = _activate_production_env(monkeypatch, tmp_path)

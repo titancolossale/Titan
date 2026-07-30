@@ -85,6 +85,7 @@
  * @property {number | null} voiceSamplesCollected
  * @property {number | null} voiceSamplesRequired
  * @property {string | null} voiceVerificationStatus
+ * @property {boolean} voiceEnrollmentCollecting
  * @property {string | null} voiceUiPhase
  * @property {string | null} voiceMicPermission
  * @property {string | null} voiceUiError
@@ -173,6 +174,7 @@ const DEFAULT_STATE = Object.freeze({
   voiceSamplesCollected: null,
   voiceSamplesRequired: null,
   voiceVerificationStatus: null,
+  voiceEnrollmentCollecting: false,
   voiceUiPhase: "idle",
   voiceMicPermission: "unknown",
   voiceUiError: null,

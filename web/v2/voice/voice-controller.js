@@ -115,7 +115,7 @@ export class VoiceController {
     this._store.subscribe(() => this._renderFromStore(), "voiceSessionState");
     this._store.subscribe(() => this._renderFromStore(), "voicePendingConfirmation");
     this._store.subscribe(() => this._renderFromStore(), "voiceUiError");
-    this._store.subscribe(() => this._renderFromStore(), "voiceEnrollmentActive");
+    this._store.subscribe(() => this._syncMicChrome(), "voiceEnrollmentCollecting");
     this._setVoiceState({
       voiceSessionState: "IDLE",
       voiceMicPermission: "unknown",
@@ -211,11 +211,8 @@ export class VoiceController {
   }
 
   async beginListening() {
-    // Biometric enrollment uses the dedicated Enregistrer control — not composer PTT.
-    if (this._store.getState().voiceEnrollmentActive) {
-      this._announce(
-        "Enrollment biométrique en cours — utilise le bouton Enregistrer dans le panneau Voice.",
-      );
+    if (this._store.getState().voiceEnrollmentCollecting) {
+      this._announce(voiceErrorMessage("enrollment_use_enregistrer"));
       return;
     }
     if (this._phase !== "idle" && this._phase !== "interrupted" && this._phase !== "failed") {
@@ -692,6 +689,7 @@ export class VoiceController {
     const mic = document.getElementById("tdl-v2-voice-mic");
     const interrupt = document.getElementById("tdl-v2-voice-interrupt");
     if (!mic) return;
+    const enrollmentLock = Boolean(this._store.getState().voiceEnrollmentCollecting);
     mic.classList.remove(
       "tdl-v2-voice-mic--idle",
       "tdl-v2-voice-mic--listening",
@@ -700,23 +698,21 @@ export class VoiceController {
       "tdl-v2-voice-mic--error",
       "tdl-v2-voice-mic--enrollment-locked",
     );
-    const enrollmentLocked = Boolean(this._store.getState().voiceEnrollmentActive);
-    if (enrollmentLocked) {
+    if (enrollmentLock) {
       mic.classList.add("tdl-v2-voice-mic--idle", "tdl-v2-voice-mic--enrollment-locked");
-      mic.disabled = true;
+      mic.toggleAttribute("disabled", true);
       mic.setAttribute("aria-disabled", "true");
       mic.setAttribute("aria-pressed", "false");
       mic.setAttribute(
         "aria-label",
-        "Micro compositeur désactivé — enrollment via Enregistrer",
+        "Désactivé pendant l’enrollment — utilise Enregistrer",
       );
-      mic.title =
-        "Enrollment biométrique actif — utilise Enregistrer dans le panneau Voice";
+      mic.title = "Désactivé pendant l’enrollment — utilise Enregistrer";
       if (interrupt) interrupt.hidden = true;
       return;
     }
-    mic.disabled = false;
-    mic.removeAttribute("aria-disabled");
+    mic.removeAttribute("disabled");
+    mic.setAttribute("aria-disabled", "false");
     const phase = this._phase;
     let cls = "tdl-v2-voice-mic--idle";
     let label = "Maintenir pour parler";
