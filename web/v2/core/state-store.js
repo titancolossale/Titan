@@ -81,7 +81,6 @@
  * @property {string | null} voiceTtsStatus
  * @property {boolean} voiceInterrupted
  * @property {string | null} voiceEnrollmentStatus
- * @property {boolean} voiceEnrollmentActive
  * @property {number | null} voiceSamplesCollected
  * @property {number | null} voiceSamplesRequired
  * @property {string | null} voiceVerificationStatus
@@ -170,7 +169,6 @@ const DEFAULT_STATE = Object.freeze({
   voiceTtsStatus: null,
   voiceInterrupted: false,
   voiceEnrollmentStatus: null,
-  voiceEnrollmentActive: false,
   voiceSamplesCollected: null,
   voiceSamplesRequired: null,
   voiceVerificationStatus: null,

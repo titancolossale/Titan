@@ -99,13 +99,11 @@ def test_ui_unchecked_consent_cannot_start_enrollment() -> None:
     assert "consentCheck.checked" in ui
     assert "consentStart.disabled = !consentCheck.checked" in ui
     assert "consent_accepted: true" in ui or "consent_accepted:true" in ui
-    # Must not open wizard / set consented before the checkbox gate.
     start_handler = ui.split("consentStart.addEventListener")[1].split(
         "function updateWizard"
     )[0]
     assert "if (!consentCheck.checked" in start_handler
     assert "consent_accepted: true" in start_handler or "consent_accepted:true" in start_handler
-    # No automatic consent without user action.
     assert "consentCheck.checked = true" not in ui
     assert "consent_accepted: true" not in ui.split("consentStart.addEventListener")[0]
 
@@ -137,14 +135,13 @@ def test_composer_mic_is_not_enrollment_recorder() -> None:
     ui = (VOICE_JS / "enrollment-ui.js").read_text(encoding="utf-8")
     ctrl = (VOICE_JS / "voice-controller.js").read_text(encoding="utf-8")
     api = (VOICE_JS / "voice-api.js").read_text(encoding="utf-8")
-    # Enrollment samples go through Enregistrer → recordSampleWav → /sample.
     assert "tdl-v2-voice-record-sample" in ui
     assert "submitEnrollmentSample" in ui
-    # Composer mic is live PTT only and locks during enrollment.
-    assert "voiceEnrollmentActive" in ctrl
-    assert "beginListening" in ctrl
+    assert "voiceEnrollmentCollecting" in ctrl
+    assert "voiceEnrollmentCollecting" in ui
     begin = ctrl.split("async beginListening()")[1].split("async endListening")[0]
-    assert "voiceEnrollmentActive" in begin
+    assert "voiceEnrollmentCollecting" in begin
+    assert "enrollment_use_enregistrer" in begin or "Enregistrer" in begin
     assert "/voice/session/start" in api
     assert "tdl-v2-voice-mic--enrollment-locked" in ctrl
     assert "Utilise le micro du compositeur pour le push-to-talk" not in ui
@@ -155,13 +152,11 @@ def test_live_failed_does_not_mark_enrollment_failed() -> None:
     store = (ROOT / "web" / "v2" / "core" / "state-store.js").read_text(encoding="utf-8")
     assert "voiceSessionState" in store
     assert "voiceEnrollmentStatus" in store
-    assert "voiceEnrollmentActive" in store
-    # Status line separates enrollment from live PTT FAILED.
-    assert "Enrollment :" in ui
-    assert "Session live (PTT)" in ui
+    assert "voiceEnrollmentCollecting" in store
+    assert "Enrollment biométrique" in ui
+    assert "Conversation (push-to-talk)" in ui
     assert "FAILED" in ui
-    assert "pas un échec d’enrollment" in ui or "pas un échec d'enrollment" in ui
-    # Must not overwrite enrollment status from live FAILED.
+    assert "n’annule pas l’enrollment" in ui or "n'annule pas l’enrollment" in ui
     assert 'voiceEnrollmentStatus: "FAILED"' not in ui
     assert "voiceEnrollmentStatus: state.voiceSessionState" not in ui
 
@@ -317,13 +312,13 @@ if (!api.includes('/voice/enrollment/consent')) throw new Error('missing consent
 if (!api.includes('/voice/enrollment/sample')) throw new Error('missing sample route');
 if (!ui.includes('submitEnrollmentSample')) throw new Error('missing sample submit');
 if (!ui.includes('tdl-v2-voice-record-sample')) throw new Error('missing Enregistrer');
-if (!store.includes('voiceEnrollmentActive')) throw new Error('missing enrollment active flag');
-if (!ctrl.includes('voiceEnrollmentActive')) throw new Error('controller missing lock');
+if (!store.includes('voiceEnrollmentCollecting')) throw new Error('missing enrollment collecting flag');
+if (!ctrl.includes('voiceEnrollmentCollecting')) throw new Error('controller missing lock');
 if (!ctrl.includes('tdl-v2-voice-mic--enrollment-locked')) throw new Error('missing lock class');
 if (ui.includes('Utilise le micro du compositeur pour le push-to-talk')) {
   throw new Error('misleading composer mic enrollment hint still present');
 }
-if (!ui.includes('Session live (PTT)')) throw new Error('live/enrollment status not separated');
+if (!ui.includes('Conversation (push-to-talk)')) throw new Error('live/enrollment status not separated');
 console.log('ok');
 """
     result = _run_node(script)

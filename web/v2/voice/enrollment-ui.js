@@ -260,17 +260,12 @@ export function mountEnrollmentPanel(root, ctx) {
     }
   }
 
-  function setEnrollmentActive(active) {
-    store.setState({ voiceEnrollmentActive: Boolean(active) });
-  }
-
   function showConsent(user) {
     selectedUser = user;
     consented = false;
     setEnrollmentCollecting(false);
     consentCheck.checked = false;
     consentStart.disabled = true;
-    setEnrollmentActive(false);
     if (consentText) {
       consentText.textContent = locale().startsWith("en") ? CONSENT_EN : CONSENT_FR;
     }
@@ -309,6 +304,7 @@ export function mountEnrollmentPanel(root, ctx) {
       setFeedback(voiceErrorMessage("consent_required"), "error");
       return;
     }
+    consentStart.disabled = true;
     try {
       // Propagate explicit user consent to the backend (production require_consent).
       let data = await api.startEnrollment({
@@ -330,42 +326,21 @@ export function mountEnrollmentPanel(root, ctx) {
           locale: locale(),
         });
         session = data.session || session;
+        if (data.script) script = data.script;
       }
       if (!sessionReadyForSamples(session)) {
-        setFeedback(voiceErrorMessage("consent_required"), "error");
-        setEnrollmentActive(false);
-        return;
-      }
-      consented = true;
-      sessionId = session.session_id || null;
-      script = data.script || null;
-
-      // Belt-and-suspenders: if start deferred consent, grant via dedicated API.
-      if (sessionId && data.session && data.session.consent_given === false) {
-        const granted = await api.grantEnrollmentConsent({
-          session_id: sessionId,
-          accepted: true,
-          locale: locale(),
-        });
-        if (granted?.session) {
-          data.session = granted.session;
-          if (granted.next_phrase) data.next_phrase = granted.next_phrase;
-          if (granted.script) script = granted.script;
-        }
-      }
-
-      if (!data.session?.consent_given && data.consent_required !== false) {
         consented = false;
         setEnrollmentCollecting(false);
         setFeedback(voiceErrorMessage("consent_required"), "error");
         return;
       }
-
       consented = true;
+      sessionId = session.session_id || null;
+      script = data.script || script;
       consentBox.hidden = true;
       wizard.hidden = false;
       setEnrollmentCollecting(true);
-      updateWizard(data.session, data.next_phrase);
+      updateWizard(session, data.next_phrase);
       store.setState({
         voiceEnrollmentStatus: session.status || "COLLECTING",
         voiceSamplesCollected: session.samples_collected ?? 0,
