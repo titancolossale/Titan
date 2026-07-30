@@ -84,7 +84,9 @@ function createVoicePanel() {
       <p class="tdl-v2-screen-header__subtitle">Enrollment et session vocale</p>
     </header>
     <div class="tdl-v2-screen-body">
-      <p class="tdl-v2-empty-state">Chargement du module vocal…</p>
+      <p class="tdl-v2-empty-state" id="tdl-v2-voice-loading" aria-live="polite">
+        Chargement du module vocal…
+      </p>
     </div>
   `;
   panel.appendChild(host);

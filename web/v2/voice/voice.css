@@ -239,6 +239,15 @@
   }
 }
 
+/* Mount timeout / retry — keep shell styling; no redesign. */
+.tdl-v2-voice-mount-error {
+  color: #fecaca;
+}
+
+#tdl-v2-voice-mount-retry {
+  margin-top: 0.85rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tdl-v2-voice-mic--recording .tdl-v2-voice-mic__ring,
   .tdl-v2--reduced-motion .tdl-v2-voice-mic--recording .tdl-v2-voice-mic__ring {
