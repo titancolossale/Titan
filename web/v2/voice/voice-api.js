@@ -225,11 +225,33 @@ export async function getVoiceSessionStats(sessionId) {
 
 /** Enrollment ----------------------------------------------------------- */
 
-/** @param {{ user: string, locale?: string, replace_existing?: boolean }} body */
+/**
+ * @param {{
+ *   user: string,
+ *   locale?: string,
+ *   replace_existing?: boolean,
+ *   consent_accepted?: boolean,
+ *   session_label?: string,
+ * }} body
+ */
 export async function startEnrollment(body) {
   return voiceFetch("/voice/enrollment/start", {
     method: "POST",
     body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Explicit consent grant for an in-flight enrollment session.
+ * @param {{ session_id: string, accepted?: boolean, locale?: string }} body
+ */
+export async function grantEnrollmentConsent(body) {
+  return voiceFetch("/voice/enrollment/consent", {
+    method: "POST",
+    body: JSON.stringify({
+      accepted: true,
+      ...body,
+    }),
   });
 }
 
