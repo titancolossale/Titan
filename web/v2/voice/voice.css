@@ -20,6 +20,19 @@
   color: #fca5a5;
 }
 
+.tdl-v2-voice-mic--enrollment-locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.tdl-v2-voice-enroll__record-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  color: var(--tdl-text-secondary, #d4d4d8);
+}
+
 .tdl-v2-voice-mic__level {
   position: absolute;
   left: 50%;

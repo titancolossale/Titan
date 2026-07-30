@@ -142,9 +142,44 @@ def test_no_raw_audio_in_browser_persistence() -> None:
 
 def test_enrollment_consent_required() -> None:
     text = (VOICE_JS / "enrollment-ui.js").read_text(encoding="utf-8")
+    api = (VOICE_JS / "voice-api.js").read_text(encoding="utf-8")
     assert "consent" in text.lower()
     assert "tdl-v2-voice-consent-check" in text
     assert "consent_required" in text or "CONSENT" in text
+    # Continuer must propagate explicit consent — never start without it.
+    assert "consent_accepted: true" in text or "consent_accepted:true" in text
+    assert "consentCheck.checked" in text
+    assert "grantEnrollmentConsent" in text
+    assert "/voice/enrollment/consent" in api
+    assert "grantEnrollmentConsent" in api
+
+
+def test_enrollment_recording_separated_from_composer_mic() -> None:
+    enroll = (VOICE_JS / "enrollment-ui.js").read_text(encoding="utf-8")
+    ctrl = (VOICE_JS / "voice-controller.js").read_text(encoding="utf-8")
+    api = (VOICE_JS / "voice-api.js").read_text(encoding="utf-8")
+    store = (V2 / "core" / "state-store.js").read_text(encoding="utf-8")
+    assert "tdl-v2-voice-record-sample" in enroll
+    assert "submitEnrollmentSample" in enroll
+    assert "/voice/enrollment/sample" in api
+    assert "recordSampleWav" in enroll
+    assert "voiceEnrollmentActive" in store
+    assert "voiceEnrollmentActive" in enroll
+    assert "voiceEnrollmentActive" in ctrl
+    assert "tdl-v2-voice-mic--enrollment-locked" in ctrl
+    # Composer mic must not be instructed as the enrollment recorder.
+    assert "Utilise le micro du compositeur pour le push-to-talk" not in enroll
+    assert "Enregistrer" in enroll
+    assert "pas le micro du compositeur" in enroll.lower() or "pas le micro" in enroll
+    # Live FAILED must not be presented as biometric enrollment failure.
+    assert "pas un échec d’enrollment" in enroll or "pas un échec d'enrollment" in enroll
+    assert "Session live (PTT)" in enroll
+    assert "Enrollment :" in enroll
+    # Composer PTT path remains distinct from enrollment sample recording.
+    assert "beginListening" in ctrl
+    assert "recordSampleWav" in ctrl
+    assert "/voice/session/start" in api
+    assert api.index("/voice/enrollment/sample") != api.index("/voice/session/start")
 
 
 def test_push_to_talk_and_barge_in_controls() -> None:
@@ -179,6 +214,7 @@ def test_voice_nav_and_composer_mic_wired() -> None:
         "voiceInputLevel",
         "voiceCurrentSpeaker",
         "voiceEnrollmentStatus",
+        "voiceEnrollmentActive",
         "voicePendingConfirmation",
     ):
         assert field in store

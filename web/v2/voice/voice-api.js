@@ -225,11 +225,36 @@ export async function getVoiceSessionStats(sessionId) {
 
 /** Enrollment ----------------------------------------------------------- */
 
-/** @param {{ user: string, locale?: string, replace_existing?: boolean }} body */
+/**
+ * Start guided enrollment. When production requires consent, pass
+ * ``consent_accepted: true`` only after the user checked the consent box.
+ * @param {{
+ *   user: string,
+ *   locale?: string,
+ *   replace_existing?: boolean,
+ *   session_label?: string,
+ *   consent_accepted?: boolean,
+ * }} body
+ */
 export async function startEnrollment(body) {
   return voiceFetch("/voice/enrollment/start", {
     method: "POST",
     body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Persist explicit enrollment consent for an in-flight session.
+ * @param {{ session_id: string, accepted?: boolean, locale?: string }} body
+ */
+export async function grantEnrollmentConsent(body) {
+  return voiceFetch("/voice/enrollment/consent", {
+    method: "POST",
+    body: JSON.stringify({
+      session_id: body.session_id,
+      accepted: body.accepted !== false,
+      locale: body.locale,
+    }),
   });
 }
 
