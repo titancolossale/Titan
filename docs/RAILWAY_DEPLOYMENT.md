@@ -289,18 +289,38 @@ Invoke-WebRequest -Uri "https://YOUR_URL/app/" -UseBasicParsing | Select-Object 
 2. Railway rebuilds and redeploys automatically  
 3. Re-check `/health`, `/ready`, `/app/`
 
-### Step L — Persistent data (optional, recommended)
+### Step L — Persistent data (**REQUIRED** for voice biometrics)
 
-Without a volume, JSON under `/app/data` can be **lost on redeploy**.
+Without a volume, JSON under `/app/data` is **lost on every redeploy**, including
+encrypted voice speaker profiles (`voice_speaker_profiles.json`).
 
-When your Railway plan allows volumes:
+**Phase 20.13:** a Railway Volume mounted at `/app/data` is **mandatory** before
+Nolan or Ibrahim enroll. Titan will fail `/ready` → `biometric_storage` when
+persistence is required and the mount is missing (no silent ephemeral fallback).
 
-1. Service → **Settings** → **Volumes** (or add volume from the canvas)  
-2. Mount path: `/app/data`  
-3. Set `TITAN_DATA_DIR=/app/data`  
-4. Redeploy  
+1. Service → **Settings** → **Volumes** (or add volume from the canvas)
+2. Mount path: `/app/data`
+3. Set `TITAN_DATA_DIR=/app/data` (Dockerfile default since Phase 20.13)
+4. Leave `TITAN_BIOMETRIC_PERSISTENCE_REQUIRED=true` (Dockerfile default)
+5. Redeploy
+6. Confirm `GET /ready` → `checks.biometric_storage.ok == true` and
+   `checks.biometric_storage.survives_redeploy == true`
 
-This step is **optional** for a first smoke test. It is **recommended** before you rely on cloud memory/missions.
+Voice biometric architecture (preferred — uses existing Titan volume infra):
+
+| Artifact | Location on volume |
+|----------|-------------------|
+| Encrypted ECAPA embeddings + profiles | `/app/data/voice_speaker_profiles.json` |
+| Enrollment / live temp audio | `/app/data/voice_enrollment_tmp`, `voice_live_tmp` |
+| ECAPA model cache | `/app/data/voice_models/ecapa` |
+| Web conversations | PostgreSQL (`DATABASE_URL`) — **not** used for biometrics |
+
+Do **not** put speaker embeddings in Postgres. Metadata + AES-GCM envelopes stay in
+the JSON profile store on the volume so the existing AES-GCM key
+(`TITAN_VOICE_EMBEDDING_STORAGE_KEY`) continues to work unchanged.
+
+Operator override (only after you have verified the volume is durable):
+`TITAN_BIOMETRIC_STORAGE_PERSISTENT=true`
 
 ---
 
@@ -333,7 +353,8 @@ Use this as a do-not-guess checklist.
 - [ ] `GET /app/` → 200
 - [ ] Login with production secret works
 - [ ] One chat message succeeds
-- [ ] (Optional) Volume mounted at `/app/data`
+- [ ] (Required for voice) Volume mounted at `/app/data`
+- [ ] `GET /ready` → `biometric_storage.ok` and `survives_redeploy`
 - [ ] `TITAN_OBSIDIAN_ENABLED=false` on cloud
 - [ ] Bookmark the public HTTPS URL
 

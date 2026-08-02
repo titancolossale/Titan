@@ -190,6 +190,19 @@ def create_app() -> FastAPI:
     except Exception:
         logger.exception("Conversation store bootstrap failed at startup")
 
+    # Phase 20.13 — biometric storage dirs + persistence validation (no ephemeral fallback).
+    try:
+        from voice.biometric_persistence import bootstrap_biometric_storage
+
+        bio_report = bootstrap_biometric_storage()
+        if not bio_report.ok:
+            logger.error(
+                "Biometric storage startup validation failed: %s",
+                bio_report.to_dict(),
+            )
+    except Exception:
+        logger.exception("Biometric storage bootstrap failed at startup")
+
     if STATIC_DIR.is_dir():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 

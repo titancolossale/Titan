@@ -214,6 +214,37 @@ def build_readiness_payload(*, include_subsystems: bool = True) -> dict[str, Any
             "affects_ready": False,
         }
 
+    # Phase 20.13 — biometric persistence (Railway Volume). Required in production;
+    # never silently falls back to ephemeral container storage.
+    try:
+        from voice.biometric_persistence import collect_biometric_storage_readiness
+
+        storage = collect_biometric_storage_readiness()
+        checks["biometric_storage"] = {
+            "ok": bool(storage.get("ok")),
+            "required": bool(storage.get("required")),
+            "writable": storage.get("writable"),
+            "persistent": storage.get("persistent"),
+            "message": storage.get("message"),
+            "affects_ready": bool(storage.get("affects_ready")),
+            "data_dir": storage.get("data_dir"),
+            "profiles_path": storage.get("profiles_path"),
+            "architecture": storage.get("architecture"),
+            "survives_redeploy": storage.get("survives_redeploy"),
+            "signals": storage.get("signals"),
+        }
+        if storage.get("required") and not storage.get("ok"):
+            core_ready = False
+            status = "not_ready"
+            http_status = 503
+    except Exception as exc:
+        checks["biometric_storage"] = {
+            "ok": False,
+            "required": False,
+            "message": f"Biometric storage check failed: {type(exc).__name__}",
+            "affects_ready": False,
+        }
+
     return {
         "status": status,
         "http_status": http_status,

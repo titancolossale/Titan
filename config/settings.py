@@ -30,7 +30,7 @@ MEMORY_DIR = _resolve_runtime_path(
 load_dotenv(ENV_FILE_PATH)
 
 TITAN_NAME = "Titan"
-VERSION = "0.59.3"
+VERSION = "0.59.4"
 CREATOR = "Nolan Hassing"
 
 LOG_LEVEL = os.getenv("TITAN_LOG_LEVEL", "INFO")
@@ -568,6 +568,33 @@ TITAN_VOICE_SPEAKER_PROFILES_PATH = _resolve_runtime_path(
         str(DATA_DIR / "voice_speaker_profiles.json"),
     ),
     str(DATA_DIR / "voice_speaker_profiles.json"),
+)
+# Phase 20.13 — Railway Volume persistence for voice biometrics (no ephemeral fallback).
+# Default: required in production; local/dev can leave unset.
+_BIOMETRIC_PERSISTENCE_RAW = os.getenv(
+    "TITAN_BIOMETRIC_PERSISTENCE_REQUIRED", ""
+).strip().lower()
+if _BIOMETRIC_PERSISTENCE_RAW in {"1", "true", "yes", "on"}:
+    TITAN_BIOMETRIC_PERSISTENCE_REQUIRED = True
+elif _BIOMETRIC_PERSISTENCE_RAW in {"0", "false", "no", "off"}:
+    TITAN_BIOMETRIC_PERSISTENCE_REQUIRED = False
+else:
+    # Align with runtime helper: only auto-require on Railway production.
+    # Dockerfile sets TITAN_BIOMETRIC_PERSISTENCE_REQUIRED=true explicitly.
+    _app_env = (
+        os.getenv("TITAN_APP_ENV", os.getenv("APP_ENV", "development"))
+        .strip()
+        .lower()
+    )
+    _on_railway = bool(
+        os.getenv("RAILWAY_ENVIRONMENT")
+        or os.getenv("RAILWAY_SERVICE_NAME")
+        or os.getenv("RAILWAY_PROJECT_ID")
+        or os.getenv("RAILWAY_VOLUME_MOUNT_PATH")
+    )
+    TITAN_BIOMETRIC_PERSISTENCE_REQUIRED = _app_env == "production" and _on_railway
+TITAN_BIOMETRIC_STORAGE_PERSISTENT = (
+    os.getenv("TITAN_BIOMETRIC_STORAGE_PERSISTENT", "false").lower() == "true"
 )
 TITAN_VOICE_OPENAI_STT_MODEL = os.getenv(
     "TITAN_VOICE_OPENAI_STT_MODEL", "whisper-1"

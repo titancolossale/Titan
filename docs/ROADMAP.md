@@ -162,7 +162,7 @@ Remaining work (high level):
 
 **Objective:** Voice interaction for Nolan and Ibrahim with speaker identification.
 
-**Status:** Phase 20.13 commit/deploy/validate **in progress**; Phase 20.12 real speaker biometric backend **landed**; Phase 20.12B live ECAPA install/validation **passed on this host**; Phase 20.10B-1 production enrollment activation **ready** (real Nolan/Ibrahim voice collection still deferred to 20.10B-2).
+**Status:** Phase 20.13 durable biometric storage (Railway Volume + AES-GCM wire-up) **landed**; enrollment workflow / verification fixes **in progress**; Phase 20.12 real speaker biometric backend **landed**.
 
 Existing foundation:
 

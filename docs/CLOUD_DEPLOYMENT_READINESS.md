@@ -122,13 +122,17 @@ See `.env.example` for the full template.
 
 | Path | Persists? | Sensitive? | Cloud strategy |
 |------|-----------|------------|----------------|
+| `data/voice_speaker_profiles.json` | **Yes** | **Yes (biometrics)** | **Railway Volume required** — AES-GCM envelopes |
+| `data/voice_models/ecapa/` | Yes | No | Volume (model cache; re-downloadable) |
+| `data/voice_enrollment_tmp/` | No (ephemeral) | Yes while present | Volume OK; deleted after processing |
+| `data/voice_live_tmp/` | No (ephemeral) | Yes while present | Volume OK; deleted after processing |
+| `data/voice_sessions.json` | Yes | Moderate | Volume mount |
 | `data/long_term_memory.json` | **Yes** | **Yes** | Volume mount |
 | `data/titan_state.json` | **Yes** | Yes | Volume mount |
 | `data/titan_mission.json` | **Yes** | Moderate | Volume mount |
 | `data/learning_memory.json` | Yes | Moderate | Volume mount |
 | `data/knowledge_learning.json` | Yes | Moderate | Volume mount |
 | `data/development_sessions.json` | Yes | Moderate | Volume mount |
-| `data/voice_sessions.json` | Yes | Moderate | Volume mount |
 | `data/scheduled_jobs.json` | Yes | Low | Volume mount |
 | `data/tool_runs.json` | Optional | Low | Volume if persist enabled |
 | `data/google_*_token.json` | Yes | **Secrets** | Volume + never commit |

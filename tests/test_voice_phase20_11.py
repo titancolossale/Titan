@@ -486,9 +486,12 @@ def test_duplicate_user_protection():
     assert none is None
 
 
-def test_store_corruption_deactivates(tmp_path: Path):
+def test_store_corruption_deactivates(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("TITAN_VOICE_EMBEDDING_ENCRYPTION", "false")
     path = tmp_path / "profiles.json"
     store = SpeakerProfileStore(file_path=path)
+    # Rebuild backend after env change (store captured encryption at init).
+    store._storage = build_embedding_storage(prefer_encryption=False)
     profile = SpeakerIdentityProfile.create(user_id="Nolan", status=EnrollmentStatus.ENROLLED)
     profile.embeddings = [[1.0, 0.0]]
     profile.sample_count = 1
@@ -505,6 +508,7 @@ def test_store_corruption_deactivates(tmp_path: Path):
     path.write_text(json.dumps(raw), encoding="utf-8")
 
     store2 = SpeakerProfileStore(file_path=path)
+    store2._storage = build_embedding_storage(prefer_encryption=False)
     store2.load()
     events = store2.list_corruption_events()
     assert events

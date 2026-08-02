@@ -674,6 +674,33 @@ python scripts/phase20_10b1_guided_enroll.py --user Nolan
 Real sample collection is **Phase 20.10B-2** via the Web App Voice panel after
 pre-flight passes.
 
+## Phase 20.13 — Durable biometric storage (Railway Volume)
+
+Voice profiles must survive Railway redeploys. Architecture:
+
+| Layer | Choice | Why |
+|-------|--------|-----|
+| Durable root | Railway Volume at `/app/data` (`TITAN_DATA_DIR`) | Existing Titan persistence path |
+| Profiles / sessions / AES-GCM envelopes | `voice_speaker_profiles.json` | Single store; schema v5 |
+| Web chat history | PostgreSQL | Unrelated to biometrics — do not migrate embeddings to SQL |
+| Encryption | AES-256-GCM via `TITAN_VOICE_EMBEDDING_STORAGE_KEY` | Unchanged key; no plaintext vectors on disk when encryption on |
+
+| Module | Role |
+|--------|------|
+| `voice/biometric_persistence.py` | Dir creation, writability, volume detection, no ephemeral fallback |
+| `voice/speaker_profile_store.py` | AES-GCM wire-up on save/load (schema v5) |
+| `/ready` → `biometric_storage` | Required in production; fails closed without volume |
+
+Env flags:
+
+| Variable | Production |
+|----------|------------|
+| `TITAN_DATA_DIR` | `/app/data` |
+| `TITAN_BIOMETRIC_PERSISTENCE_REQUIRED` | `true` |
+| `TITAN_BIOMETRIC_STORAGE_PERSISTENT` | set `true` only after confirming volume durability |
+| `TITAN_VOICE_EMBEDDING_ENCRYPTION` | `true` |
+| `TITAN_VOICE_EMBEDDING_STORAGE_KEY` | Railway secret (never rotate casually) |
+
 ## Related documents
 
 - `docs/ARCHITECTURE.md` — official execution path

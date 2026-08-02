@@ -8,10 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Version policy
 
 - **Semver:** `MAJOR.MINOR.PATCH` — breaking changes, new features, and bug fixes respectively.
-- **Current codebase version:** `0.59.1` (see `config/settings.py`).
+- **Current codebase version:** `0.59.4` (see `config/settings.py`).
 - **Phase 1 target release:** `0.1.0` — Titan V2 Phase 1 (Architecture Cleanup). **Shipped 2026-06-27.**
 - **Phase 10A release:** `0.10.0` — Tool Runtime V2 default. **Shipped 2026-06-28.**
 - **Future milestone:** `2.0.0` — full Titan V2 release after all planned phases.
+
+## [0.59.4] — 2026-08-02
+
+### Added
+
+- **Phase 20.13 — Persistent voice biometric storage (Railway Volume)**
+  - `voice/biometric_persistence.py` — create biometric dirs, writability probe, volume/persistence detection; never silent ephemeral fallback
+  - `/ready` check `biometric_storage` (required in production when persistence required)
+  - Startup bootstrap in `api/app.py` validates biometric storage on boot
+  - `SpeakerProfileStore` schema v5: AES-GCM envelopes on save; empty plaintext `embeddings` when encryption enabled; encrypted enrollment sample envelopes
+  - Dockerfile defaults: `TITAN_DATA_DIR=/app/data`, `TITAN_BIOMETRIC_PERSISTENCE_REQUIRED=true`
+  - Tests: `tests/test_voice_phase20_13_persistence.py` (enrollment restart, redeploy simulation, multi-user, encryption)
+  - Docs: Railway volume **required** for voice; biometrics stay on volume JSON (not Postgres)
+
+### Notes
+
+- Does **not** change `TITAN_VOICE_EMBEDDING_STORAGE_KEY`
+- Does **not** perform new voice enrollment
+- Postgres remains conversation store only
 
 ## [0.59.1] — 2026-07-29
 

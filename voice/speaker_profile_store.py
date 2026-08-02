@@ -2,13 +2,19 @@
 # Titan Speaker Profile Store
 # =====================================
 
-"""Production-safe persistence for voice identity profiles (Phase 20.2 / 20.11).
+"""Production-safe persistence for voice identity profiles (Phase 20.2 / 20.11 / 20.13).
 
 Stores derived embeddings only — never raw enrollment audio. Public list/get
 APIs return safe metadata without biometric representations.
 
 Phase 20.11 adds schema v4: integrity hashes, encryption-ready codec metadata,
 production-trust flags, and corruption detection on load.
+
+Phase 20.13 wires AES-GCM into the save/load path (schema v5): when
+``TITAN_VOICE_EMBEDDING_ENCRYPTION=true``, profile and in-flight session
+embeddings are persisted as authenticated envelopes with empty plaintext
+``embeddings`` / ``embedding`` fields. Durable file lives under ``TITAN_DATA_DIR``
+(Railway Volume ``/app/data``).
 """
 
 from __future__ import annotations
@@ -21,10 +27,12 @@ from typing import Any
 
 from voice.embedding_provider import is_dev_fallback_version, is_production_trusted_version
 from voice.embedding_storage import (
-    PlaintextEmbeddingStorage,
+    EmbeddingCorruptionError,
     StoredEmbeddingBundle,
     build_embedding_storage,
     detect_duplicate_user_embeddings,
+    unwrap_profile_embeddings,
+    wrap_profile_embeddings,
 )
 from voice.enrollment_models import (
     EMBEDDING_VERSION,
@@ -38,7 +46,7 @@ from voice.exceptions import VoiceConfigurationError
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def _utc_now() -> datetime:
@@ -106,7 +114,7 @@ class SpeakerProfileStore:
             },
             "active_by_user": dict(self._active_by_user),
             "enrollment_sessions": {
-                sid: session.to_storage_dict()
+                sid: self._session_to_storage(session)
                 for sid, session in self._sessions.items()
             },
             "audit_history": [event.to_dict() for event in self._audit_events[-500:]],
@@ -118,7 +126,7 @@ class SpeakerProfileStore:
             json.dump(payload, handle, indent=4, ensure_ascii=False)
 
     def _profile_to_storage(self, profile: SpeakerIdentityProfile) -> dict[str, Any]:
-        """Persist profile with integrity-sealed embedding bundle."""
+        """Persist profile with integrity-sealed (and optionally AES-GCM) embeddings."""
         base = profile.to_storage_dict()
         # Never retain raw audio in profile storage unless explicitly configured.
         base["retain_raw_audio"] = bool(self._retain_raw_audio)
@@ -133,16 +141,115 @@ class SpeakerProfileStore:
                 vectors=[list(row) for row in profile.embeddings],
                 retain_raw_audio=self._retain_raw_audio,
             )
-            encoded = PlaintextEmbeddingStorage().encode(bundle)
-            base["embedding_bundle"] = {
-                "integrity_hash": encoded.get("integrity_hash"),
-                "codec": encoded.get("codec"),
-                "format_version": encoded.get("format_version"),
-                "encrypted": encoded.get("encrypted", False),
-            }
-            # Keep plaintext vectors for recognition compatibility; hash seals them.
+            encoded = self._storage.encode(bundle)
             base["integrity_hash"] = encoded.get("integrity_hash")
+            profile.integrity_hash = encoded.get("integrity_hash")
+            if self._storage.encryption_enabled:
+                # No plaintext vectors on disk when AES-GCM is active.
+                base["embeddings"] = []
+                base["embedding_bundle"] = encoded
+            else:
+                base["embeddings"] = [list(row) for row in profile.embeddings]
+                base["embedding_bundle"] = {
+                    "integrity_hash": encoded.get("integrity_hash"),
+                    "codec": encoded.get("codec"),
+                    "format_version": encoded.get("format_version"),
+                    "encrypted": False,
+                }
         return base
+
+    def _session_to_storage(self, session: EnrollmentSession) -> dict[str, Any]:
+        """Persist enrollment session; encrypt per-sample embeddings when enabled."""
+        raw = session.to_storage_dict()
+        if not self._storage.encryption_enabled:
+            return raw
+        sealed_samples: list[dict[str, Any]] = []
+        for sample in raw.get("samples", []):
+            if not isinstance(sample, dict):
+                continue
+            item = dict(sample)
+            embedding = item.get("embedding") or []
+            if embedding:
+                envelope = wrap_profile_embeddings(
+                    profile_id=f"{session.session_id}:{item.get('sample_id', 'sample')}",
+                    user_id=session.user_id,
+                    embedding_version=session.embedding_version,
+                    embeddings=[list(embedding)],
+                    backend=self._storage,
+                    retain_raw_audio=False,
+                )
+                item["embedding"] = []
+                item["embedding_envelope"] = envelope
+            sealed_samples.append(item)
+        raw["samples"] = sealed_samples
+        return raw
+
+    def _load_profile_embeddings(self, payload: dict[str, Any]) -> list[list[float]]:
+        """Decode profile embeddings from AES-GCM envelope or legacy plaintext."""
+        bundle = payload.get("embedding_bundle")
+        if isinstance(bundle, dict) and (
+            bundle.get("ciphertext_b64")
+            or bundle.get("encrypted")
+            or str(bundle.get("codec") or "") in {"aes_gcm_v1", "encrypted_envelope"}
+        ):
+            try:
+                return unwrap_profile_embeddings(
+                    bundle,
+                    backend=self._storage,
+                    profile_id=str(payload.get("profile_id") or ""),
+                    user_id=str(payload.get("user_id") or ""),
+                    embedding_version=str(payload.get("embedding_version") or ""),
+                )
+            except EmbeddingCorruptionError:
+                raise
+        embeddings = payload.get("embeddings") or []
+        if isinstance(embeddings, list) and embeddings:
+            return [
+                [float(v) for v in row]
+                for row in embeddings
+                if isinstance(row, list)
+            ]
+        return []
+
+    def _hydrate_session_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Decrypt sample embedding envelopes before EnrollmentSession.from_dict."""
+        samples_in = payload.get("samples", [])
+        if not isinstance(samples_in, list):
+            return payload
+        hydrated = dict(payload)
+        samples_out: list[dict[str, Any]] = []
+        for item in samples_in:
+            if not isinstance(item, dict):
+                continue
+            sample = dict(item)
+            envelope = sample.get("embedding_envelope")
+            embedding = sample.get("embedding") or []
+            if isinstance(envelope, dict) and (
+                envelope.get("ciphertext_b64") or envelope.get("encrypted")
+            ):
+                try:
+                    vectors = unwrap_profile_embeddings(
+                        envelope,
+                        backend=self._storage,
+                        profile_id=str(payload.get("session_id") or ""),
+                        user_id=str(payload.get("user_id") or ""),
+                        embedding_version=str(payload.get("embedding_version") or ""),
+                    )
+                    sample["embedding"] = list(vectors[0]) if vectors else []
+                except EmbeddingCorruptionError as exc:
+                    logger.error(
+                        "Enrollment sample envelope corrupt session=%s sample=%s: %s",
+                        payload.get("session_id"),
+                        sample.get("sample_id"),
+                        exc,
+                    )
+                    sample["embedding"] = []
+                sample.pop("embedding_envelope", None)
+            elif embedding:
+                sample["embedding"] = [float(v) for v in embedding]
+            samples_out.append(sample)
+        hydrated["samples"] = samples_out
+        return hydrated
 
     def _load_corruption(self, raw: dict[str, Any]) -> None:
         events = raw.get("corruption_events", [])
@@ -156,9 +263,32 @@ class SpeakerProfileStore:
                 if not isinstance(payload, dict):
                     continue
                 try:
-                    profile = SpeakerIdentityProfile.from_dict(
-                        {**payload, "profile_id": payload.get("profile_id", pid)}
-                    )
+                    merged = {**payload, "profile_id": payload.get("profile_id", pid)}
+                    try:
+                        vectors = self._load_profile_embeddings(merged)
+                    except EmbeddingCorruptionError as exc:
+                        logger.error(
+                            "Embedding decrypt/integrity failure for profile %s: %s",
+                            pid,
+                            exc,
+                        )
+                        self._corruption_events.append(
+                            {
+                                "profile_id": str(pid),
+                                "user_id": str(payload.get("user_id") or ""),
+                                "error": "embedding_corruption_detected",
+                                "at": _utc_now().isoformat(),
+                            }
+                        )
+                        merged = {**merged, "embeddings": [], "active": False}
+                        profile = SpeakerIdentityProfile.from_dict(merged)
+                        profile.active = False
+                        profile.failure_reason = "embedding_corruption_detected"
+                        if profile.user_id:
+                            self._profiles[profile.profile_id] = profile
+                        continue
+                    merged["embeddings"] = vectors
+                    profile = SpeakerIdentityProfile.from_dict(merged)
                 except Exception as exc:
                     logger.error("Corrupt profile payload %s: %s", pid, exc)
                     self._corruption_events.append(
@@ -169,8 +299,8 @@ class SpeakerProfileStore:
                         }
                     )
                     continue
-                # Integrity check when sealed bundle present.
-                integrity = payload.get("integrity_hash")
+                # Integrity check when sealed plaintext bundle present.
+                integrity = payload.get("integrity_hash") or profile.integrity_hash
                 if integrity and profile.embeddings:
                     bundle = StoredEmbeddingBundle(
                         profile_id=profile.profile_id,
@@ -216,9 +346,10 @@ class SpeakerProfileStore:
             for sid, payload in sessions.items():
                 if not isinstance(payload, dict):
                     continue
-                session = EnrollmentSession.from_dict(
+                hydrated = self._hydrate_session_payload(
                     {**payload, "session_id": payload.get("session_id", sid)}
                 )
+                session = EnrollmentSession.from_dict(hydrated)
                 self._sessions[session.session_id] = session
 
     def _load_audit(self, raw: dict[str, Any]) -> None:
@@ -455,6 +586,8 @@ class SpeakerProfileStore:
             "retain_raw_audio": self._retain_raw_audio,
             "schema_version": SCHEMA_VERSION,
             "corruption_event_count": len(self._corruption_events),
+            "profiles_path": str(self.file_path) if self.file_path else None,
+            "plaintext_embeddings_on_disk": not self._storage.encryption_enabled,
         }
 
     def list_safe_profiles(self, *, user_id: str | None = None) -> list[dict[str, Any]]:

@@ -422,22 +422,24 @@ def _check_enrollment_storage(store: SpeakerProfileStore) -> PreflightCheck:
         except Exception:
             file_path = Path("data/voice_speaker_profiles.json")
             store.file_path = file_path
+
+    from voice.biometric_persistence import validate_biometric_storage
+
+    persistence = validate_biometric_storage(profiles_path=file_path)
     details = {
         "path": str(file_path),
-        "path_writable": False,
+        "path_writable": persistence.writable,
+        "persistent": persistence.persistent,
+        "persistence_required": persistence.persistence_required,
         "schema_version": health.get("schema_version"),
         "encryption_enabled": health.get("encryption_enabled"),
         "codec": health.get("codec"),
         "key_id": health.get("key_id"),
         "using_dev_key": health.get("using_dev_key"),
         "retain_raw_audio": health.get("retain_raw_audio"),
+        "plaintext_embeddings_on_disk": health.get("plaintext_embeddings_on_disk"),
+        "persistence_diagnostics": persistence.diagnostics,
     }
-    try:
-        parent = file_path.parent
-        parent.mkdir(parents=True, exist_ok=True)
-        details["path_writable"] = parent.exists() and os.access(parent, os.W_OK)
-    except OSError as exc:
-        details["path_error"] = type(exc).__name__
 
     if health.get("retain_raw_audio"):
         return PreflightCheck(
@@ -447,11 +449,23 @@ def _check_enrollment_storage(store: SpeakerProfileStore) -> PreflightCheck:
             details=details,
         )
 
-    if not details["path_writable"]:
+    if not persistence.writable:
         return PreflightCheck(
             name="enrollment_storage",
             status=PreflightStatus.NOT_READY,
             message=f"Enrollment profile path not writable: {file_path}",
+            details=details,
+        )
+
+    if persistence.persistence_required and not persistence.persistent:
+        return PreflightCheck(
+            name="enrollment_storage",
+            status=PreflightStatus.NOT_READY,
+            message=(
+                "Biometric storage is not volume-backed. Mount Railway Volume at "
+                "/app/data (TITAN_DATA_DIR=/app/data) before enrollment — "
+                "profiles must survive redeploys."
+            ),
             details=details,
         )
 
@@ -474,7 +488,7 @@ def _check_enrollment_storage(store: SpeakerProfileStore) -> PreflightCheck:
     return PreflightCheck(
         name="enrollment_storage",
         status=PreflightStatus.READY,
-        message="Encrypted enrollment profile storage is ready.",
+        message="Encrypted enrollment profile storage is ready on durable data dir.",
         details=details,
     )
 
