@@ -104,6 +104,7 @@ ALLOWED_TRANSITIONS: dict[ProductionEnrollmentState, frozenset[ProductionEnrollm
     ProductionEnrollmentState.FAILED: frozenset(
         {
             ProductionEnrollmentState.WAITING_CONSENT,  # new attempt
+            ProductionEnrollmentState.VERIFYING,  # reopen verify; keep pending profile
             ProductionEnrollmentState.CANCELLED,
         }
     ),

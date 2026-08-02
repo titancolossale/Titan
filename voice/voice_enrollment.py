@@ -891,6 +891,13 @@ class VoiceEnrollmentService:
     ) -> dict[str, Any]:
         """Verify with a fresh sample; activate only on success."""
         session = self._require_session(session_id, authenticated_user)
+        # Production recovery: a premature terminal FAILED must not lock out
+        # verification when the pending (inactive) enrollment profile still exists.
+        if (
+            session.status == EnrollmentStatus.FAILED
+            and session.pending_profile_id
+        ):
+            self._reopen_pending_verification(session)
         if session.status != EnrollmentStatus.VERIFYING:
             raise VoiceEnrollmentError(
                 f"Cannot verify in state {session.status.value}",
@@ -924,19 +931,17 @@ class VoiceEnrollmentService:
                 existing_fingerprints=profile.enrollment_fingerprints,
             )
             if not validation.accepted:
-                # Duplicate of enrollment set or bad quality — not a verification pass.
-                if validation.reject_code == SampleRejectReason.DUPLICATE:
-                    return self._fail_verification(
-                        session,
-                        profile,
-                        EnrollmentVerificationResult(
-                            matched_identity=None,
-                            confidence=0.0,
-                            threshold=self._config.min_enrollment_confidence,
-                            outcome=VerificationOutcome.FAILED,
-                            reason="verification_sample_reused_from_enrollment",
-                        ),
+                # Quality / duplicate rejects are retryable — do not terminalize
+                # the session on the first bad verification take.
+                reason = (
+                    "verification_sample_reused_from_enrollment"
+                    if validation.reject_code == SampleRejectReason.DUPLICATE
+                    else (
+                        validation.reject_code.value
+                        if validation.reject_code
+                        else "verification_sample_rejected"
                     )
+                )
                 return self._fail_verification(
                     session,
                     profile,
@@ -945,10 +950,9 @@ class VoiceEnrollmentService:
                         confidence=0.0,
                         threshold=self._config.min_enrollment_confidence,
                         outcome=VerificationOutcome.FAILED,
-                        reason=validation.reject_code.value
-                        if validation.reject_code
-                        else "verification_sample_rejected",
+                        reason=reason,
                     ),
+                    retryable=True,
                 )
 
             probe = extract_voice_features(audio_bytes)
@@ -1104,6 +1108,10 @@ class VoiceEnrollmentService:
             normalized = SessionManager.normalize_user(user_id)
             if normalized:
                 session = self._store.get_active_session_for_user(normalized)
+                # Expose FAILED sessions that still hold a pending profile so the
+                # UI can resume verification without starting a new enrollment.
+                if session is None:
+                    session = self._find_failed_pending_verification(normalized)
 
         profiles = self._store.list_safe_profiles(
             user_id=SessionManager.normalize_user(user_id) if user_id else None
@@ -1294,6 +1302,83 @@ class VoiceEnrollmentService:
             "workflow": self._workflow_snapshot(session).to_dict(),
             "profile": activated.to_public_dict(),
         }
+
+    def _find_failed_pending_verification(
+        self, user_id: str
+    ) -> EnrollmentSession | None:
+        """Latest FAILED session that still has a pending (inactive) profile."""
+        for session in self._store.list_sessions_for_user(user_id):
+            if (
+                session.status == EnrollmentStatus.FAILED
+                and session.pending_profile_id
+            ):
+                profile = self._store.get_profile(session.pending_profile_id)
+                if (
+                    profile is not None
+                    and not profile.active
+                    and profile.embeddings
+                ):
+                    return session
+        return None
+
+    def _reopen_pending_verification(
+        self, session: EnrollmentSession
+    ) -> SpeakerIdentityProfile:
+        """Re-enter VERIFYING without deleting enrollment embeddings or profile.
+
+        Used when a prior verification attempt terminalized to FAILED (e.g.
+        non-retryable validation reject) while the pending profile remains.
+        """
+        if not session.pending_profile_id:
+            raise VoiceEnrollmentError(
+                "No pending profile to verify",
+                code="missing_pending_profile",
+            )
+        profile = self._store.get_profile(session.pending_profile_id)
+        if profile is None or not profile.embeddings:
+            raise VoiceEnrollmentError(
+                "Pending profile missing",
+                code="missing_pending_profile",
+            )
+        if profile.active:
+            raise VoiceEnrollmentError(
+                "Profile is already active",
+                code="already_enrolled",
+            )
+
+        # Give a fresh verification budget after a premature terminal failure.
+        session.verification_retries = 0
+        session.failure_reason = None
+        session.verification_status = "awaiting_verification_sample"
+        session.status = EnrollmentStatus.VERIFYING
+        profile.enrollment_status = EnrollmentStatus.VERIFYING
+        profile.failure_reason = None
+        profile.active = False
+        self._set_workflow(
+            session,
+            ProductionEnrollmentState.VERIFYING,
+            reason="verification_reopened_from_failed",
+            force=True,
+        )
+        self._store.update_profile(profile)
+        self._store.save_session(session)
+        self._sync_workspace(session)
+        self._audit(
+            "verification_reopened",
+            user_id=session.user_id,
+            session_id=session.session_id,
+            profile_id=profile.profile_id,
+            workflow_state=session.workflow_state,
+            attempt_number=session.attempt_number,
+            detail="pending_profile_preserved",
+        )
+        logger.info(
+            "VOICE_ENROLLMENT_VERIFICATION_REOPENED session=%s user=%s profile=%s",
+            session.session_id,
+            session.user_id,
+            profile.profile_id,
+        )
+        return profile
 
     def _fail_verification(
         self,

@@ -204,12 +204,20 @@ export function mountEnrollmentPanel(root, ctx) {
     try {
       const data = await api.getEnrollmentStatus(user ? { user } : {});
       const active = data?.active_profile;
+      const session = data?.session || null;
       const ws = data?.workspace || {};
       store.setState({
-        voiceEnrollmentStatus: ws.voice_enrollment_status || active?.enrollment_status || null,
-        voiceSamplesCollected: ws.voice_samples_collected ?? null,
-        voiceSamplesRequired: ws.voice_samples_required ?? null,
-        voiceVerificationStatus: ws.voice_verification_status || null,
+        voiceEnrollmentStatus:
+          session?.status ||
+          ws.voice_enrollment_status ||
+          active?.enrollment_status ||
+          null,
+        voiceSamplesCollected:
+          session?.samples_collected ?? ws.voice_samples_collected ?? null,
+        voiceSamplesRequired:
+          session?.samples_required ?? ws.voice_samples_required ?? null,
+        voiceVerificationStatus:
+          session?.verification_status || ws.voice_verification_status || null,
         workspaceState: {
           ...(store.getState().workspaceState || {}),
           ...ws,
@@ -220,6 +228,12 @@ export function mountEnrollmentPanel(root, ctx) {
           statusEl.textContent = `Profil actif : ${active.display_name || active.user_id} (${active.enrollment_status})`;
           revokeBtn.hidden = false;
           revokeBtn.dataset.user = active.user_id;
+        } else if (awaitingVerification(session)) {
+          statusEl.textContent = user
+            ? `Profil créé pour ${user} — vérification requise avant activation.`
+            : "Profil créé — vérification requise avant activation.";
+          revokeBtn.hidden = true;
+          resumeVerificationWizard(session);
         } else {
           statusEl.textContent = user
             ? `Aucun profil actif pour ${user}.`
@@ -306,6 +320,15 @@ export function mountEnrollmentPanel(root, ctx) {
     }
     consentStart.disabled = true;
     try {
+      // Prefer resuming pending verification — never wipe Nolan/Ibrahim enrollment.
+      try {
+        const existing = await api.getEnrollmentStatus({ user: selectedUser });
+        if (resumeVerificationWizard(existing?.session)) {
+          return;
+        }
+      } catch {
+        /* fall through to start */
+      }
       // Propagate explicit user consent to the backend (production require_consent).
       let data = await api.startEnrollment({
         user: selectedUser,
@@ -359,6 +382,14 @@ export function mountEnrollmentPanel(root, ctx) {
     }
   });
 
+  /** True when enrollment samples are done and a verification take is expected. */
+  function awaitingVerification(session) {
+    if (!session) return false;
+    if (session.status === "VERIFYING") return true;
+    // FAILED with pending profile: backend can reopen verify without re-enroll.
+    return session.status === "FAILED" && Boolean(session.pending_profile_id);
+  }
+
   function updateWizard(session, nextPhrase) {
     const collected = session?.samples_collected ?? 0;
     const required = session?.samples_required ?? 3;
@@ -371,9 +402,11 @@ export function mountEnrollmentPanel(root, ctx) {
       script?.phrases?.[collected] ||
       "Lis la phrase à voix haute.";
     if (phraseEl) phraseEl.textContent = typeof phrase === "string" ? phrase : String(phrase);
-    finishBtn.hidden = !(session?.samples_collected >= session?.samples_required);
-    verifyBtn.hidden = session?.status !== "VERIFYING" && !session?.pending_profile_id;
-    if (session?.status === "VERIFYING" || session?.pending_profile_id) {
+    const verifyPending = awaitingVerification(session);
+    finishBtn.hidden =
+      verifyPending || !(session?.samples_collected >= session?.samples_required);
+    verifyBtn.hidden = !verifyPending;
+    if (verifyPending) {
       verifyBtn.hidden = false;
       if (phraseEl) {
         phraseEl.textContent =
@@ -382,6 +415,30 @@ export function mountEnrollmentPanel(root, ctx) {
             : "Enregistre une phrase de vérification (nouvelle).";
       }
     }
+  }
+
+  /** Resume VERIFYING / FAILED+pending without starting a new enrollment. */
+  function resumeVerificationWizard(session) {
+    if (!session?.session_id || !awaitingVerification(session)) return false;
+    sessionId = session.session_id;
+    consented = true;
+    consentBox.hidden = true;
+    wizard.hidden = false;
+    setEnrollmentCollecting(true);
+    updateWizard(session, null);
+    store.setState({
+      voiceEnrollmentStatus: session.status || "VERIFYING",
+      voiceSamplesCollected: session.samples_collected ?? null,
+      voiceSamplesRequired: session.samples_required ?? null,
+      voiceVerificationStatus: session.verification_status || "pending",
+    });
+    setFeedback(
+      locale().startsWith("en")
+        ? "Pending profile ready — record a fresh verification phrase (Enregistrer)."
+        : "Profil en attente — enregistre une phrase de vérification (Enregistrer).",
+      "info",
+    );
+    return true;
   }
 
   recordBtn.addEventListener("click", async () => {
@@ -398,11 +455,15 @@ export function mountEnrollmentPanel(root, ctx) {
       // Dedicated enrollment recorder — never the composer mic /voice/session path.
       const samplePromise = recordSampleWav(7000);
       const sample = await samplePromise;
+      // Route to /verify only while verification is pending (incl. FAILED reopen).
       if (verifyBtn && !verifyBtn.hidden && sessionId) {
         const result = await api.verifyEnrollment({
           session_id: sessionId,
           audio_base64: sample.audio_base64,
         });
+        if (result.session) {
+          updateWizard(result.session, null);
+        }
         if (result.ok && result.activated) {
           setFeedback(
             locale().startsWith("en")
@@ -418,14 +479,23 @@ export function mountEnrollmentPanel(root, ctx) {
           wizard.hidden = true;
           await refreshStatus(selectedUser);
         } else {
+          const canRetry = result.retry_allowed !== false;
           setFeedback(
             result.verification?.reason ||
-              (locale().startsWith("en")
-                ? "Verification failed — you can retry."
-                : "Vérification échouée — tu peux réessayer."),
+              (canRetry
+                ? locale().startsWith("en")
+                  ? "Verification failed — you can retry."
+                  : "Vérification échouée — tu peux réessayer."
+                : locale().startsWith("en")
+                  ? "Verification failed."
+                  : "Vérification échouée."),
             "error",
           );
-          store.setState({ voiceVerificationStatus: "failed" });
+          store.setState({
+            voiceVerificationStatus:
+              result.verification?.verification_result || "failed",
+            voiceEnrollmentStatus: result.session?.status || null,
+          });
         }
       } else {
         const result = await api.submitEnrollmentSample({

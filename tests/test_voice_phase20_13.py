@@ -295,6 +295,157 @@ def test_api_consent_paths_with_require_consent(
     enroll_routes._enrollment_service = None  # noqa: SLF001
 
 
+def _speech_like(seed: int, seconds: float = 1.25) -> bytes:
+    n = int(16000 * 2 * seconds)
+    return bytes(((seed * 37 + i * 17) % 180) + 40 for i in range(n))
+
+
+def _enroll_to_verifying(service: VoiceEnrollmentService, *, user: str = "Nolan") -> str:
+    started = service.start_enrollment(
+        target_user=user,
+        authenticated_user=user,
+        locale="fr-FR",
+        consent_accepted=True,
+    )
+    session_id = started["session"]["session_id"]
+    for offset in range(3):
+        accepted = service.submit_sample(
+            session_id=session_id,
+            audio_bytes=_speech_like(11 + offset),
+            authenticated_user=user,
+        )
+        assert accepted["accepted"] is True
+    finished = service.finish_enrollment(
+        session_id=session_id, authenticated_user=user
+    )
+    assert finished["profile"]["active"] is False
+    assert finished["session"]["status"] == EnrollmentStatus.VERIFYING.value
+    return session_id
+
+
+# ---------------------------------------------------------------------------
+# Verification reopen / "Cannot verify in state FAILED" regression
+# ---------------------------------------------------------------------------
+
+
+def test_verify_validation_reject_stays_retryable(tmp_path: Path) -> None:
+    """Bad verification takes must not terminalize on the first attempt."""
+    service = _enrollment_service(
+        tmp_path,
+        require_consent=True,
+        max_verification_retries=3,
+        min_quality_score=0.2,
+    )
+    session_id = _enroll_to_verifying(service)
+    profile_before = service.store.get_session(session_id)
+    assert profile_before is not None
+    pending_id = profile_before.pending_profile_id
+    assert pending_id
+
+    # Near-silence / empty-ish payload → validation reject (not a score pass).
+    rejected = service.verify_enrollment(
+        session_id=session_id,
+        audio_bytes=b"RIFF" + b"\x00" * 64,
+        authenticated_user="Nolan",
+    )
+    assert rejected["ok"] is False
+    assert rejected["activated"] is False
+    assert rejected["retry_allowed"] is True
+    assert rejected["session"]["status"] == EnrollmentStatus.VERIFYING.value
+
+    # Profile + embeddings preserved; still inactive.
+    profile = service.store.get_profile(pending_id)
+    assert profile is not None
+    assert profile.active is False
+    assert profile.embeddings
+    assert service.store.get_active_profile("Nolan") is None
+
+
+def test_cannot_verify_in_state_failed_reopens_pending_profile(
+    tmp_path: Path,
+) -> None:
+    """Production bug: retry after terminal FAILED must reopen VERIFYING."""
+    service = _enrollment_service(
+        tmp_path,
+        require_consent=True,
+        max_verification_retries=3,
+        min_quality_score=0.2,
+    )
+    session_id = _enroll_to_verifying(service)
+    session = service.store.get_session(session_id)
+    assert session is not None
+    pending_id = session.pending_profile_id
+    assert pending_id
+    profile = service.store.get_profile(pending_id)
+    assert profile is not None
+    embeddings_before = list(profile.embeddings)
+
+    # Simulate the production terminal failure (non-retryable path / prior bug).
+    session.status = EnrollmentStatus.FAILED
+    session.workflow_state = "FAILED"
+    session.failure_reason = "verification_sample_rejected"
+    session.verification_retries = 1
+    profile.enrollment_status = EnrollmentStatus.FAILED
+    profile.failure_reason = "verification_sample_rejected"
+    profile.active = False
+    service.store.update_profile(profile)
+    service.store.save_session(session)
+
+    # Prior behavior raised VoiceEnrollmentError("Cannot verify in state FAILED").
+    # Reopen must succeed without deleting the pending enrollment profile.
+    result = service.verify_enrollment(
+        session_id=session_id,
+        audio_bytes=b"RIFF" + b"\x00" * 64,
+        authenticated_user="Nolan",
+    )
+    assert "Cannot verify in state FAILED" not in str(result)
+    assert result["activated"] is False
+    assert result["retry_allowed"] is True
+    assert result["session"]["status"] == EnrollmentStatus.VERIFYING.value
+    assert result["session"]["pending_profile_id"] == pending_id
+
+    profile_after = service.store.get_profile(pending_id)
+    assert profile_after is not None
+    assert profile_after.active is False
+    assert profile_after.embeddings == embeddings_before
+    assert service.store.get_active_profile("Nolan") is None
+
+
+def test_get_status_exposes_failed_pending_verification(tmp_path: Path) -> None:
+    service = _enrollment_service(tmp_path, require_consent=True)
+    session_id = _enroll_to_verifying(service)
+    session = service.store.get_session(session_id)
+    assert session is not None
+    session.status = EnrollmentStatus.FAILED
+    session.workflow_state = "FAILED"
+    service.store.save_session(session)
+
+    status = service.get_status(user_id="Nolan", authenticated_user="Nolan")
+    assert status["session"] is not None
+    assert status["session"]["session_id"] == session_id
+    assert status["session"]["status"] == EnrollmentStatus.FAILED.value
+    assert status["session"]["pending_profile_id"]
+    assert status["active_profile"] is None
+
+
+def test_ui_verification_resume_contracts() -> None:
+    ui = (VOICE_JS / "enrollment-ui.js").read_text(encoding="utf-8")
+    assert "function awaitingVerification" in ui
+    assert 'session.status === "FAILED"' in ui
+    assert "pending_profile_id" in ui
+    assert "resumeVerificationWizard" in ui
+    assert "retry_allowed" in ui
+    # Must update wizard after verify response (avoid stale VERIFYING UI).
+    verify_block = ui.split("api.verifyEnrollment")[1].split("submitEnrollmentSample")[0]
+    assert "updateWizard(result.session" in verify_block
+    # Must prefer resume over startEnrollment wipe.
+    consent_block = ui.split("consentStart.addEventListener")[1].split(
+        "recordBtn.addEventListener"
+    )[0]
+    assert "resumeVerificationWizard" in consent_block
+    assert "getEnrollmentStatus" in consent_block
+
+
 @pytest.mark.skipif(not _node_available(), reason="Node.js not installed")
 def test_node_consent_payload_and_enrollment_lock_contract() -> None:
     """Source-level Node checks: consent payload shape + mic lock flag."""
@@ -312,6 +463,9 @@ if (!api.includes('/voice/enrollment/consent')) throw new Error('missing consent
 if (!api.includes('/voice/enrollment/sample')) throw new Error('missing sample route');
 if (!ui.includes('submitEnrollmentSample')) throw new Error('missing sample submit');
 if (!ui.includes('tdl-v2-voice-record-sample')) throw new Error('missing Enregistrer');
+if (!ui.includes('awaitingVerification')) throw new Error('missing awaitingVerification');
+if (!ui.includes('resumeVerificationWizard')) throw new Error('missing resumeVerificationWizard');
+if (!ui.includes('retry_allowed')) throw new Error('missing retry_allowed handling');
 if (!store.includes('voiceEnrollmentCollecting')) throw new Error('missing enrollment collecting flag');
 if (!ctrl.includes('voiceEnrollmentCollecting')) throw new Error('controller missing lock');
 if (!ctrl.includes('tdl-v2-voice-mic--enrollment-locked')) throw new Error('missing lock class');
